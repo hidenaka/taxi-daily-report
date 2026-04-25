@@ -265,11 +265,11 @@ test('detectFormat: Gemini形式（CSV）を判別', () => {
   assert.equal(detectFormat(text), 'gemini');
 });
 
-test('parseReport: Claude形式から trips 26件、rests 5件を抽出', () => {
+test('parseReport: Claude形式から trips 26件、rests 4件を抽出', () => {
   const text = readFileSync('tests/fixtures/sample-claude.txt', 'utf-8');
   const result = parseReport(text);
   assert.equal(result.trips.length, 26);
-  assert.equal(result.rests.length, 5);
+  assert.equal(result.rests.length, 4);
 });
 
 test('parseReport: Claude形式の最初のtripが正しい', () => {
@@ -389,11 +389,11 @@ git commit -m "feat(parser): detect format and parse Claude tab-separated text"
 `tests/parser.test.js` に追記：
 
 ```javascript
-test('parseReport: Gemini形式から trips 25件、rests 5件を抽出', () => {
+test('parseReport: Gemini形式から trips 25件、rests 6件を抽出', () => {
   const text = readFileSync('tests/fixtures/sample-gemini.csv', 'utf-8');
   const result = parseReport(text);
   assert.equal(result.trips.length, 25);
-  assert.equal(result.rests.length, 5);
+  assert.equal(result.rests.length, 6);
 });
 
 test('parseReport: Gemini形式の最初のtripが正しい（引用符付き金額）', () => {
@@ -890,9 +890,9 @@ git commit -m "feat(payroll): lookup rate from tier table for shifts 1-11"
 - [ ] **Step 1: 失敗するテストを書く**
 
 ```javascript
-test('calcBasePay: 13乗務、11乗務までで1,100,000(税抜)+12-13回各110,000(税抜) → basePay = 755,700 + 110,000×2×0.62 = 892,100', () => {
-  const drives = Array(13).fill({ trips: [{ amount: 121000, isCancel: false }] });
-  // 各日 121,000(税込) = 110,000(税抜)、13乗務
+test('calcBasePay: 13乗務、各日税込110,000 → 11乗務まで税抜1,100,000で歩率0.687、12-13乗務目は税抜100,000×0.62×2', () => {
+  const drives = Array(13).fill({ trips: [{ amount: 110000, isCancel: false }] });
+  // 各日 110,000(税込) = 100,000(税抜)、13乗務
   const config = {
     rateTable: {
       "11": [
@@ -904,10 +904,10 @@ test('calcBasePay: 13乗務、11乗務までで1,100,000(税抜)+12-13回各110,
     }
   };
   const result = calcBasePay(drives, config);
-  // 11乗務まで: 1,210,000税込 → 1,100,000税抜 × 0.687 = 755,700
-  // 12-13乗務: 110,000 × 2 × 0.62 = 136,400
-  // 合計: 892,100
-  assert.equal(Math.round(result.basePay), 892100);
+  // 11乗務まで: 11 × 110,000(税込) = 1,210,000(税込) → 1,100,000(税抜) × 0.687 = 755,700
+  // 12-13乗務: 100,000(税抜) × 2 × 0.62 = 124,000
+  // 合計: 879,700
+  assert.equal(Math.round(result.basePay), 879700);
   assert.equal(result.shiftCount, 13);
 });
 ```

@@ -435,8 +435,8 @@ Step 3: プレミアム車両のインセンティブ
 
 ### 13.1 パーサーのユニットテスト（必須）
 - **テストデータ**: 設計時にユーザーが提供した Claude形式 + Gemini形式 の2件を `tests/fixtures/` 配下に保存して使用
-  - `tests/fixtures/sample-claude.txt`（タブ区切り、26件＋休5件）
-  - `tests/fixtures/sample-gemini.csv`（CSV、25件＋休5件）
+  - `tests/fixtures/sample-claude.txt`（タブ区切り、26件＋休4件）
+  - `tests/fixtures/sample-gemini.csv`（CSV、25件＋休6件）
 - **検証項目**:
   - trips の件数
   - rests の件数
