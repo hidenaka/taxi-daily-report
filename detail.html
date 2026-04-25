@@ -220,36 +220,35 @@ function renderTripsTable(drive) {
   const rests = drive.rests || [];
   // 全エントリを時刻順に
   const events = [];
-  for (const t of trips) events.push({ kind: 'trip', t });
-  for (const r of rests) events.push({ kind: 'rest', r });
-  events.sort((a, b) => {
-    const aTime = a.kind === 'trip' ? a.t.boardTime : a.r.startTime;
-    const bTime = b.kind === 'trip' ? b.t.boardTime : b.r.startTime;
-    return (aTime || '').localeCompare(bTime || '');
-  });
+  for (const t of trips) events.push({ kind: 'trip', t, start: t.boardTime, end: t.alightTime });
+  for (const r of rests) events.push({ kind: 'rest', r, start: r.startTime, end: r.endTime });
+  events.sort((a, b) => (a.start || '').localeCompare(b.start || ''));
 
-  let prevAlight = null;
-  const rows = events.map(ev => {
+  // 各イベントの「次まで」 = 次イベントのstart - このイベントのend
+  const nextGap = (i) => {
+    const cur = events[i];
+    const next = events[i + 1];
+    if (!cur?.end || !next?.start) return null;
+    let g = timeToMinutes(next.start) - timeToMinutes(cur.end);
+    if (g < 0) g += 24*60;
+    return (g >= 0 && g < 12*60) ? g : null;
+  };
+
+  const rows = events.map((ev, i) => {
+    const gap = nextGap(i);
+    const gapStr = gap === null ? '—' : `${gap}分`;
     if (ev.kind === 'rest') {
       const r = ev.r;
       let dur = timeToMinutes(r.endTime) - timeToMinutes(r.startTime);
       if (dur < 0) dur += 24*60;
-      prevAlight = r.endTime;
       return `<tr style="background:#f5f5f5;color:var(--muted);">
         <td>休</td><td>${r.startTime}</td><td>${r.endTime}</td><td class="r">${dur}分</td>
-        <td>—</td><td class="place" colspan="2">${r.place || ''}</td><td class="r">—</td><td class="r">—</td>
+        <td>—</td><td class="place" colspan="2">${r.place || ''}</td><td class="r">—</td><td class="r">—</td><td class="r">${gapStr}</td>
       </tr>`;
     }
     const t = ev.t;
     let dur = timeToMinutes(t.alightTime) - timeToMinutes(t.boardTime);
     if (dur < 0) dur += 24*60;
-    let waitMin = '';
-    if (prevAlight && t.boardTime) {
-      let w = timeToMinutes(t.boardTime) - timeToMinutes(prevAlight);
-      if (w < 0) w += 24*60;
-      waitMin = w >= 0 && w < 600 ? `${w}分` : '';
-    }
-    prevAlight = t.alightTime;
     const cls = t.isCancel ? 'cancel' : (t.isCharter ? 'charter' : '');
     return `<tr class="${cls}">
       <td>${t.no}</td>
@@ -261,6 +260,7 @@ function renderTripsTable(drive) {
       <td class="place" title="${t.alightPlace}">${t.alightPlace}${t.isCancel ? ' [×]' : ''}</td>
       <td class="r">${(t.km || 0).toFixed(1)}</td>
       <td class="r">${t.isCancel ? '—' : formatYen(t.amount)}</td>
+      <td class="r">${gapStr}</td>
     </tr>`;
   }).join('');
   document.getElementById('tripsCard').innerHTML = `
@@ -269,12 +269,12 @@ function renderTripsTable(drive) {
     <table class="trip-table">
       <thead><tr>
         <th>No</th><th>乗車</th><th>降車</th><th class="r">時間</th>
-        <th>区</th><th>乗車地</th><th>降車地</th><th class="r">km</th><th class="r">金額</th>
+        <th>区</th><th>乗車地</th><th>降車地</th><th class="r">km</th><th class="r">金額</th><th class="r">次まで</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
     </div>
-    <div class="legend">区: 迎=お迎え / 貸=貸切。橙=キャンセル、薄橙背景=貸切</div>
+    <div class="legend">区: 迎=お迎え / 貸=貸切。「次まで」=このイベント終了から次イベント開始までの空車時間。橙=キャンセル、薄橙背景=貸切</div>
   `;
 }
 
