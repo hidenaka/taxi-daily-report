@@ -114,9 +114,29 @@ export const PERIOD_LABELS = {
   night: '深夜(23時〜)'
 };
 
+// 1乗務の出庫〜帰庫を時間帯ごとに分割 (分単位)
+export function periodMinutesInDrive(drive) {
+  const result = { morning: 0, noon: 0, evening: 0, night: 0 };
+  if (!drive.departureTime || !drive.returnTime) return result;
+  const dep = timeToMinutes(drive.departureTime);
+  let ret = timeToMinutes(drive.returnTime);
+  if (ret < dep) ret += 24 * 60;
+  // 1分刻みで時間帯判定
+  for (let m = dep; m < ret; m++) {
+    const h = Math.floor(m / 60) % 24;
+    let k;
+    if (h >= 23 || h < 7) k = 'night';
+    else if (h < 13) k = 'morning';
+    else if (h < 18) k = 'noon';
+    else k = 'evening';
+    result[k]++;
+  }
+  return result;
+}
+
 // 1乗務を時間帯別に集計
 export function calcPeriodBreakdown(drive) {
-  const empty = () => ({ sales: 0, count: 0, tripMin: 0, restMin: 0 });
+  const empty = () => ({ sales: 0, count: 0, tripMin: 0, restMin: 0, periodMin: 0 });
   const result = { morning: empty(), noon: empty(), evening: empty(), night: empty() };
   for (const t of (drive.trips || [])) {
     if (t.isCancel) continue;
@@ -133,12 +153,15 @@ export function calcPeriodBreakdown(drive) {
     if (dur < 0) dur += 24 * 60;
     result[k].restMin += dur;
   }
+  // 各時間帯の滞在時間 (出庫〜帰庫を時間帯で分割)
+  const pm = periodMinutesInDrive(drive);
+  for (const k of Object.keys(result)) result[k].periodMin = pm[k];
   return result;
 }
 
 // 複数乗務の時間帯別集計を合算
 export function aggregatePeriodBreakdowns(drives) {
-  const empty = () => ({ sales: 0, count: 0, tripMin: 0, restMin: 0 });
+  const empty = () => ({ sales: 0, count: 0, tripMin: 0, restMin: 0, periodMin: 0 });
   const total = { morning: empty(), noon: empty(), evening: empty(), night: empty() };
   for (const d of drives) {
     const b = calcPeriodBreakdown(d);
@@ -147,6 +170,7 @@ export function aggregatePeriodBreakdowns(drives) {
       total[k].count += b[k].count;
       total[k].tripMin += b[k].tripMin;
       total[k].restMin += b[k].restMin;
+      total[k].periodMin += b[k].periodMin;
     }
   }
   return total;

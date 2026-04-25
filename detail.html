@@ -222,12 +222,13 @@ function renderPeriodTable(drive) {
   const totalCount = keys.reduce((s, k) => s + pb[k].count, 0);
   const totalTrip = keys.reduce((s, k) => s + pb[k].tripMin, 0);
   const totalRest = keys.reduce((s, k) => s + pb[k].restMin, 0);
+  const totalPeriod = keys.reduce((s, k) => s + pb[k].periodMin, 0);
   const cell = (v) => `<td>${v}</td>`;
   const row = (label, valueFn) => `
     <tr>
       <td class="lbl">${label}</td>
       ${keys.map(k => cell(valueFn(pb[k]))).join('')}
-      ${cell(valueFn({ sales: totalSales, count: totalCount, tripMin: totalTrip, restMin: totalRest }))}
+      ${cell(valueFn({ sales: totalSales, count: totalCount, tripMin: totalTrip, restMin: totalRest, periodMin: totalPeriod }))}
     </tr>`;
   document.getElementById('periodCard').innerHTML = `
     <div class="muted">時間帯別サマリー</div>
@@ -243,7 +244,7 @@ function renderPeriodTable(drive) {
         ${row('件数', d => d.count || '—')}
         ${row('平均単価', d => d.count > 0 ? formatYen(d.sales / d.count) : '—')}
         ${row('実車時間', d => d.tripMin > 0 ? formatMin(d.tripMin) : '—')}
-        ${row('時間単価', d => d.tripMin > 0 ? formatYen(d.sales / (d.tripMin/60)) : '—')}
+        ${row('時間単価', d => d.periodMin > 0 ? formatYen(d.sales / (d.periodMin/60)) : '—')}
         ${row('休憩時間', d => d.restMin > 0 ? formatMin(d.restMin) : '—')}
       </tbody>
     </table>
