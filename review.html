@@ -193,15 +193,15 @@ async function load() {
     const monthly = calcMonthlySales(drives);
     const pay = calcTotalPay(drives, config);
     const detailed = drives.filter(d => !isSummaryOnly(d));
-    let tripMin = 0;
-    for (const d of detailed) tripMin += calcTimeBreakdown(d).tripMin;
+    let totalMin = 0;
+    for (const d of detailed) totalMin += calcTimeBreakdown(d).totalMin;
     monthSummaries.push({
       ym, drives,
       totalSales: monthly.inclTax,
       totalShifts: drives.length,
       totalPay: pay.total,
-      totalTripMin: tripMin,
-      hourly: tripMin > 0 ? monthly.inclTax / (tripMin / 60) : 0
+      totalShiftMin: totalMin,
+      hourly: totalMin > 0 ? monthly.inclTax / (totalMin / 60) : 0
     });
   }
   document.getElementById('rangeInfo').textContent = `${formatBillingPeriod(periods[0])} 〜 ${formatBillingPeriod(periods[periods.length-1])} (${allDrives.length}乗務)`;

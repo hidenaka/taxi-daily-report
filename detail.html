@@ -111,8 +111,8 @@ async function load() {
   const validCount = valid.length;
   const km = valid.reduce((s, t) => s + (t.km || 0), 0);
   const breakdown = calcTimeBreakdown(drive);
-  const tripHours = breakdown.tripMin / 60;
-  const hourlyRate = tripHours > 0 ? sales.inclTax / tripHours : 0;
+  const totalHours = breakdown.totalMin / 60;
+  const hourlyRate = totalHours > 0 ? sales.inclTax / totalHours : 0;
   const avgPrice = validCount > 0 ? sales.inclTax / validCount : 0;
 
   // KPI 4列
@@ -121,7 +121,7 @@ async function load() {
       <div><div class="lbl">売上(税込)</div><div class="num">${formatYen(sales.inclTax)}</div></div>
       <div><div class="lbl">件数</div><div class="num">${validCount}</div></div>
       <div><div class="lbl">平均単価</div><div class="num">${formatYen(avgPrice)}</div></div>
-      <div><div class="lbl">時間単価(実車)</div><div class="num">${formatYen(hourlyRate)}</div></div>
+      <div><div class="lbl">時間単価(乗務)</div><div class="num">${formatYen(hourlyRate)}</div></div>
     </div>
     <div class="kpi-row" style="margin-top:8px;">
       <div><div class="lbl">走行距離</div><div class="num">${km.toFixed(1)}<span style="font-size:11px;">km</span></div></div>
