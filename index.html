@@ -29,7 +29,8 @@
 .sum-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 4px; }
 .sum-table th, .sum-table td { padding: 6px 4px; text-align: right; border-bottom: 1px solid #eee; }
 .sum-table th { font-weight: 600; color: var(--muted); font-size: 10px; }
-.sum-table td.date, .sum-table th.date { text-align: left; cursor: pointer; }
+.sum-table td.date, .sum-table th.date, .sum-table td.l, .sum-table th.l { text-align: left; }
+.sum-table td.date { cursor: pointer; }
 .sum-table tr.total { background: #f5f5f5; font-weight: 600; }
 .sum-table tr.total td { border-top: 2px solid #ddd; }
 .period-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 4px; }
@@ -101,12 +102,6 @@ async function render() {
     predicted = predictMonthly(drives, config, range.start, range.end);
   }
 
-  // 合計乗務時間 (detailedな日のみ)
-  let totalShiftMin = 0;
-  for (const d of drives) {
-    if (!isSummaryOnly(d)) totalShiftMin += calcTimeBreakdown(d).totalMin;
-  }
-
   // サマリー
   let summaryHtml = `
     <div class="period-nav">
@@ -115,7 +110,6 @@ async function render() {
       <button id="nextBtn">翌月度 ›</button>
     </div>
     <div class="kv"><div>乗務数${isPast ? '（実績）' : ''}</div><div><strong>${actualResult.shiftCount}</strong>${isCurrent || isFuture ? ` / ${respShifts}` : ''}乗務${actualResult.paidLeaveDays > 0 ? ` <span class="badge" style="background:#ce93d8;color:#fff;">有給${actualResult.paidLeaveDays}日</span>` : ''}</div></div>
-    ${totalShiftMin > 0 ? `<div class="kv"><div>合計乗務時間</div><div><strong>${formatMin(totalShiftMin)}</strong></div></div>` : ''}
   `;
 
   if (isPast || drives.length >= respShifts) {
@@ -223,6 +217,10 @@ function renderSummaryTable(drives) {
       const v = pb[k].sales;
       return `<td>${v > 0 ? formatYen(v) : dash}</td>`;
     }).join('');
+    const memoText = (d.reviewMemo || '').trim();
+    const memoCell = memoText
+      ? `<td class="l" style="max-width:160px;color:#555;font-size:10px;line-height:1.3;white-space:normal;">${memoText.replace(/</g,'&lt;').replace(/\n/g,' / ')}</td>`
+      : `<td>—</td>`;
     return `<tr onclick="location.href='detail.html?date=${d.date}'" style="cursor:pointer;${summary ? 'background:#fafafa;' : ''}">
       <td class="date">${formatDate(d.date)}${summary ? '<span class="badge" style="font-size:9px;padding:0 4px;background:#ddd;color:#666;margin-left:3px;">概</span>' : ''}</td>
       <td>${summary ? dash : count}</td>
@@ -232,6 +230,7 @@ function renderSummaryTable(drives) {
       <td>${summary ? dash : km.toFixed(1)}</td>
       <td>${summary ? dash : formatMin(bd.totalMin)}</td>
       <td>${summary ? dash : formatMin(bd.tripMin)}</td>
+      ${memoCell}
     </tr>`;
   }).join('');
   card.innerHTML = `
@@ -241,7 +240,7 @@ function renderSummaryTable(drives) {
         <thead><tr>
           <th class="date">日付</th><th>件数</th><th>税込</th><th>税抜</th>
           ${PKEYS.map(k => `<th>${PERIOD_LABELS[k]}</th>`).join('')}
-          <th>km</th><th>乗務</th><th>実車</th>
+          <th>km</th><th>乗務</th><th>実車</th><th class="l">メモ</th>
         </tr></thead>
         <tbody>
           ${rows}
@@ -254,6 +253,7 @@ function renderSummaryTable(drives) {
             <td>${detKm.toFixed(1)}</td>
             <td>${formatMin(detTotalMin)}</td>
             <td>${formatMin(detTripMin)}</td>
+            <td>—</td>
           </tr>
         </tbody>
       </table>

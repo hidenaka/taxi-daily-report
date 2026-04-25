@@ -1,4 +1,4 @@
-const CACHE_NAME = 'taxi-daily-v21';
+const CACHE_NAME = 'taxi-daily-v22';
 const STATIC_FILES = [
   './',
   './index.html',
