@@ -72,6 +72,12 @@ export function hourlyActivity(drive, startHour = 7) {
   });
 }
 
+// summary-only な drive: 詳細trip単位のデータがなく合計のみ
+export function isSummaryOnly(drive) {
+  if (drive._importedFrom === 'spreadsheet') return true;
+  return (drive.trips || []).some(t => t._periodCount);
+}
+
 // 時間帯キー: 朝(7-12)/昼(13-17)/夜(18-22)/深夜(23-6)
 export function getPeriodKey(timeStr) {
   const m = timeToMinutes(timeStr);
