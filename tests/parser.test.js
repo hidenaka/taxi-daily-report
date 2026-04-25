@@ -61,3 +61,28 @@ test('parseReport: Gemini形式で「迎」フィールドが空の場合 isPick
   const trip23 = result.trips.find(t => t.no === 23);
   assert.equal(trip23.isPickup, false);
 });
+
+test('parseReport: km=0 & amount=500 はキャンセル扱い、amount=0 に上書き', () => {
+  const text = `No\t乗車\t降車\t時間\t迎\t乗車地\t降車地\t営Km\t合計\t待機
+1\t10:00\t10:05\t0:05\t迎\t品川区A\t品川区A\t0\t500\t`;
+  const result = parseReport(text);
+  assert.equal(result.trips.length, 1);
+  assert.equal(result.trips[0].isCancel, true);
+  assert.equal(result.trips[0].amount, 0);
+});
+
+test('parseReport: km=0 & 乗車地==降車地 もキャンセル扱い（500円以外でも）', () => {
+  const text = `No\t乗車\t降車\t時間\t迎\t乗車地\t降車地\t営Km\t合計\t待機
+2\t11:00\t11:00\t0:00\t迎\t大田区西蒲田5\t大田区西蒲田5\t0\t0\t`;
+  const result = parseReport(text);
+  assert.equal(result.trips[0].isCancel, true);
+  assert.equal(result.trips[0].amount, 0);
+});
+
+test('parseReport: 通常乗車（km>0）はキャンセル扱いにならない', () => {
+  const text = `No\t乗車\t降車\t時間\t迎\t乗車地\t降車地\t営Km\t合計\t待機
+3\t12:00\t12:10\t0:10\t迎\t品川区A\t品川区B\t2.0\t1500\t`;
+  const result = parseReport(text);
+  assert.equal(result.trips[0].isCancel, false);
+  assert.equal(result.trips[0].amount, 1500);
+});

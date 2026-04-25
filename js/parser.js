@@ -21,6 +21,8 @@ function parseClaudeRow(cells) {
   if (no === '休') {
     return { type: 'rest', startTime: board, endTime: alight, place: bp };
   }
+  // キャンセル判定: km=0 で (amount=500 or 乗車地==降車地)
+  const isCancel = parseKm(km) === 0 && (parseAmount(amt) === 500 || bp === ap);
   return {
     type: 'trip',
     no: parseInt(no, 10),
@@ -29,9 +31,9 @@ function parseClaudeRow(cells) {
     boardPlace: bp,
     alightPlace: ap,
     km: parseKm(km),
-    amount: parseAmount(amt),
+    amount: isCancel ? 0 : parseAmount(amt),
     isPickup: pickup === '迎',
-    isCancel: false,
+    isCancel,
     waitTime: wait || ''
   };
 }
@@ -57,6 +59,8 @@ function parseGeminiRow(cells) {
   if (no === '休') {
     return { type: 'rest', startTime: board, endTime: alight, place: bp };
   }
+  // キャンセル判定: km=0 で (amount=500 or 乗車地==降車地)
+  const isCancel = parseKm(km) === 0 && (parseAmount(amt) === 500 || bp === ap);
   return {
     type: 'trip',
     no: parseInt(no, 10),
@@ -65,9 +69,9 @@ function parseGeminiRow(cells) {
     boardPlace: bp,
     alightPlace: ap,
     km: parseKm(km),
-    amount: parseAmount(amt),
+    amount: isCancel ? 0 : parseAmount(amt),
     isPickup: pickup === '迎',
-    isCancel: false,
+    isCancel,
     waitTime: ''
   };
 }
