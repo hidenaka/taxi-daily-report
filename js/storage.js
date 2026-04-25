@@ -108,3 +108,42 @@ export async function saveConfig(config) {
   const sha = existing?.sha || null;
   return putFile('data/config.json', config, 'update config', sha);
 }
+
+const PENDING_QUEUE_KEY = 'pending_saves';
+
+function getPendingQueue() {
+  return JSON.parse(localStorage.getItem(PENDING_QUEUE_KEY) || '[]');
+}
+
+function setPendingQueue(queue) {
+  localStorage.setItem(PENDING_QUEUE_KEY, JSON.stringify(queue));
+}
+
+// saveDriveをラップ: 失敗時はキューに退避
+export async function saveDriveSafe(drive) {
+  try {
+    return await saveDrive(drive);
+  } catch (err) {
+    if (err.code === 'CONFLICT') throw err; // コンフリクトは呼び元で処理
+    // ネットワーク or その他失敗 → キューに退避
+    const queue = getPendingQueue();
+    queue.push({ type: 'drive', data: drive, queuedAt: Date.now() });
+    setPendingQueue(queue);
+    throw new Error(`保存失敗: ${err.message} (キューに退避済、復帰時に再送します)`);
+  }
+}
+
+// 起動時に呼ぶ：キュー内の保存待ちを再送
+export async function flushPendingQueue() {
+  const queue = getPendingQueue();
+  const remaining = [];
+  for (const item of queue) {
+    try {
+      if (item.type === 'drive') await saveDrive(item.data);
+    } catch (err) {
+      remaining.push(item);
+    }
+  }
+  setPendingQueue(remaining);
+  return { sent: queue.length - remaining.length, remaining: remaining.length };
+}
