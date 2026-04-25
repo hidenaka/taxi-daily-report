@@ -193,7 +193,7 @@ function renderSummaryTable(drives) {
   const sorted = [...drives].sort((a, b) => a.date.localeCompare(b.date));
   const PKEYS = ['morning', 'noon', 'evening', 'night'];
   let totalIncl = 0, totalExcl = 0, totalKm = 0;
-  let detIncl = 0, detCount = 0, detKm = 0, detTripMin = 0, detTotalMin = 0;
+  let detIncl = 0, detExcl = 0, detCount = 0, detDays = 0, detKm = 0, detTripMin = 0, detTotalMin = 0;
   const periodTotals = { morning: 0, noon: 0, evening: 0, night: 0 };
   const rows = sorted.map(d => {
     const sales = calcDailySales(d);
@@ -207,8 +207,9 @@ function renderSummaryTable(drives) {
     let pb = null;
     if (!summary) {
       const count = valid.length;
-      detIncl += sales.inclTax; detCount += count; detKm += km;
+      detIncl += sales.inclTax; detExcl += sales.exclTax; detCount += count; detKm += km;
       detTripMin += bd.tripMin; detTotalMin += bd.totalMin;
+      detDays++;
       pb = calcPeriodBreakdown(d);
       for (const k of PKEYS) periodTotals[k] += pb[k].sales;
     }
@@ -260,6 +261,19 @@ function renderSummaryTable(drives) {
             <td>${detTotalMin > 0 ? formatYen(detIncl / (detTotalMin / 60)) : '—'}</td>
             <td>—</td>
           </tr>
+          ${detDays > 0 ? `
+          <tr class="total" style="background:#fff8e1;">
+            <td class="date">1乗務平均</td>
+            <td>${(detCount / detDays).toFixed(1)}</td>
+            <td>${formatYen(detIncl / detDays)}</td>
+            <td>${formatYen(detExcl / detDays)}</td>
+            ${PKEYS.map(k => `<td>${periodTotals[k] > 0 ? formatYen(periodTotals[k] / detDays) : '—'}</td>`).join('')}
+            <td>${(detKm / detDays).toFixed(1)}</td>
+            <td>${formatMin(detTotalMin / detDays)}</td>
+            <td>${formatMin(detTripMin / detDays)}</td>
+            <td>${detTotalMin > 0 ? formatYen(detIncl / (detTotalMin / 60)) : '—'}</td>
+            <td>—</td>
+          </tr>` : ''}
         </tbody>
       </table>
     </div>
