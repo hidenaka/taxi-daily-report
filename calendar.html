@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>カレンダー — タクシー日報</title>
+<link rel="stylesheet" href="css/style.css">
+<style>
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 6px; }
+.cal-cell { padding: 12px 0; text-align: center; background: #fff; border-radius: 4px; font-size: 14px; cursor: pointer; user-select: none; }
+.cal-cell.planned { background: var(--green); color: #fff; font-weight: 600; }
+.cal-cell.actual { background: var(--primary); color: #fff; font-weight: 600; }
+.cal-cell.today { border: 2px solid #f57f17; background: #ffeb3b; }
+.cal-cell.dim { color: #ccc; }
+.dow-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; font-size: 11px; color: var(--muted); text-align: center; }
+.dow-toggle { display: inline-block; padding: 4px 10px; margin: 2px; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; background: #fff; }
+.dow-toggle.on { background: var(--green); color: #fff; border-color: var(--green); }
+</style>
+</head>
+<body>
+<main style="padding:14px;">
+  <h1>シフトカレンダー</h1>
+
+  <section class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <button class="btn" id="prevBtn" style="background:var(--gray);">‹ 前月</button>
+      <strong id="monthLabel"></strong>
+      <button class="btn" id="nextBtn" style="background:var(--gray);">翌月 ›</button>
+    </div>
+    <div class="dow-row" style="margin-top:10px;">
+      <div>日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div>土</div>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div style="margin-top:12px;font-size:11px;display:flex;gap:8px;flex-wrap:wrap;">
+      <span><span style="display:inline-block;width:10px;height:10px;background:var(--primary);border-radius:2px;"></span> 実績</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:var(--green);border-radius:2px;"></span> 予定</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:#ffeb3b;border:1px solid #f57f17;border-radius:2px;"></span> 今日</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h3>曜日一括選択</h3>
+    <div id="dowToggles"></div>
+    <p class="muted">タップで月内の該当曜日を一括予定追加</p>
+  </section>
+
+  <section class="card">
+    <h3>月サマリー</h3>
+    <div id="summary"></div>
+  </section>
+</main>
+<div id="navHost"></div>
+<script type="module">
+import { renderBottomNav, formatYen, todayIso } from './js/app.js';
+import { getConfig, saveConfig, getDrivesForMonth } from './js/storage.js';
+
+document.getElementById('navHost').innerHTML = renderBottomNav('calendar');
+
+let viewYear = new Date().getFullYear();
+let viewMonth = new Date().getMonth(); // 0-indexed
+let config = null;
+let drivesThisMonth = [];
+
+const DOW = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+async function load() {
+  config = await getConfig();
+  if (!config) return alert('config.json未取得');
+  await render();
+}
+
+async function render() {
+  document.getElementById('monthLabel').textContent = `${viewYear}年 ${viewMonth + 1}月`;
+  drivesThisMonth = await getDrivesForMonth(`${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`);
+  renderGrid();
+  renderDowToggles();
+  renderSummary();
+}
+
+function isPlanned(date) {
+  return config.shifts.expandedDates.includes(date);
+}
+
+function isActual(date) {
+  return drivesThisMonth.some(d => d.date === date);
+}
+
+function renderGrid() {
+  const grid = document.getElementById('calGrid');
+  grid.innerHTML = '';
+  const first = new Date(viewYear, viewMonth, 1);
+  const startDow = first.getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+
+  // 前月の埋め
+  const prevDays = new Date(viewYear, viewMonth, 0).getDate();
+  for (let i = startDow - 1; i >= 0; i--) {
+    const d = document.createElement('div');
+    d.className = 'cal-cell dim';
+    d.textContent = prevDays - i;
+    grid.appendChild(d);
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const iso = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const cell = document.createElement('div');
+    cell.className = 'cal-cell';
+    if (isActual(iso)) cell.classList.add('actual');
+    else if (isPlanned(iso)) cell.classList.add('planned');
+    if (iso === todayIso()) cell.classList.add('today');
+    cell.textContent = d;
+    cell.onclick = () => togglePlanned(iso);
+    grid.appendChild(cell);
+  }
+}
+
+async function togglePlanned(iso) {
+  if (isActual(iso)) return alert('実績入力済の日は変更できません');
+  const list = config.shifts.expandedDates;
+  const idx = list.indexOf(iso);
+  if (idx >= 0) list.splice(idx, 1); else { list.push(iso); list.sort(); }
+  await saveConfig(config);
+  await render();
+}
+
+function renderDowToggles() {
+  const host = document.getElementById('dowToggles');
+  host.innerHTML = '';
+  ['日','月','火','水','木','金','土'].forEach((label, i) => {
+    const dow = DOW[i];
+    const isOn = config.shifts.patterns.includes(dow);
+    const btn = document.createElement('span');
+    btn.className = 'dow-toggle' + (isOn ? ' on' : '');
+    btn.textContent = label;
+    btn.onclick = async () => {
+      const idx = config.shifts.patterns.indexOf(dow);
+      if (idx >= 0) config.shifts.patterns.splice(idx, 1); else config.shifts.patterns.push(dow);
+      // 当月の expandedDates に該当曜日を全展開（既存はそのまま）
+      const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dt = new Date(viewYear, viewMonth, d);
+        const iso = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const dowName = DOW[dt.getDay()];
+        if (config.shifts.patterns.includes(dowName) && !config.shifts.expandedDates.includes(iso) && !isActual(iso)) {
+          config.shifts.expandedDates.push(iso);
+        }
+      }
+      config.shifts.expandedDates.sort();
+      await saveConfig(config);
+      await render();
+    };
+    host.appendChild(btn);
+  });
+}
+
+function renderSummary() {
+  const ym = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
+  const planned = config.shifts.expandedDates.filter(d => d.startsWith(ym)).length;
+  const actual = drivesThisMonth.length;
+  const remaining = Math.max(0, planned - actual);
+  const willMakeResp = (actual + (config.shifts.expandedDates.filter(d => d.startsWith(ym) && d >= todayIso()).length)) >= config.responsibilityShifts;
+  document.getElementById('summary').innerHTML = `
+    <div>予定: <strong>${planned}乗務</strong></div>
+    <div>実績: <strong>${actual}乗務</strong></div>
+    <div>残り: <strong>${remaining}乗務</strong></div>
+    <div style="color:${willMakeResp ? 'var(--primary)' : 'var(--orange)'}">責任出番達成見込み: <strong>${willMakeResp ? '○' : '△'} (${actual + remaining}/${config.responsibilityShifts})</strong></div>
+  `;
+}
+
+document.getElementById('prevBtn').onclick = () => {
+  viewMonth--; if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+  render();
+};
+document.getElementById('nextBtn').onclick = () => {
+  viewMonth++; if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+  render();
+};
+
+if (localStorage.getItem('github_token') && localStorage.getItem('github_data_repo')) load();
+else alert('先に設定画面でGitHubトークンを設定してください');
+</script>
+</body>
+</html>
