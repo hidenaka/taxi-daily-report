@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>設定 — タクシー日報</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="manifest" href="manifest.webmanifest">
+</head>
+<body>
+<main style="padding:14px;">
+  <h1>設定</h1>
+
+  <section class="card">
+    <h3>GitHub（データリポジトリ）</h3>
+    <label class="muted">データリポジトリ (username/repo-data)</label>
+    <input class="input" id="repoInput" placeholder="hidenaka/taxi-daily-report-data">
+    <label class="muted" style="margin-top:8px;display:block;">Personal Access Token (repo権限)</label>
+    <input class="input" id="tokenInput" type="password">
+    <button class="btn btn-block" id="saveGhBtn" style="margin-top:8px;">保存</button>
+    <div id="ghStatus" class="muted" style="margin-top:6px;"></div>
+  </section>
+
+  <section class="card">
+    <h3>デフォルト</h3>
+    <label class="muted">乗務種別</label>
+    <select class="select" id="vehicleTypeSel">
+      <option value="regular">普通車</option>
+      <option value="premium">プレミアム</option>
+    </select>
+    <label class="muted" style="margin-top:8px;display:block;">出庫時刻</label>
+    <input class="input" id="departureInput" type="time" value="07:00">
+  </section>
+
+  <section class="card">
+    <h3>天候地点</h3>
+    <label class="muted">緯度</label>
+    <input class="input" id="latInput" type="number" step="0.0001" value="35.6938">
+    <label class="muted" style="margin-top:8px;display:block;">経度</label>
+    <input class="input" id="lonInput" type="number" step="0.0001" value="139.7036">
+    <label class="muted" style="margin-top:8px;display:block;">表示名</label>
+    <input class="input" id="locNameInput" value="千代田区">
+  </section>
+
+  <section class="card">
+    <h3>レートテーブル</h3>
+    <p class="muted">乗務数別の売上ティアと歩率。編集は慎重に。</p>
+    <div id="rateTableEditor"></div>
+    <button class="btn" id="saveConfigBtn" style="margin-top:10px;">設定全体を保存</button>
+  </section>
+
+  <section class="card">
+    <h3>データ</h3>
+    <button class="btn" id="exportBtn">全データをエクスポート</button>
+    <button class="btn" id="recalcBtn" style="margin-left:8px;background:var(--gray);">全drives再計算（ドライラン）</button>
+  </section>
+</main>
+<div id="navHost"></div>
+<script type="module">
+import { renderBottomNav } from './js/app.js';
+import { getConfig, saveConfig, getDrivesForMonth } from './js/storage.js';
+import { calcTotalPay } from './js/payroll.js';
+
+document.getElementById('navHost').innerHTML = renderBottomNav('settings');
+
+// GitHub設定 復元
+document.getElementById('repoInput').value = localStorage.getItem('github_data_repo') || '';
+document.getElementById('tokenInput').value = localStorage.getItem('github_token') || '';
+
+document.getElementById('saveGhBtn').onclick = () => {
+  localStorage.setItem('github_data_repo', document.getElementById('repoInput').value);
+  localStorage.setItem('github_token', document.getElementById('tokenInput').value);
+  document.getElementById('ghStatus').textContent = '保存しました。設定を読み込みます…';
+  loadConfig();
+};
+
+let currentConfig = null;
+
+async function loadConfig() {
+  try {
+    currentConfig = await getConfig();
+    if (!currentConfig) { document.getElementById('ghStatus').textContent = 'config.json が見つかりません'; return; }
+    document.getElementById('vehicleTypeSel').value = currentConfig.defaults.vehicleType;
+    document.getElementById('departureInput').value = currentConfig.defaults.departureTime;
+    document.getElementById('latInput').value = currentConfig.weatherLocation.lat;
+    document.getElementById('lonInput').value = currentConfig.weatherLocation.lon;
+    document.getElementById('locNameInput').value = currentConfig.weatherLocation.name;
+    renderRateTable(currentConfig.rateTable);
+    document.getElementById('ghStatus').textContent = '読み込み成功';
+  } catch (e) {
+    document.getElementById('ghStatus').textContent = 'エラー: ' + e.message;
+  }
+}
+
+function renderRateTable(rt) {
+  const host = document.getElementById('rateTableEditor');
+  host.innerHTML = '';
+  for (const shifts of ['11','10','9','8','7','6','5','4']) {
+    const tiers = rt[shifts] || [];
+    const div = document.createElement('div');
+    div.style.marginBottom = '12px';
+    div.innerHTML = `<strong>${shifts}乗務</strong>` +
+      tiers.map((t, i) =>
+        `<div style="display:flex;gap:4px;margin-top:4px;">
+          <input class="input" style="flex:1;" type="number" data-shifts="${shifts}" data-idx="${i}" data-key="salesMin" value="${t.salesMin}">
+          <input class="input" style="flex:1;" type="number" data-shifts="${shifts}" data-idx="${i}" data-key="salesMax" value="${t.salesMax}">
+          <input class="input" style="flex:1;" type="number" step="0.001" data-shifts="${shifts}" data-idx="${i}" data-key="rate" value="${t.rate}">
+        </div>`
+      ).join('');
+    host.appendChild(div);
+  }
+  // 12-13率
+  const rateDiv = document.createElement('div');
+  rateDiv.innerHTML = `<strong>12-13乗務率</strong> <input class="input" id="rate1213" type="number" step="0.01" value="${rt['12_13rate']}" style="width:100px;">`;
+  host.appendChild(rateDiv);
+}
+
+document.getElementById('saveConfigBtn').onclick = async () => {
+  if (!currentConfig) return;
+  // フォームから currentConfig を更新
+  currentConfig.defaults.vehicleType = document.getElementById('vehicleTypeSel').value;
+  currentConfig.defaults.departureTime = document.getElementById('departureInput').value;
+  currentConfig.weatherLocation = {
+    lat: parseFloat(document.getElementById('latInput').value),
+    lon: parseFloat(document.getElementById('lonInput').value),
+    name: document.getElementById('locNameInput').value
+  };
+  // レートテーブル
+  document.querySelectorAll('#rateTableEditor input[data-shifts]').forEach(inp => {
+    const s = inp.dataset.shifts; const i = parseInt(inp.dataset.idx); const k = inp.dataset.key;
+    if (!currentConfig.rateTable[s][i]) currentConfig.rateTable[s][i] = {};
+    currentConfig.rateTable[s][i][k] = parseFloat(inp.value);
+  });
+  currentConfig.rateTable['12_13rate'] = parseFloat(document.getElementById('rate1213').value);
+  currentConfig.lastUpdated = new Date().toISOString();
+  await saveConfig(currentConfig);
+  alert('保存しました');
+};
+
+document.getElementById('exportBtn').onclick = async () => {
+  // 当月だけでなく全月を取得（簡略化のため過去12ヶ月）
+  const all = [];
+  const now = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now); d.setMonth(now.getMonth() - i);
+    const ym = d.toISOString().slice(0, 7);
+    const drives = await getDrivesForMonth(ym);
+    all.push(...drives);
+  }
+  const blob = new Blob([JSON.stringify({ config: currentConfig, drives: all }, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'taxi-export.json'; a.click();
+};
+
+document.getElementById('recalcBtn').onclick = async () => {
+  const ym = new Date().toISOString().slice(0, 7);
+  const drives = await getDrivesForMonth(ym);
+  const result = calcTotalPay(drives, currentConfig);
+  alert(`当月再計算結果: 乗務${result.shiftCount} 推定¥${Math.round(result.total).toLocaleString()}`);
+};
+
+if (localStorage.getItem('github_token') && localStorage.getItem('github_data_repo')) loadConfig();
+</script>
+</body>
+</html>
