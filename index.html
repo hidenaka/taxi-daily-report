@@ -89,8 +89,8 @@ async function render() {
   const isFuture = range.start > today;
   const isCurrent = !isPast && !isFuture;
 
-  // 今日の傾向(当月度表示時のみ・過去データから)
-  if (isCurrent) await renderTodayHint();
+  // 今日の傾向(当月度表示時のみ・過去データから) ← 後追いで非同期実行(UIをブロックしない)
+  if (isCurrent) renderTodayHint();
 
   const monthLabel = formatBillingPeriod(viewPeriod);
   const takeHomeRate = config.takeHomeRate ?? 0.75;
@@ -338,14 +338,18 @@ function eachDateInRange(start, end) {
 // 今日の傾向: 過去同曜日の平均と直近トレンド
 async function renderTodayHint() {
   const card = document.getElementById('todayHintCard');
+  card.style.display = '';
+  card.innerHTML = '<div class="muted" style="font-size:11px;">今日の傾向を集計中…</div>';
   const today = todayIso();
   const todayDow = dowOf(today);
   const dowName = DOW_LABELS[todayDow];
-  // 過去6ヶ月分から同曜日のdrivesを集計
-  const samples = [];
+  // 過去3ヶ月分(並列で取得)から同曜日のdrivesを集計
+  const periods = [];
   let p = currentBillingPeriod();
-  for (let i = 0; i < 6; i++) {
-    const ds = await getDrivesForMonth(p);
+  for (let i = 0; i < 3; i++) { periods.push(p); p = shiftBillingPeriod(p, -1); }
+  const all = await Promise.all(periods.map(ym => getDrivesForMonth(ym)));
+  const samples = [];
+  for (const ds of all) {
     for (const d of ds) {
       if (isSummaryOnly(d)) continue;
       if (d.date === today) continue;
@@ -355,16 +359,14 @@ async function renderTodayHint() {
         if (sales > 0) samples.push(sales);
       }
     }
-    p = shiftBillingPeriod(p, -1);
   }
   if (samples.length === 0) { card.style.display = 'none'; return; }
   const avg = samples.reduce((s,v) => s+v, 0) / samples.length;
   const max = Math.max(...samples);
-  card.style.display = '';
   card.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:baseline;">
       <strong>今日(${dowName}) の傾向</strong>
-      <span class="muted" style="font-size:10px;">過去${samples.length}日</span>
+      <span class="muted" style="font-size:10px;">過去${samples.length}日(3ヶ月)</span>
     </div>
     <div class="kv" style="margin-top:6px;"><div>平均日売上</div><div><strong>${formatYen(avg)}</strong></div></div>
     <div class="kv"><div>ベスト</div><div><strong>${formatYen(max)}</strong></div></div>
