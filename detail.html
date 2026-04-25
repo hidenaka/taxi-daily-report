@@ -27,13 +27,13 @@
 
 .hour-chart { margin-top: 8px; overflow-x: auto; }
 .hour-row { display: grid; grid-template-columns: repeat(24, minmax(28px, 1fr)); gap: 2px; }
-.hour-bar-col { display: flex; flex-direction: column; align-items: center; }
+.hour-bar-col { display: grid; grid-template-rows: 60px 12px 11px auto; justify-items: center; align-items: end; }
 .hour-bar-col .bar-wrap { height: 60px; display: flex; align-items: end; width: 100%; }
 .hour-bar-col .bar { width: 100%; background: var(--green, #4CAF50); border-radius: 2px 2px 0 0; min-height: 1px; }
 .hour-bar-col .bar.zero { background: #f0f0f0; }
-.hour-bar-col .yen { font-size: 9px; color: #1b5e20; font-weight: 600; line-height: 1.1; margin-top: 2px; }
-.hour-bar-col .min { font-size: 8px; color: var(--muted); line-height: 1.1; }
-.hour-bar-col .h { font-size: 9px; color: var(--muted); margin-top: 2px; border-top: 1px solid #ddd; padding-top: 2px; width: 100%; text-align: center; }
+.hour-bar-col .yen { font-size: 9px; color: #1b5e20; font-weight: 600; line-height: 1; align-self: center; }
+.hour-bar-col .min { font-size: 8px; color: var(--muted); line-height: 1; align-self: center; }
+.hour-bar-col .h { font-size: 9px; color: var(--muted); margin-top: 2px; border-top: 1px solid #ddd; padding-top: 2px; width: 100%; text-align: center; align-self: end; }
 
 .trip-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 4px; }
 .trip-table th, .trip-table td { padding: 4px 3px; border-bottom: 1px solid #eee; }
@@ -52,7 +52,11 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 <main style="padding:14px;">
-  <h1 id="title">乗務詳細</h1>
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+    <button class="btn" onclick="history.length > 1 ? history.back() : location.href='index.html'" style="background:var(--gray);padding:6px 12px;font-size:13px;">← 戻る</button>
+    <a href="index.html" style="font-size:12px;color:var(--muted);text-decoration:none;">ホーム</a>
+  </div>
+  <h1 id="title" style="margin-top:0;">乗務詳細</h1>
 
   <section class="card" id="kpiCard"></section>
   <section class="card" id="periodCard"></section>
