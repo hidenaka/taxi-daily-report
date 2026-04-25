@@ -1,0 +1,61 @@
+{
+  "_note": "TODO: rateTable は IMG_5676 の解像度不足のためプレースホルダ値です。設定画面（settings.html）から本人が表を見ながら編集してください。確定したら Task 14（過去明細検算）を実施。既知データ点: 11乗務×税抜1,100,000 → 0.687。",
+  "shifts": {
+    "patterns": ["sun", "tue", "thu"],
+    "exceptions": { "added": [], "removed": [], "swapped": [] },
+    "expandedDates": []
+  },
+  "defaults": {
+    "vehicleType": "regular",
+    "departureTime": "07:00"
+  },
+  "weatherLocation": {
+    "lat": 35.6938,
+    "lon": 139.7036,
+    "name": "千代田区"
+  },
+  "premiumIncentive": {
+    "thresholdSalesExclTax": 80000,
+    "amountPerShift": 2000
+  },
+  "responsibilityShifts": 11,
+  "rateTable": {
+    "11": [
+      { "salesMin": 0,       "salesMax": 500000,  "rate": 0.55 },
+      { "salesMin": 500000,  "salesMax": 800000,  "rate": 0.60 },
+      { "salesMin": 800000,  "salesMax": 1000000, "rate": 0.65 },
+      { "salesMin": 1000000, "salesMax": 1100000, "rate": 0.68 },
+      { "salesMin": 1100000, "salesMax": 1200000, "rate": 0.687 },
+      { "salesMin": 1200000, "salesMax": 9999999, "rate": 0.70 }
+    ],
+    "10": [
+      { "salesMin": 0,       "salesMax": 500000,  "rate": 0.50 },
+      { "salesMin": 500000,  "salesMax": 1000000, "rate": 0.55 },
+      { "salesMin": 1000000, "salesMax": 9999999, "rate": 0.60 }
+    ],
+    "9": [
+      { "salesMin": 0,       "salesMax": 500000,  "rate": 0.48 },
+      { "salesMin": 500000,  "salesMax": 1000000, "rate": 0.53 },
+      { "salesMin": 1000000, "salesMax": 9999999, "rate": 0.58 }
+    ],
+    "8": [
+      { "salesMin": 0,       "salesMax": 500000,  "rate": 0.45 },
+      { "salesMin": 500000,  "salesMax": 9999999, "rate": 0.50 }
+    ],
+    "7": [
+      { "salesMin": 0,       "salesMax": 500000,  "rate": 0.42 },
+      { "salesMin": 500000,  "salesMax": 9999999, "rate": 0.47 }
+    ],
+    "6": [
+      { "salesMin": 0,       "salesMax": 9999999, "rate": 0.40 }
+    ],
+    "5": [
+      { "salesMin": 0,       "salesMax": 9999999, "rate": 0.35 }
+    ],
+    "4": [
+      { "salesMin": 0,       "salesMax": 9999999, "rate": 0.30 }
+    ],
+    "12_13rate": 0.62
+  },
+  "lastUpdated": "2026-04-25T12:00:00+09:00"
+}
