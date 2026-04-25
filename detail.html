@@ -25,17 +25,18 @@
 .period-table tr.total { background: #f5f5f5; font-weight: 600; }
 .period-table tr.total td { border-top: 2px solid #ddd; }
 
-.hour-chart { margin-top: 8px; overflow-x: auto; }
-.hour-row { display: grid; grid-template-columns: repeat(24, minmax(28px, 1fr)); gap: 2px; }
-.hour-bar-col { display: grid; grid-template-rows: 60px 12px 11px auto; justify-items: center; align-items: end; }
-.hour-bar-col .bar-wrap { height: 60px; display: flex; align-items: end; gap: 1px; width: 100%; }
-.hour-bar-col .bar { flex: 1; border-radius: 2px 2px 0 0; min-height: 1px; }
-.hour-bar-col .bar.sales { background: var(--green, #4CAF50); }
-.hour-bar-col .bar.rest { background: #555; }
-.hour-bar-col .bar.zero { background: #f0f0f0; }
-.hour-bar-col .yen { font-size: 9px; color: #1b5e20; font-weight: 600; line-height: 1; align-self: center; }
-.hour-bar-col .min { font-size: 8px; color: var(--muted); line-height: 1; align-self: center; }
-.hour-bar-col .h { font-size: 9px; color: var(--muted); margin-top: 2px; border-top: 1px solid #ddd; padding-top: 2px; width: 100%; text-align: center; align-self: end; }
+.hour-list { margin-top: 8px; }
+.hour-row { display: grid; grid-template-columns: 38px 1fr 70px; gap: 6px; align-items: center; padding: 4px 0; border-bottom: 1px solid #f0f0f0; font-size: 12px; }
+.hour-row .h { font-weight: 600; color: #444; text-align: right; padding-right: 4px; font-size: 12px; }
+.hour-row .h.zero { color: #ccc; font-weight: 400; }
+.hour-row .barcell { display: grid; grid-template-rows: 1fr 1fr; gap: 2px; }
+.hour-row .bar-bg { height: 11px; background: #f5f5f5; border-radius: 3px; overflow: hidden; }
+.hour-row .bar { height: 100%; border-radius: 3px; min-width: 0; transition: width 0.2s; }
+.hour-row .bar.sales { background: var(--green, #4CAF50); }
+.hour-row .bar.rest { background: #757575; }
+.hour-row .vals { font-size: 10px; line-height: 1.3; text-align: right; color: var(--muted); }
+.hour-row .vals .y { color: #1b5e20; font-weight: 600; font-size: 11px; }
+.hour-row .vals .r { color: #555; }
 
 .trip-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 4px; }
 .trip-table th, .trip-table td { padding: 4px 3px; border-bottom: 1px solid #eee; }
@@ -77,6 +78,7 @@ import { renderBottomNav, formatYen, formatDate } from './js/app.js';
 import { getDrive, listFiles, saveDriveSafe } from './js/storage.js';
 import { calcDailySales } from './js/payroll.js';
 import { calcTimeBreakdown, hourlyActivity, calcPeriodBreakdown, PERIOD_LABELS, formatMin, timeToMinutes } from './js/chart-helpers.js';
+import { weatherEmoji } from './js/weather.js';
 
 const SHIFT_START_HOUR = 7;
 function shiftHour(h) { return h < SHIFT_START_HOUR ? h + 24 : h; }
@@ -153,16 +155,21 @@ async function load() {
   // 時間別: 7時スタート、各バーに金額・実車分
   renderHourChart(drive);
 
-  // 天候
+  // 天候 (絵文字+温度のシンプル表記)
   if (drive.weather) {
     const w = drive.weather;
+    const cell = (lbl, p) => `<div style="text-align:center;flex:1;">
+      <div style="font-size:10px;color:var(--muted);">${lbl}</div>
+      <div style="font-size:24px;line-height:1.2;">${p ? weatherEmoji(p.code) : '—'}</div>
+      <div style="font-size:11px;color:#444;">${p?.tempAvg != null ? p.tempAvg + '℃' : ''}${p?.precipMm > 0 ? ` / ${p.precipMm}mm` : ''}</div>
+    </div>`;
     document.getElementById('weatherCard').innerHTML = `
       <div class="muted">天候</div>
-      <div style="display:flex;gap:8px;font-size:12px;margin-top:4px;flex-wrap:wrap;">
-        <div>朝 ${w.morning?.label || '-'} ${w.morning?.tempAvg ?? ''}℃</div>
-        <div>昼 ${w.noon?.label || '-'} ${w.noon?.tempAvg ?? ''}℃</div>
-        <div>夕夜 ${w.evening?.label || '-'} ${w.evening?.tempAvg ?? ''}℃</div>
-        <div>深夜 ${w.night?.label || '-'} ${w.night?.tempAvg ?? ''}℃</div>
+      <div style="display:flex;gap:4px;margin-top:6px;">
+        ${cell('朝', w.morning)}
+        ${cell('昼', w.noon)}
+        ${cell('夕夜', w.evening)}
+        ${cell('深夜', w.night)}
       </div>
     `;
   } else {
@@ -246,37 +253,33 @@ function renderPeriodTable(drive) {
 
 function renderHourChart(drive) {
   const acts = hourlyActivity(drive, SHIFT_START_HOUR);
-  const maxSales = Math.max(...acts.map(a => a.sales), 1);
-  const REST_FULL = 60; // 60分=100%
-  const cols = acts.map(a => {
-    const salesPct = a.sales === 0 ? 0 : Math.max(4, (a.sales / maxSales) * 100);
-    const restPct = a.restMin === 0 ? 0 : Math.max(4, (a.restMin / REST_FULL) * 100);
-    const salesCls = a.sales === 0 ? 'sales zero' : 'sales';
-    const restCls = a.restMin === 0 ? 'rest zero' : 'rest';
-    const yen = a.sales > 0 ? formatYen(a.sales) : '';
-    const tripMin = a.tripMin > 0 ? `実${a.tripMin}` : '';
-    const restMin = a.restMin > 0 ? `休${a.restMin}` : '';
-    const minLabel = [tripMin, restMin].filter(Boolean).join(' ');
-    return `<div class="hour-bar-col">
-      <div class="bar-wrap">
-        <div class="bar ${salesCls}" style="height:${salesPct}%" title="売上¥${a.sales.toLocaleString()}"></div>
-        <div class="bar ${restCls}" style="height:${restPct}%" title="休憩${a.restMin}分"></div>
+  // 0売上＆0休憩の時間帯は表示しない (帰庫後の0時間帯を省く)
+  const filtered = acts.filter(a => a.sales > 0 || a.tripMin > 0 || a.restMin > 0);
+  const maxSales = Math.max(...filtered.map(a => a.sales), 1);
+  const REST_FULL = 60;
+  const rows = filtered.map(a => {
+    const salesPct = a.sales === 0 ? 0 : Math.max(2, (a.sales / maxSales) * 100);
+    const restPct = a.restMin === 0 ? 0 : Math.max(2, (a.restMin / REST_FULL) * 100);
+    const yenLabel = a.sales > 0 ? formatYen(a.sales) : '—';
+    const restLabel = a.restMin > 0 ? `休${a.restMin}分` : '';
+    const tripLabel = a.tripMin > 0 ? `実${a.tripMin}分` : '';
+    return `<div class="hour-row">
+      <div class="h">${shiftHour(a.hour)}時</div>
+      <div class="barcell">
+        <div class="bar-bg"><div class="bar sales" style="width:${salesPct}%"></div></div>
+        <div class="bar-bg"><div class="bar rest" style="width:${restPct}%"></div></div>
       </div>
-      <div class="yen">${yen}</div>
-      <div class="min">${minLabel}</div>
-      <div class="h">${shiftHour(a.hour)}</div>
+      <div class="vals">
+        <div class="y">${yenLabel}</div>
+        <div class="r">${[tripLabel, restLabel].filter(Boolean).join(' / ') || '—'}</div>
+      </div>
     </div>`;
-  }).join('');
-  const peakAct = acts.reduce((a, b) => a.sales >= b.sales ? a : b);
+  }).join('') || '<p class="muted" style="font-size:11px;">tripなし</p>';
+  const peakAct = filtered.length > 0 ? filtered.reduce((a, b) => a.sales >= b.sales ? a : b) : null;
   document.getElementById('hourCard').innerHTML = `
-    <div class="muted">時間別 売上(緑) + 休憩(灰) ・7時スタート、深夜は25時〜</div>
-    <div class="hour-chart">
-      <div class="hour-row">${cols}</div>
-    </div>
-    <div class="legend">
-      売上=その時間の合計、休憩=その時間内の休憩分(60分で満タン)。<br>
-      ピーク売上: <strong>${shiftHour(peakAct.hour)}時台 ${formatYen(peakAct.sales)} (実車${peakAct.tripMin}分)</strong>
-    </div>
+    <div class="muted">時間別 売上(緑) と 休憩(グレー) ・7時スタート、深夜は25時〜</div>
+    <div class="hour-list">${rows}</div>
+    ${peakAct ? `<div class="legend">ピーク売上: <strong>${shiftHour(peakAct.hour)}時台 ${formatYen(peakAct.sales)} (実車${peakAct.tripMin}分)</strong></div>` : ''}
   `;
 }
 

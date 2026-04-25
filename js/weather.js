@@ -16,6 +16,21 @@ export function weatherLabel(code) {
   return WMO_LABELS[code] || '不明';
 }
 
+export function weatherEmoji(code) {
+  if (code == null) return '';
+  if (code === 0) return '☀️';
+  if (code === 1) return '🌤';
+  if (code === 2) return '⛅';
+  if (code === 3) return '☁️';
+  if (code === 45 || code === 48) return '🌫';
+  if (code >= 51 && code <= 55) return '🌦';
+  if (code >= 61 && code <= 67) return '🌧';
+  if (code >= 71 && code <= 77) return '🌨';
+  if (code >= 80 && code <= 82) return '🌧';
+  if (code >= 95) return '⛈';
+  return '';
+}
+
 // 1日分の天候を時間別で取得 → 4区分に集計
 export async function fetchWeatherForDate(date, location) {
   const today = new Date().toISOString().slice(0, 10);

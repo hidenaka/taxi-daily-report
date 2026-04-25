@@ -223,6 +223,7 @@ function renderSummaryTable(drives) {
     const memoCell = memoText
       ? `<td class="l" style="max-width:160px;color:#555;font-size:10px;line-height:1.3;white-space:normal;">${memoText.replace(/</g,'&lt;').replace(/\n/g,' / ')}</td>`
       : `<td>—</td>`;
+    const hourly = bd.tripMin > 0 ? sales.inclTax / (bd.tripMin / 60) : 0;
     return `<tr onclick="location.href='detail.html?date=${d.date}'" style="cursor:pointer;${summary ? 'background:#fafafa;' : ''}">
       <td class="date">${formatDate(d.date)}${summary ? '<span class="badge" style="font-size:9px;padding:0 4px;background:#ddd;color:#666;margin-left:3px;">概</span>' : ''}</td>
       <td>${summary ? dash : count}</td>
@@ -232,6 +233,7 @@ function renderSummaryTable(drives) {
       <td>${summary ? dash : km.toFixed(1)}</td>
       <td>${summary ? dash : formatMin(bd.totalMin)}</td>
       <td>${summary ? dash : formatMin(bd.tripMin)}</td>
+      <td>${summary ? dash : formatYen(hourly)}</td>
       ${memoCell}
     </tr>`;
   }).join('');
@@ -242,7 +244,7 @@ function renderSummaryTable(drives) {
         <thead><tr>
           <th class="date">日付</th><th>件数</th><th>税込</th><th>税抜</th>
           ${PKEYS.map(k => `<th>${PERIOD_LABELS[k]}</th>`).join('')}
-          <th>km</th><th>乗務</th><th>実車</th><th class="l">メモ</th>
+          <th>km</th><th>乗務</th><th>実車</th><th>時間単価</th><th class="l">メモ</th>
         </tr></thead>
         <tbody>
           ${rows}
@@ -255,6 +257,7 @@ function renderSummaryTable(drives) {
             <td>${detKm.toFixed(1)}</td>
             <td>${formatMin(detTotalMin)}</td>
             <td>${formatMin(detTripMin)}</td>
+            <td>${detTripMin > 0 ? formatYen(detIncl / (detTripMin / 60)) : '—'}</td>
             <td>—</td>
           </tr>
         </tbody>
