@@ -56,3 +56,24 @@ export function calcBasePay(drives, config) {
 
   return { basePay, rate: rate11, shiftCount, extraRate };
 }
+
+export function calcIncentive(drives, config) {
+  const { thresholdSalesExclTax, amountPerShift } = config.premiumIncentive;
+  let total = 0;
+  for (const drive of drives) {
+    if (drive.vehicleType !== 'premium') continue;
+    const daily = calcDailySales(drive);
+    if (daily.exclTax > thresholdSalesExclTax) total += amountPerShift;
+  }
+  return total;
+}
+
+export function calcTotalPay(drives, config) {
+  const base = calcBasePay(drives, config);
+  const incentive = calcIncentive(drives, config);
+  return {
+    ...base,
+    incentive,
+    total: base.basePay + incentive
+  };
+}
