@@ -66,6 +66,7 @@ if ('serviceWorker' in navigator) {
   <section class="card" id="allocCard"></section>
   <section class="card" id="hourCard"></section>
   <section class="card" id="weatherCard"></section>
+  <section class="card" id="reviewMemoCard"></section>
   <section class="card" id="tripsCard"></section>
 
   <button class="btn btn-block" id="editBtn" style="margin-top:8px;">この乗務を編集</button>
@@ -73,7 +74,7 @@ if ('serviceWorker' in navigator) {
 <div id="navHost"></div>
 <script type="module">
 import { renderBottomNav, formatYen, formatDate } from './js/app.js';
-import { getDrive, listFiles } from './js/storage.js';
+import { getDrive, listFiles, saveDriveSafe } from './js/storage.js';
 import { calcDailySales } from './js/payroll.js';
 import { calcTimeBreakdown, hourlyActivity, calcPeriodBreakdown, PERIOD_LABELS, formatMin, timeToMinutes } from './js/chart-helpers.js';
 
@@ -168,10 +169,43 @@ async function load() {
     document.getElementById('weatherCard').innerHTML = `<div class="muted">天候未取得</div>`;
   }
 
+  // 振り返りメモ
+  renderReviewMemo(drive);
+
   // 日報明細(完全版)
   renderTripsTable(drive);
 
   document.getElementById('editBtn').onclick = () => location.href = `input.html?date=${date}`;
+}
+
+function renderReviewMemo(drive) {
+  const card = document.getElementById('reviewMemoCard');
+  const memo = drive.reviewMemo || '';
+  card.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:baseline;">
+      <strong>振り返りメモ</strong>
+      <span class="muted" style="font-size:10px;">気づき/反省/次回の改善</span>
+    </div>
+    <textarea id="reviewMemoInput" class="input" rows="3" style="margin-top:6px;width:100%;box-sizing:border-box;font-family:inherit;" placeholder="例: 雨で羽田が混んだ。次回は10時前に羽田入りする">${memo}</textarea>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:6px;">
+      <button class="btn" id="saveMemoBtn" style="padding:6px 14px;font-size:13px;">保存</button>
+      <span id="memoStatus" class="muted" style="font-size:11px;"></span>
+    </div>
+  `;
+  document.getElementById('saveMemoBtn').onclick = async () => {
+    const newMemo = document.getElementById('reviewMemoInput').value;
+    const status = document.getElementById('memoStatus');
+    status.textContent = '保存中…';
+    try {
+      drive.reviewMemo = newMemo;
+      drive.updatedAt = new Date().toISOString();
+      await saveDriveSafe(drive);
+      status.textContent = '✓ 保存完了';
+      setTimeout(() => status.textContent = '', 2000);
+    } catch (e) {
+      status.textContent = '✗ ' + e.message;
+    }
+  };
 }
 
 function renderPeriodTable(drive) {

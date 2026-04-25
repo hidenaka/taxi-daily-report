@@ -157,3 +157,89 @@ export function formatMin(min) {
   const m = Math.round(min % 60);
   return `${h}:${String(m).padStart(2, '0')}`;
 }
+
+// ====== 振り返り分析関数 ======
+
+// dateOfWeek (0=日, 1=月, ... 6=土)
+export function dowOf(isoDate) {
+  return new Date(isoDate + 'T00:00:00+09:00').getDay();
+}
+
+// 曜日 × 時間帯 平均売上マトリックス
+// returns { matrix: [7][4] = avgSales, count: [7][4] = 日数 }
+export function dowPeriodMatrix(drives) {
+  const sumMap = Array.from({length: 7}, () => ({morning:0, noon:0, evening:0, night:0}));
+  const countMap = Array.from({length: 7}, () => ({morning:0, noon:0, evening:0, night:0}));
+  for (const d of drives) {
+    if (isSummaryOnly(d)) continue;
+    const dow = dowOf(d.date);
+    const pb = calcPeriodBreakdown(d);
+    for (const k of ['morning','noon','evening','night']) {
+      sumMap[dow][k] += pb[k].sales;
+      if (pb[k].count > 0) countMap[dow][k]++;
+    }
+  }
+  const matrix = sumMap.map((row, i) => {
+    const r = {};
+    for (const k of ['morning','noon','evening','night']) {
+      r[k] = countMap[i][k] > 0 ? sumMap[i][k] / countMap[i][k] : 0;
+    }
+    return r;
+  });
+  return { matrix, count: countMap };
+}
+
+// 日別売上一覧 → ベスト/ワースト
+export function rankDrivesBySales(drives, n = 10) {
+  const detailed = drives.filter(d => !isSummaryOnly(d)).map(d => {
+    const valid = (d.trips || []).filter(t => !t.isCancel);
+    const sales = valid.reduce((s,t) => s + (t.amount || 0), 0);
+    return {
+      date: d.date,
+      sales,
+      count: valid.length,
+      dow: dowOf(d.date),
+      weather: d.weather,
+      vehicleType: d.vehicleType,
+    };
+  }).filter(d => d.sales > 0);
+  const sorted = [...detailed].sort((a,b) => b.sales - a.sales);
+  return {
+    best: sorted.slice(0, n),
+    worst: sorted.slice(-n).reverse()
+  };
+}
+
+// 天気別売上集計 (主に日中の天気で判定)
+export function weatherSalesAggregation(drives) {
+  const buckets = { sunny: [], cloudy: [], rainy: [], snowy: [] };
+  for (const d of drives) {
+    if (isSummaryOnly(d)) continue;
+    if (!d.weather) continue;
+    const w = d.weather.noon || d.weather.morning;
+    if (!w) continue;
+    const code = w.code;
+    let bucket;
+    if (code >= 71 && code <= 77) bucket = 'snowy';
+    else if (code >= 51 && code <= 67) bucket = 'rainy';
+    else if (code >= 80) bucket = 'rainy';
+    else if (code >= 2) bucket = 'cloudy';
+    else bucket = 'sunny';
+    const valid = (d.trips || []).filter(t => !t.isCancel);
+    const sales = valid.reduce((s,t) => s + (t.amount || 0), 0);
+    if (sales > 0) buckets[bucket].push(sales);
+  }
+  const result = {};
+  for (const k of Object.keys(buckets)) {
+    const arr = buckets[k];
+    result[k] = {
+      days: arr.length,
+      avg: arr.length > 0 ? arr.reduce((s,v)=>s+v,0) / arr.length : 0,
+      total: arr.reduce((s,v)=>s+v,0)
+    };
+  }
+  return result;
+}
+
+export const WEATHER_LABELS = { sunny: '晴れ', cloudy: '曇り', rainy: '雨', snowy: '雪' };
+export const DOW_LABELS = ['日','月','火','水','木','金','土'];

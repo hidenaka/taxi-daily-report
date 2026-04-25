@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>振り返り — タクシー日報</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+.range-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+.range-tabs button { flex: 1; background: #f0f0f0; color: #333; border: none; padding: 8px; border-radius: 4px; font-size: 12px; cursor: pointer; }
+.range-tabs button.active { background: var(--primary); color: #fff; font-weight: 600; }
+
+.heat { display: grid; grid-template-columns: 30px repeat(4, 1fr); gap: 2px; font-size: 11px; }
+.heat .h { padding: 4px 2px; text-align: center; color: var(--muted); font-size: 10px; }
+.heat .lbl { padding: 6px 2px; color: var(--muted); font-weight: 600; text-align: center; font-size: 11px; }
+.heat .cell { padding: 8px 2px; text-align: center; border-radius: 3px; font-weight: 600; }
+
+.rank-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.rank-table th, .rank-table td { padding: 5px 4px; border-bottom: 1px solid #eee; text-align: right; }
+.rank-table th { color: var(--muted); font-size: 10px; font-weight: 600; }
+.rank-table td.l, .rank-table th.l { text-align: left; }
+.rank-table tr { cursor: pointer; }
+.rank-table tr:hover { background: #fafafa; }
+.rank-table .rank { color: var(--muted); width: 22px; }
+.rank-table .gold { background: #fff8e1; }
+.rank-table .red { background: #ffebee; }
+
+.wbar { display: grid; grid-template-columns: 50px 1fr 80px; gap: 6px; align-items: center; font-size: 12px; padding: 4px 0; }
+.wbar .bar { height: 18px; background: var(--green); border-radius: 3px; }
+.wbar.cloudy .bar { background: #90a4ae; }
+.wbar.rainy .bar { background: #5c6bc0; }
+.wbar.snowy .bar { background: #b0bec5; }
+.wbar .v { text-align: right; font-weight: 600; }
+.wbar .lbl { color: var(--muted); }
+
+.trend-svg { width: 100%; height: 130px; }
+.trend-line { fill: none; stroke: var(--primary); stroke-width: 2; }
+.trend-dot { fill: var(--primary); }
+.trend-axis { stroke: #ddd; stroke-width: 1; }
+.trend-label { font-size: 9px; fill: var(--muted); }
+.trend-month { font-size: 9px; fill: var(--muted); }
+
+.metric-tabs { display: flex; gap: 4px; margin-bottom: 6px; }
+.metric-tabs button { flex: 1; background: #f0f0f0; color: #333; border: none; padding: 6px; border-radius: 4px; font-size: 11px; }
+.metric-tabs button.active { background: var(--primary); color: #fff; }
+
+.loading { padding: 30px; text-align: center; color: var(--muted); }
+.section-h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.section-h .desc { font-size: 10px; color: var(--muted); }
+</style>
+</head>
+<body>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
+}
+</script>
+<main style="padding:14px;">
+  <h1 style="margin-top:0;">振り返り</h1>
+
+  <section class="card">
+    <div class="section-h">
+      <strong>分析期間</strong>
+      <span class="desc">過去N月度のデータで分析</span>
+    </div>
+    <div class="range-tabs">
+      <button data-months="3">3ヶ月</button>
+      <button data-months="6" class="active">6ヶ月</button>
+      <button data-months="12">12ヶ月</button>
+    </div>
+    <div id="rangeInfo" class="muted" style="font-size:11px;"></div>
+  </section>
+
+  <section class="card" id="trendCard">
+    <div class="section-h">
+      <strong>月度トレンド</strong>
+      <span class="desc">改善/悪化を一目で</span>
+    </div>
+    <div class="metric-tabs" id="metricTabs">
+      <button data-m="total" class="active">総支給</button>
+      <button data-m="sales">売上(税込)</button>
+      <button data-m="hourly">時間単価</button>
+      <button data-m="shifts">乗務数</button>
+    </div>
+    <svg class="trend-svg" id="trendSvg"></svg>
+    <div id="trendLegend" class="muted" style="font-size:11px;"></div>
+  </section>
+
+  <section class="card" id="heatCard">
+    <div class="section-h">
+      <strong>曜日 × 時間帯 平均売上</strong>
+      <span class="desc">パターン発見</span>
+    </div>
+    <div id="heatBody"></div>
+    <p class="muted" style="font-size:10px;margin-top:6px;">数字は1乗務あたり平均(該当曜日×時間帯にtripがある日のみで集計)</p>
+  </section>
+
+  <section class="card" id="weatherCard">
+    <div class="section-h">
+      <strong>天気別 平均日売上</strong>
+      <span class="desc">天気と稼ぎの関係</span>
+    </div>
+    <div id="weatherBody"></div>
+  </section>
+
+  <section class="card" id="bestCard">
+    <div class="section-h">
+      <strong>ベストデイ TOP10</strong>
+      <span class="desc">再現性のある勝ちパターン</span>
+    </div>
+    <div id="bestBody"></div>
+  </section>
+
+  <section class="card" id="worstCard">
+    <div class="section-h">
+      <strong>ワーストデイ TOP10</strong>
+      <span class="desc">何が起きていたか</span>
+    </div>
+    <div id="worstBody"></div>
+  </section>
+
+  <section class="card" id="memoCard">
+    <div class="section-h">
+      <strong>振り返りメモ一覧</strong>
+      <span class="desc">過去の気づき</span>
+    </div>
+    <div id="memoBody"></div>
+  </section>
+</main>
+<div id="navHost"></div>
+<script type="module">
+import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod } from './js/app.js';
+import { getDrivesForMonth } from './js/storage.js';
+import { calcDailySales, calcTotalPay, calcMonthlySales } from './js/payroll.js';
+import { calcTimeBreakdown, dowPeriodMatrix, rankDrivesBySales, weatherSalesAggregation, WEATHER_LABELS, DOW_LABELS, isSummaryOnly, formatMin } from './js/chart-helpers.js';
+import { getConfig } from './js/storage.js';
+
+document.getElementById('navHost').innerHTML = renderBottomNav('review');
+
+let monthsRange = 6;
+let allDrives = [];
+let monthSummaries = []; // [{ym, drives, totalSales, totalShifts, totalPay, totalTripMin, ...}]
+let config = null;
+let selectedMetric = 'total';
+
+document.querySelectorAll('.range-tabs button').forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll('.range-tabs button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    monthsRange = parseInt(b.dataset.months);
+    load();
+  };
+});
+document.querySelectorAll('#metricTabs button').forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll('#metricTabs button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    selectedMetric = b.dataset.m;
+    renderTrend();
+  };
+});
+
+async function load() {
+  if (!localStorage.getItem('github_token') || !localStorage.getItem('github_data_repo')) {
+    document.querySelector('main').innerHTML = '<div class="loading">設定からGitHubトークンを設定してください</div>';
+    return;
+  }
+  document.getElementById('rangeInfo').textContent = '読み込み中…';
+  config = await getConfig();
+  const current = currentBillingPeriod();
+  const periods = [];
+  for (let i = monthsRange - 1; i >= 0; i--) {
+    periods.push(shiftBillingPeriod(current, -i));
+  }
+  monthSummaries = [];
+  allDrives = [];
+  for (const ym of periods) {
+    const drives = await getDrivesForMonth(ym);
+    allDrives.push(...drives);
+    const monthly = calcMonthlySales(drives);
+    const pay = calcTotalPay(drives, config);
+    const detailed = drives.filter(d => !isSummaryOnly(d));
+    let tripMin = 0;
+    for (const d of detailed) tripMin += calcTimeBreakdown(d).tripMin;
+    monthSummaries.push({
+      ym, drives,
+      totalSales: monthly.inclTax,
+      totalShifts: drives.length,
+      totalPay: pay.total,
+      totalTripMin: tripMin,
+      hourly: tripMin > 0 ? monthly.inclTax / (tripMin / 60) : 0
+    });
+  }
+  document.getElementById('rangeInfo').textContent = `${formatBillingPeriod(periods[0])} 〜 ${formatBillingPeriod(periods[periods.length-1])} (${allDrives.length}乗務)`;
+  renderTrend();
+  renderHeatmap();
+  renderWeather();
+  renderRanks();
+  renderMemos();
+}
+
+function renderTrend() {
+  const svg = document.getElementById('trendSvg');
+  const w = svg.clientWidth || 320, h = 130;
+  const padL = 40, padR = 8, padT = 10, padB = 18;
+  const innerW = w - padL - padR, innerH = h - padT - padB;
+  const valueOf = (s) => ({total: s.totalPay, sales: s.totalSales, hourly: s.hourly, shifts: s.totalShifts}[selectedMetric]);
+  const values = monthSummaries.map(valueOf);
+  const max = Math.max(...values, 1);
+  const min = 0;
+  const xStep = innerW / Math.max(1, monthSummaries.length - 1);
+  const points = monthSummaries.map((s, i) => {
+    const x = padL + i * xStep;
+    const y = padT + innerH - ((valueOf(s) - min) / (max - min)) * innerH;
+    return { x, y, value: valueOf(s), label: s.ym.slice(5) + '月' };
+  });
+  const linePath = points.map((p, i) => (i === 0 ? 'M' : 'L') + p.x + ',' + p.y).join(' ');
+  const yLabels = [0, 0.5, 1].map(r => {
+    const y = padT + innerH - r * innerH;
+    const v = min + (max - min) * r;
+    return `<line class="trend-axis" x1="${padL}" y1="${y}" x2="${w - padR}" y2="${y}"/>
+      <text class="trend-label" x="${padL - 4}" y="${y + 3}" text-anchor="end">${formatLabelValue(v)}</text>`;
+  }).join('');
+  const xLabels = points.map(p => `<text class="trend-month" x="${p.x}" y="${h - 4}" text-anchor="middle">${p.label}</text>`).join('');
+  const dots = points.map(p => `<circle class="trend-dot" cx="${p.x}" cy="${p.y}" r="3"/>`).join('');
+  svg.innerHTML = `${yLabels}<path class="trend-line" d="${linePath}"/>${dots}${xLabels}`;
+  const last = monthSummaries[monthSummaries.length - 1];
+  const prev = monthSummaries[monthSummaries.length - 2];
+  if (prev) {
+    const lv = valueOf(last), pv = valueOf(prev);
+    const diff = lv - pv;
+    const pct = pv > 0 ? (diff / pv * 100) : 0;
+    const sign = diff >= 0 ? '+' : '';
+    document.getElementById('trendLegend').innerHTML =
+      `直近月: <strong>${formatLabelValue(lv)}</strong> (前月比 <span style="color:${diff>=0?'var(--primary)':'var(--orange,#ff9800)'};">${sign}${formatLabelValue(diff)} ${sign}${pct.toFixed(1)}%</span>)`;
+  } else {
+    document.getElementById('trendLegend').textContent = '';
+  }
+}
+
+function formatLabelValue(v) {
+  if (selectedMetric === 'shifts') return Math.round(v) + '乗務';
+  if (selectedMetric === 'hourly') return formatYen(v);
+  if (v >= 100000) return '¥' + (Math.round(v/1000)/10) + '万';
+  return formatYen(v);
+}
+
+function renderHeatmap() {
+  const { matrix, count } = dowPeriodMatrix(allDrives);
+  const flat = matrix.flatMap(r => Object.values(r)).filter(v => v > 0);
+  const max = Math.max(...flat, 1);
+  let html = '<div class="heat">';
+  html += '<div class="h"></div><div class="h">朝</div><div class="h">昼</div><div class="h">夜</div><div class="h">深夜</div>';
+  for (let dow = 0; dow < 7; dow++) {
+    const isWeekend = dow === 0 || dow === 6;
+    const dowColor = dow === 0 ? '#d32f2f' : dow === 6 ? '#1976d2' : '';
+    html += `<div class="lbl" style="${dowColor ? 'color:' + dowColor : ''}">${DOW_LABELS[dow]}</div>`;
+    for (const k of ['morning','noon','evening','night']) {
+      const v = matrix[dow][k];
+      const intensity = v > 0 ? Math.min(1, v / max) : 0;
+      const bg = v > 0 ? `rgba(76, 175, 80, ${0.15 + 0.7 * intensity})` : '#fafafa';
+      const text = v > 0 ? formatYen(v).replace('¥','') : '—';
+      const color = intensity > 0.6 ? '#fff' : '#222';
+      const days = count[dow][k];
+      html += `<div class="cell" style="background:${bg};color:${color};" title="${days}日の平均">${text}</div>`;
+    }
+  }
+  html += '</div>';
+  document.getElementById('heatBody').innerHTML = html;
+}
+
+function renderWeather() {
+  const agg = weatherSalesAggregation(allDrives);
+  const max = Math.max(...Object.values(agg).map(a => a.avg), 1);
+  let html = '';
+  for (const k of ['sunny','cloudy','rainy','snowy']) {
+    const a = agg[k];
+    if (a.days === 0) continue;
+    const pct = (a.avg / max) * 100;
+    html += `<div class="wbar ${k}">
+      <div class="lbl">${WEATHER_LABELS[k]}</div>
+      <div><div class="bar" style="width:${pct}%"></div></div>
+      <div class="v">${formatYen(a.avg)}<br><span style="font-size:9px;color:var(--muted);font-weight:400;">${a.days}日</span></div>
+    </div>`;
+  }
+  document.getElementById('weatherBody').innerHTML = html || '<p class="muted" style="font-size:11px;">データ不足</p>';
+}
+
+function renderRanks() {
+  const { best, worst } = rankDrivesBySales(allDrives, 10);
+  document.getElementById('bestBody').innerHTML = renderRankTable(best, 'gold');
+  document.getElementById('worstBody').innerHTML = renderRankTable(worst, 'red');
+}
+
+function renderRankTable(rows, cls) {
+  if (rows.length === 0) return '<p class="muted" style="font-size:11px;">データなし</p>';
+  const wIcon = (w) => {
+    if (!w) return '';
+    const noon = w.noon || w.morning;
+    if (!noon) return '';
+    const c = noon.code;
+    if (c >= 71 && c <= 77) return '❄';
+    if (c >= 51 && c <= 67 || c >= 80) return '☂';
+    if (c >= 2) return '☁';
+    return '☀';
+  };
+  return `<div style="overflow-x:auto;"><table class="rank-table">
+    <thead><tr><th>#</th><th class="l">日付</th><th>曜</th><th>天気</th><th>件数</th><th>売上</th></tr></thead>
+    <tbody>${rows.map((r, i) => `
+      <tr class="${i < 3 ? cls : ''}" onclick="location.href='detail.html?date=${r.date}'">
+        <td class="rank">${i + 1}</td>
+        <td class="l">${formatDate(r.date)}</td>
+        <td style="color:${r.dow===0?'#d32f2f':r.dow===6?'#1976d2':''};">${DOW_LABELS[r.dow]}</td>
+        <td>${wIcon(r.weather)}</td>
+        <td>${r.count}</td>
+        <td><strong>${formatYen(r.sales)}</strong></td>
+      </tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+function renderMemos() {
+  const memos = allDrives
+    .filter(d => d.reviewMemo && d.reviewMemo.trim())
+    .sort((a,b) => b.date.localeCompare(a.date));
+  if (memos.length === 0) {
+    document.getElementById('memoBody').innerHTML = '<p class="muted" style="font-size:11px;">振り返りメモはまだありません。詳細ページで記入できます。</p>';
+    return;
+  }
+  document.getElementById('memoBody').innerHTML = memos.map(d => `
+    <div onclick="location.href='detail.html?date=${d.date}'" style="padding:8px 4px;border-bottom:1px solid #eee;cursor:pointer;">
+      <div style="font-size:11px;color:var(--muted);">${formatDate(d.date)}</div>
+      <div style="font-size:12px;margin-top:2px;white-space:pre-wrap;">${d.reviewMemo}</div>
+    </div>
+  `).join('');
+}
+
+load();
+</script>
+</body>
+</html>

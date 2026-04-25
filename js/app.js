@@ -3,6 +3,7 @@ export function renderBottomNav(activePage) {
     { id: 'home', label: 'ホーム', href: 'index.html' },
     { id: 'input', label: '入力', href: 'input.html' },
     { id: 'calendar', label: 'カレンダー', href: 'calendar.html' },
+    { id: 'review', label: '振り返り', href: 'review.html' },
     { id: 'settings', label: '設定', href: 'settings.html' }
   ];
   return `
