@@ -63,3 +63,24 @@ test('calcBasePay: 11乗務、売上1,100,000(税抜) → 歩率68.7% → 755,70
   assert.equal(result.rate, 0.687);
   assert.equal(result.shiftCount, 11);
 });
+
+test('calcBasePay: 13乗務、各日税込110,000 → 11乗務まで税抜1,100,000で歩率0.687、12-13乗務目は税抜100,000×0.62×2', () => {
+  const drives = Array(13).fill({ trips: [{ amount: 110000, isCancel: false }] });
+  // 各日 110,000(税込) = 100,000(税抜)、13乗務
+  const config = {
+    rateTable: {
+      "11": [
+        { salesMin: 0, salesMax: 500000, rate: 0.55 },
+        { salesMin: 500000, salesMax: 1000000, rate: 0.62 },
+        { salesMin: 1000000, salesMax: 2000000, rate: 0.687 }
+      ],
+      "12_13rate": 0.62
+    }
+  };
+  const result = calcBasePay(drives, config);
+  // 11乗務まで: 11 × 110,000(税込) = 1,210,000(税込) → 1,100,000(税抜) × 0.687 = 755,700
+  // 12-13乗務: 100,000(税抜) × 2 × 0.62 = 124,000
+  // 合計: 879,700
+  assert.equal(Math.round(result.basePay), 879700);
+  assert.equal(result.shiftCount, 13);
+});

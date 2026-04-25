@@ -33,15 +33,26 @@ export function findRate(tiers, salesExclTax) {
 }
 
 export function calcBasePay(drives, config) {
-  const monthly = calcMonthlySales(drives);
-  const shiftCount = monthly.shiftCount;
-  const salesExclTax = monthly.exclTax;
+  const shiftCount = drives.length;
 
   if (shiftCount <= 11) {
+    const monthly = calcMonthlySales(drives);
     const tiers = config.rateTable[String(shiftCount)] || config.rateTable["11"];
-    const rate = findRate(tiers, salesExclTax);
-    return { basePay: salesExclTax * rate, rate, shiftCount };
+    const rate = findRate(tiers, monthly.exclTax);
+    return { basePay: monthly.exclTax * rate, rate, shiftCount };
   }
-  // 12乗務以上は次のタスクで実装
-  return { basePay: 0, rate: 0, shiftCount };
+
+  // 12乗務以上: 11乗務目までで歩率算出 + 12乗務目以降は固定率
+  const drives11 = drives.slice(0, 11);
+  const monthly11 = calcMonthlySales(drives11);
+  const rate11 = findRate(config.rateTable["11"], monthly11.exclTax);
+  let basePay = monthly11.exclTax * rate11;
+
+  const extraRate = config.rateTable["12_13rate"];
+  for (const drive of drives.slice(11)) {
+    const daily = calcDailySales(drive);
+    basePay += daily.exclTax * extraRate;
+  }
+
+  return { basePay, rate: rate11, shiftCount, extraRate };
 }
