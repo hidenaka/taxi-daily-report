@@ -48,10 +48,16 @@ async function load() {
   // サマリー（責任出番達成前提）
   const result = calcTotalPay(drives, config);
   const monthLabel = ym.split('-')[1].replace(/^0/, '') + '月';
+  const takeHomeRate = config.takeHomeRate ?? 0.75;
+  const takeHome = result.total * takeHomeRate;
   document.getElementById('summaryCard').innerHTML = `
-    <div style="display:flex;justify-content:space-between;font-size:12px;">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;">
       <div><strong>${monthLabel}</strong> ${result.shiftCount}/${config.responsibilityShifts}乗務</div>
-      <div>暫定 <strong>${formatYen(result.total)}</strong></div>
+      <div>総支給 <strong>${formatYen(result.total)}</strong></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-top:4px;color:var(--muted);">
+      <div>手取り推定（×${(takeHomeRate*100).toFixed(0)}%）</div>
+      <div style="color:var(--primary);font-size:14px;"><strong>${formatYen(takeHome)}</strong></div>
     </div>
   `;
 
