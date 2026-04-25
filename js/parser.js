@@ -36,22 +36,61 @@ function parseClaudeRow(cells) {
   };
 }
 
+// CSV1行を引用符を考慮してセルに分解
+function splitCsvLine(line) {
+  const cells = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { inQuotes = !inQuotes; continue; }
+    if (c === ',' && !inQuotes) { cells.push(cur); cur = ''; continue; }
+    cur += c;
+  }
+  cells.push(cur);
+  return cells;
+}
+
+function parseGeminiRow(cells) {
+  // [No, 乗車, 降車, 時間, 迎, 乗車地, 降車地, 営Km, 男, 女, 合計]
+  const [no, board, alight, dur, pickup, bp, ap, km, _m, _f, amt] = cells;
+  if (no === '休') {
+    return { type: 'rest', startTime: board, endTime: alight, place: bp };
+  }
+  return {
+    type: 'trip',
+    no: parseInt(no, 10),
+    boardTime: board,
+    alightTime: alight,
+    boardPlace: bp,
+    alightPlace: ap,
+    km: parseKm(km),
+    amount: parseAmount(amt),
+    isPickup: pickup === '迎',
+    isCancel: false,
+    waitTime: ''
+  };
+}
+
 export function parseReport(text) {
   const format = detectFormat(text);
   const lines = text.split('\n').filter(l => l.trim() !== '');
-  // ヘッダー行をスキップ
   const dataLines = lines.slice(1);
 
   const trips = [];
   const rests = [];
 
   for (const line of dataLines) {
-    const cells = format === 'claude' ? line.split('\t') : []; // Geminiは次のタスクで
-    if (cells.length === 0) continue;
+    const cells = format === 'claude' ? line.split('\t') : splitCsvLine(line);
+    if (cells.length === 0 || (cells.length === 1 && cells[0].trim() === '')) continue;
 
-    const parsed = parseClaudeRow(cells);
-    if (parsed.type === 'rest') rests.push({ startTime: parsed.startTime, endTime: parsed.endTime, place: parsed.place });
-    else { delete parsed.type; trips.push(parsed); }
+    const parsed = format === 'claude' ? parseClaudeRow(cells) : parseGeminiRow(cells);
+    if (parsed.type === 'rest') {
+      rests.push({ startTime: parsed.startTime, endTime: parsed.endTime, place: parsed.place });
+    } else {
+      delete parsed.type;
+      trips.push(parsed);
+    }
   }
 
   return { trips, rests, format };
