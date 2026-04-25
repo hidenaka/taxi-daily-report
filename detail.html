@@ -10,20 +10,39 @@
 .kpi-row > div { flex: 1; text-align: center; }
 .kpi-row .num { font-size: 18px; font-weight: 700; }
 .kpi-row .lbl { font-size: 10px; color: var(--muted); }
+
 .alloc-bar { display: flex; height: 22px; border-radius: 4px; overflow: hidden; margin-top: 6px; }
 .alloc-bar > div { display: flex; align-items: center; justify-content: center; color: #fff; font-size: 11px; }
-.hour-chart { margin-top: 8px; }
-.hour-bars { display: grid; grid-template-columns: repeat(24, 1fr); gap: 1px; align-items: end; height: 60px; }
-.hour-bars > div { background: var(--green, #4CAF50); border-radius: 2px 2px 0 0; min-height: 1px; position: relative; }
-.hour-bars > div.zero { background: #f0f0f0; }
-.hour-axis { display: grid; grid-template-columns: repeat(24, 1fr); gap: 1px; font-size: 9px; color: var(--muted); margin-top: 2px; }
-.hour-axis > div { text-align: center; }
-.peak-label { font-size: 11px; color: var(--muted); margin-top: 4px; }
-.trip-row { display: flex; padding: 6px 0; border-bottom: 1px solid #eee; font-size: 12px; }
-.trip-row .no { width: 24px; color: var(--muted); }
-.trip-row .time { width: 80px; }
-.trip-row .place { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.trip-row .yen { text-align: right; font-weight: 600; }
+.alloc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; font-size: 11px; }
+.alloc-grid > div { background: #f5f5f5; padding: 6px; border-radius: 4px; text-align: center; }
+.alloc-grid .lbl { color: var(--muted); font-size: 10px; }
+.alloc-grid .v { font-weight: 600; font-size: 13px; }
+
+.period-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 4px; }
+.period-table th, .period-table td { padding: 4px 3px; text-align: right; border-bottom: 1px solid #eee; }
+.period-table th { font-weight: 600; color: var(--muted); font-size: 10px; }
+.period-table th.lbl, .period-table td.lbl { text-align: left; color: var(--muted); }
+.period-table tr.total { background: #f5f5f5; font-weight: 600; }
+.period-table tr.total td { border-top: 2px solid #ddd; }
+
+.hour-chart { margin-top: 8px; overflow-x: auto; }
+.hour-row { display: grid; grid-template-columns: repeat(24, minmax(28px, 1fr)); gap: 2px; }
+.hour-bar-col { display: flex; flex-direction: column; align-items: center; }
+.hour-bar-col .bar-wrap { height: 60px; display: flex; align-items: end; width: 100%; }
+.hour-bar-col .bar { width: 100%; background: var(--green, #4CAF50); border-radius: 2px 2px 0 0; min-height: 1px; }
+.hour-bar-col .bar.zero { background: #f0f0f0; }
+.hour-bar-col .yen { font-size: 9px; color: #1b5e20; font-weight: 600; line-height: 1.1; margin-top: 2px; }
+.hour-bar-col .min { font-size: 8px; color: var(--muted); line-height: 1.1; }
+.hour-bar-col .h { font-size: 9px; color: var(--muted); margin-top: 2px; border-top: 1px solid #ddd; padding-top: 2px; width: 100%; text-align: center; }
+
+.trip-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 4px; }
+.trip-table th, .trip-table td { padding: 4px 3px; border-bottom: 1px solid #eee; }
+.trip-table th { font-weight: 600; color: var(--muted); font-size: 10px; text-align: left; }
+.trip-table td.r, .trip-table th.r { text-align: right; }
+.trip-table .place { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trip-table tr.cancel { color: var(--orange); }
+.trip-table tr.charter { background: #fff3e0; }
+.legend { font-size: 10px; color: var(--muted); margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -36,8 +55,9 @@ if ('serviceWorker' in navigator) {
   <h1 id="title">乗務詳細</h1>
 
   <section class="card" id="kpiCard"></section>
+  <section class="card" id="periodCard"></section>
   <section class="card" id="allocCard"></section>
-  <section class="card" id="heatCard"></section>
+  <section class="card" id="hourCard"></section>
   <section class="card" id="weatherCard"></section>
   <section class="card" id="tripsCard"></section>
 
@@ -48,7 +68,7 @@ if ('serviceWorker' in navigator) {
 import { renderBottomNav, formatYen, formatDate } from './js/app.js';
 import { getDrive } from './js/storage.js';
 import { calcDailySales } from './js/payroll.js';
-import { calcTimeBreakdown, salesByHour, formatMin } from './js/chart-helpers.js';
+import { calcTimeBreakdown, hourlyActivity, calcPeriodBreakdown, PERIOD_LABELS, formatMin, timeToMinutes } from './js/chart-helpers.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('home');
 
@@ -60,59 +80,61 @@ async function load() {
   if (!drive) { document.getElementById('title').textContent = '見つかりません'; return; }
   document.getElementById('title').textContent = `${formatDate(drive.date)} 詳細`;
 
-  // KPI
   const sales = calcDailySales(drive);
-  const validCount = drive.trips.filter(t => !t.isCancel).length;
+  const valid = (drive.trips || []).filter(t => !t.isCancel);
+  const validCount = valid.length;
+  const km = valid.reduce((s, t) => s + (t.km || 0), 0);
   const breakdown = calcTimeBreakdown(drive);
   const tripHours = breakdown.tripMin / 60;
   const hourlyRate = tripHours > 0 ? sales.inclTax / tripHours : 0;
+  const avgPrice = validCount > 0 ? sales.inclTax / validCount : 0;
 
+  // KPI 4列
   document.getElementById('kpiCard').innerHTML = `
     <div class="kpi-row">
       <div><div class="lbl">売上(税込)</div><div class="num">${formatYen(sales.inclTax)}</div></div>
       <div><div class="lbl">件数</div><div class="num">${validCount}</div></div>
-      <div><div class="lbl">実車時間単価</div><div class="num">${formatYen(hourlyRate)}</div></div>
+      <div><div class="lbl">平均単価</div><div class="num">${formatYen(avgPrice)}</div></div>
+      <div><div class="lbl">時間単価(実車)</div><div class="num">${formatYen(hourlyRate)}</div></div>
     </div>
+    <div class="kpi-row" style="margin-top:8px;">
+      <div><div class="lbl">走行距離</div><div class="num">${km.toFixed(1)}<span style="font-size:11px;">km</span></div></div>
+      <div><div class="lbl">出庫</div><div class="num" style="font-size:14px;">${drive.departureTime || '-'}</div></div>
+      <div><div class="lbl">帰庫</div><div class="num" style="font-size:14px;">${drive.returnTime || '-'}</div></div>
+      <div><div class="lbl">車種</div><div class="num" style="font-size:14px;">${drive.vehicleType === 'premium' ? 'プレ' : '普通'}</div></div>
+    </div>
+    ${drive.memo ? `<div style="margin-top:8px;font-size:11px;color:var(--muted);">メモ: ${drive.memo}</div>` : ''}
   `;
 
-  // 時間配分3色帯
+  // 時間帯別サマリー表
+  renderPeriodTable(drive);
+
+  // 時間配分3色帯 + 数値
   const total = Math.max(1, breakdown.totalMin);
   document.getElementById('allocCard').innerHTML = `
-    <div class="muted">時間配分（${formatMin(total)}）</div>
+    <div class="muted">時間配分（営業時間 ${formatMin(total)}）</div>
     <div class="alloc-bar">
       <div style="background:var(--green);flex:${breakdown.tripMin}">実車 ${formatMin(breakdown.tripMin)}</div>
       <div style="background:var(--gray);flex:${breakdown.restMin}">休 ${formatMin(breakdown.restMin)}</div>
       <div style="background:var(--orange);flex:${breakdown.idleMin}">空車 ${formatMin(breakdown.idleMin)}</div>
     </div>
+    <div class="alloc-grid">
+      <div><div class="lbl">営業時間</div><div class="v">${formatMin(total)}</div></div>
+      <div><div class="lbl">実車</div><div class="v">${formatMin(breakdown.tripMin)}</div></div>
+      <div><div class="lbl">休憩</div><div class="v">${formatMin(breakdown.restMin)}</div></div>
+      <div><div class="lbl">空車</div><div class="v">${formatMin(breakdown.idleMin)}</div></div>
+    </div>
   `;
 
-  // 時間別売上グラフ（棒グラフ + 時刻ラベル）
-  const hours = salesByHour(drive);
-  const max = Math.max(...hours, 1);
-  const peakHour = hours.indexOf(max);
-  const bars = hours.map((y, h) => {
-    const heightPct = y === 0 ? 0 : Math.max(4, (y / max) * 100);
-    const cls = y === 0 ? 'zero' : '';
-    return `<div class="${cls}" style="height:${heightPct}%;" title="${h}時 ¥${y.toLocaleString()}"></div>`;
-  }).join('');
-  const axis = Array.from({length: 24}, (_, h) =>
-    `<div>${[0,3,6,9,12,15,18,21].includes(h) ? h : ''}</div>`
-  ).join('');
-  document.getElementById('heatCard').innerHTML = `
-    <div class="muted">時間別売上（縦軸=売上、横軸=出発時刻 0-23時）</div>
-    <div class="hour-chart">
-      <div class="hour-bars">${bars}</div>
-      <div class="hour-axis">${axis}</div>
-    </div>
-    <div class="peak-label">ピーク: <strong>${peakHour}時台 ${formatYen(max)}</strong></div>
-  `;
+  // 時間別: 7時スタート、各バーに金額・実車分
+  renderHourChart(drive);
 
   // 天候
   if (drive.weather) {
     const w = drive.weather;
     document.getElementById('weatherCard').innerHTML = `
       <div class="muted">天候</div>
-      <div style="display:flex;gap:8px;font-size:12px;margin-top:4px;">
+      <div style="display:flex;gap:8px;font-size:12px;margin-top:4px;flex-wrap:wrap;">
         <div>朝 ${w.morning?.label || '-'} ${w.morning?.tempAvg ?? ''}℃</div>
         <div>昼 ${w.noon?.label || '-'} ${w.noon?.tempAvg ?? ''}℃</div>
         <div>夕夜 ${w.evening?.label || '-'} ${w.evening?.tempAvg ?? ''}℃</div>
@@ -123,18 +145,137 @@ async function load() {
     document.getElementById('weatherCard').innerHTML = `<div class="muted">天候未取得</div>`;
   }
 
-  // 日報明細
-  const tripsHtml = drive.trips.map(t => `
-    <div class="trip-row" style="${t.isCancel ? 'color:var(--orange);' : ''}">
-      <div class="no">${t.no}</div>
-      <div class="time">${t.boardTime}</div>
-      <div class="place">${t.boardPlace}→${t.alightPlace}${t.isCancel ? ' [×]' : ''}</div>
-      <div class="yen">${t.isCancel ? '—' : formatYen(t.amount)}</div>
-    </div>
-  `).join('');
-  document.getElementById('tripsCard').innerHTML = `<div class="muted">日報明細</div>${tripsHtml}`;
+  // 日報明細(完全版)
+  renderTripsTable(drive);
 
   document.getElementById('editBtn').onclick = () => location.href = `input.html?date=${date}`;
+}
+
+function renderPeriodTable(drive) {
+  const pb = calcPeriodBreakdown(drive);
+  const keys = ['morning', 'noon', 'evening', 'night'];
+  const totalSales = keys.reduce((s, k) => s + pb[k].sales, 0);
+  const totalCount = keys.reduce((s, k) => s + pb[k].count, 0);
+  const totalTrip = keys.reduce((s, k) => s + pb[k].tripMin, 0);
+  const totalRest = keys.reduce((s, k) => s + pb[k].restMin, 0);
+  const cell = (v) => `<td>${v}</td>`;
+  const row = (label, valueFn) => `
+    <tr>
+      <td class="lbl">${label}</td>
+      ${keys.map(k => cell(valueFn(pb[k]))).join('')}
+      ${cell(valueFn({ sales: totalSales, count: totalCount, tripMin: totalTrip, restMin: totalRest }))}
+    </tr>`;
+  document.getElementById('periodCard').innerHTML = `
+    <div class="muted">時間帯別サマリー</div>
+    <div style="overflow-x:auto;">
+    <table class="period-table">
+      <thead><tr>
+        <th class="lbl"></th>
+        ${keys.map(k => `<th>${PERIOD_LABELS[k]}</th>`).join('')}
+        <th>合計</th>
+      </tr></thead>
+      <tbody>
+        ${row('営収(税込)', d => d.sales > 0 ? formatYen(d.sales) : '—')}
+        ${row('件数', d => d.count || '—')}
+        ${row('平均単価', d => d.count > 0 ? formatYen(d.sales / d.count) : '—')}
+        ${row('実車時間', d => d.tripMin > 0 ? formatMin(d.tripMin) : '—')}
+        ${row('時間単価', d => d.tripMin > 0 ? formatYen(d.sales / (d.tripMin/60)) : '—')}
+        ${row('休憩時間', d => d.restMin > 0 ? formatMin(d.restMin) : '—')}
+      </tbody>
+    </table>
+    </div>
+  `;
+}
+
+function renderHourChart(drive) {
+  const acts = hourlyActivity(drive, 7);
+  const max = Math.max(...acts.map(a => a.sales), 1);
+  const cols = acts.map(a => {
+    const heightPct = a.sales === 0 ? 0 : Math.max(4, (a.sales / max) * 100);
+    const cls = a.sales === 0 ? 'zero' : '';
+    const yen = a.sales > 0 ? formatYen(a.sales) : '';
+    const min = a.tripMin > 0 ? `${a.tripMin}分` : '';
+    return `<div class="hour-bar-col">
+      <div class="bar-wrap"><div class="bar ${cls}" style="height:${heightPct}%"></div></div>
+      <div class="yen">${yen}</div>
+      <div class="min">${min}</div>
+      <div class="h">${a.hour}</div>
+    </div>`;
+  }).join('');
+  const peakAct = acts.reduce((a, b) => a.sales >= b.sales ? a : b);
+  document.getElementById('hourCard').innerHTML = `
+    <div class="muted">時間別売上 (7時スタート、横軸=時刻)</div>
+    <div class="hour-chart">
+      <div class="hour-row">${cols}</div>
+    </div>
+    <div class="legend">
+      上段: 売上(¥) / 中段: 実車時間(分) / 下段: 時刻<br>
+      ピーク: <strong>${peakAct.hour}時台 ${formatYen(peakAct.sales)} (実車${peakAct.tripMin}分)</strong>
+    </div>
+  `;
+}
+
+function renderTripsTable(drive) {
+  const trips = drive.trips || [];
+  const rests = drive.rests || [];
+  // 全エントリを時刻順に
+  const events = [];
+  for (const t of trips) events.push({ kind: 'trip', t });
+  for (const r of rests) events.push({ kind: 'rest', r });
+  events.sort((a, b) => {
+    const aTime = a.kind === 'trip' ? a.t.boardTime : a.r.startTime;
+    const bTime = b.kind === 'trip' ? b.t.boardTime : b.r.startTime;
+    return (aTime || '').localeCompare(bTime || '');
+  });
+
+  let prevAlight = null;
+  const rows = events.map(ev => {
+    if (ev.kind === 'rest') {
+      const r = ev.r;
+      let dur = timeToMinutes(r.endTime) - timeToMinutes(r.startTime);
+      if (dur < 0) dur += 24*60;
+      prevAlight = r.endTime;
+      return `<tr style="background:#f5f5f5;color:var(--muted);">
+        <td>休</td><td>${r.startTime}</td><td>${r.endTime}</td><td class="r">${dur}分</td>
+        <td>—</td><td class="place" colspan="2">${r.place || ''}</td><td class="r">—</td><td class="r">—</td>
+      </tr>`;
+    }
+    const t = ev.t;
+    let dur = timeToMinutes(t.alightTime) - timeToMinutes(t.boardTime);
+    if (dur < 0) dur += 24*60;
+    let waitMin = '';
+    if (prevAlight && t.boardTime) {
+      let w = timeToMinutes(t.boardTime) - timeToMinutes(prevAlight);
+      if (w < 0) w += 24*60;
+      waitMin = w >= 0 && w < 600 ? `${w}分` : '';
+    }
+    prevAlight = t.alightTime;
+    const cls = t.isCancel ? 'cancel' : (t.isCharter ? 'charter' : '');
+    return `<tr class="${cls}">
+      <td>${t.no}</td>
+      <td>${t.boardTime}</td>
+      <td>${t.alightTime}</td>
+      <td class="r">${dur}分</td>
+      <td>${t.isPickup ? '迎' : ''}${t.isCharter ? '貸' : ''}</td>
+      <td class="place" title="${t.boardPlace}">${t.boardPlace}</td>
+      <td class="place" title="${t.alightPlace}">${t.alightPlace}${t.isCancel ? ' [×]' : ''}</td>
+      <td class="r">${(t.km || 0).toFixed(1)}</td>
+      <td class="r">${t.isCancel ? '—' : formatYen(t.amount)}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('tripsCard').innerHTML = `
+    <div class="muted">日報明細</div>
+    <div style="overflow-x:auto;">
+    <table class="trip-table">
+      <thead><tr>
+        <th>No</th><th>乗車</th><th>降車</th><th class="r">時間</th>
+        <th>区</th><th>乗車地</th><th>降車地</th><th class="r">km</th><th class="r">金額</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    </div>
+    <div class="legend">区: 迎=お迎え / 貸=貸切。橙=キャンセル、薄橙背景=貸切</div>
+  `;
 }
 
 if (localStorage.getItem('github_token') && localStorage.getItem('github_data_repo')) load();
