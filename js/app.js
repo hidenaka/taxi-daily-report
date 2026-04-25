@@ -21,8 +21,16 @@ export function formatDate(isoDate) {
   return `${d.getMonth() + 1}/${d.getDate()}(${days[d.getDay()]})`;
 }
 
+// ローカル(JST)タイムゾーンでの YYYY-MM-DD 文字列を返す
+export function toLocalIso(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 export function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return toLocalIso(new Date());
 }
 
 // タクシー業界の月度（16日始まり〜翌月15日締め、2月のみ16-13、3月度は2/14スタート）

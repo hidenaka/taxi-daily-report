@@ -8,10 +8,24 @@
 <link rel="manifest" href="manifest.webmanifest">
 <style>
 .fab { position: fixed; right: 18px; bottom: 76px; width: 56px; height: 56px; border-radius: 50%; background: var(--primary); color: #fff; border: none; font-size: 28px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-.drive-row { display: flex; padding: 12px; border-bottom: 1px solid #eee; align-items: center; cursor: pointer; }
-.drive-row .date { font-weight: 600; flex: 0 0 80px; }
-.drive-row .meta { flex: 1; font-size: 12px; color: var(--muted); }
-.drive-row .yen { font-weight: 600; }
+.period-nav { display:flex;justify-content:space-between;align-items:center;margin-bottom:8px; }
+.period-nav button { background: var(--gray); color: #333; border: none; padding: 6px 10px; border-radius: 4px; font-size: 13px; }
+.kv { display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-top:4px; }
+.kv strong { font-size: 14px; }
+.badge { display:inline-block;font-size:10px;padding:1px 6px;border-radius:8px;background:var(--gray);color:#333;margin-left:6px; }
+.badge.actual { background: var(--primary); color: #fff; }
+.badge.predict { background: var(--orange, #ff9800); color: #fff; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; margin-top: 6px; }
+.cal-cell { min-height: 56px; padding: 4px 2px; text-align: center; background: #fafafa; border-radius: 4px; font-size: 11px; cursor: default; user-select: none; border: 1px solid #eee; display: flex; flex-direction: column; justify-content: space-between; }
+.cal-cell.actual { background: #e3f2fd; border-color: var(--primary); cursor: pointer; }
+.cal-cell.today { box-shadow: 0 0 0 2px #f57f17 inset; }
+.cal-cell.dim { background: transparent; border: none; }
+.cal-cell .day { font-weight: 600; font-size: 13px; }
+.cal-cell .yen { font-size: 10px; color: var(--primary); font-weight: 600; line-height: 1.1; }
+.cal-cell .ic { font-size: 10px; color: var(--muted); }
+.dow-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; font-size: 10px; color: var(--muted); text-align: center; }
+.dow-row .sat { color: #1976d2; }
+.dow-row .sun { color: #d32f2f; }
 </style>
 </head>
 <body>
@@ -22,16 +36,20 @@ if ('serviceWorker' in navigator) {
 </script>
 <main style="padding:14px;">
   <section class="card" id="summaryCard">読み込み中…</section>
-  <section class="card" style="padding:0;" id="listCard"></section>
+  <section class="card" id="targetCard" style="display:none;"></section>
+  <section class="card" id="calCard" style="display:none;"></section>
 </main>
 <button class="fab" onclick="location.href='input.html'">＋</button>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod } from './js/app.js';
+import { renderBottomNav, formatYen, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js';
 import { getConfig, getDrivesForMonth, flushPendingQueue } from './js/storage.js';
-import { calcTotalPay, calcDailySales } from './js/payroll.js';
+import { calcTotalPay, calcDailySales, calcMonthlySales } from './js/payroll.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('home');
+
+let viewPeriod = currentBillingPeriod();
+let config = null;
 
 async function load() {
   if (!localStorage.getItem('github_token') || !localStorage.getItem('github_data_repo')) {
@@ -39,47 +57,171 @@ async function load() {
     return;
   }
   await flushPendingQueue();
-  const config = await getConfig();
+  config = await getConfig();
   if (!config) { document.getElementById('summaryCard').innerHTML = 'config未取得'; return; }
-  const ym = currentBillingPeriod();
-  const drives = await getDrivesForMonth(ym);
-  drives.sort((a, b) => b.date.localeCompare(a.date));
+  await render();
+}
 
-  // サマリー（責任出番達成前提）
-  const result = calcTotalPay(drives, config);
-  const monthLabel = formatBillingPeriod(ym);
+async function render() {
+  const drives = await getDrivesForMonth(viewPeriod);
+  drives.sort((a, b) => a.date.localeCompare(b.date));
+  const range = getBillingPeriodRange(viewPeriod);
+  const today = todayIso();
+  const isPast = range.end < today;
+  const isFuture = range.start > today;
+  const isCurrent = !isPast && !isFuture;
+
+  const monthLabel = formatBillingPeriod(viewPeriod);
   const takeHomeRate = config.takeHomeRate ?? 0.75;
-  const takeHome = result.total * takeHomeRate;
-  document.getElementById('summaryCard').innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;">
-      <div><strong>${monthLabel}</strong> ${result.shiftCount}/${config.responsibilityShifts}乗務</div>
-      <div>総支給 <strong>${formatYen(result.total)}</strong></div>
+  const respShifts = config.responsibilityShifts;
+
+  const actualResult = calcTotalPay(drives, config);
+  const actualTakeHome = actualResult.total * takeHomeRate;
+
+  let predicted = null;
+  if (isCurrent && drives.length > 0 && drives.length < respShifts) {
+    predicted = predictMonthly(drives, config);
+  }
+
+  // サマリー
+  let summaryHtml = `
+    <div class="period-nav">
+      <button id="prevBtn">‹ 前月度</button>
+      <strong>${monthLabel}</strong>
+      <button id="nextBtn">翌月度 ›</button>
     </div>
-    <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-top:4px;color:var(--muted);">
-      <div>手取り推定（×${(takeHomeRate*100).toFixed(0)}%）</div>
-      <div style="color:var(--primary);font-size:14px;"><strong>${formatYen(takeHome)}</strong></div>
-    </div>
+    <div class="kv"><div>乗務数${isPast ? '（実績）' : ''}</div><div><strong>${actualResult.shiftCount}</strong>${isCurrent || isFuture ? ` / ${respShifts}` : ''}乗務</div></div>
   `;
 
-  // 直近乗務リスト
-  const list = document.getElementById('listCard');
-  list.innerHTML = drives.length === 0
-    ? '<div style="padding:14px;color:var(--muted);">乗務記録なし</div>'
-    : drives.map(d => {
-        const sales = calcDailySales(d);
-        const validCount = d.trips.filter(t => !t.isCancel).length;
-        const wIcon = pickWeatherIcon(d.weather);
-        return `<div class="drive-row" onclick="location.href='detail.html?date=${d.date}'">
-          <div class="date">${formatDate(d.date)}</div>
-          <div class="meta">${wIcon} ${validCount}件</div>
-          <div class="yen">${formatYen(sales.inclTax)}</div>
-        </div>`;
-      }).join('');
+  if (isPast || drives.length >= respShifts) {
+    summaryHtml += `
+      <div class="kv"><div>総支給<span class="badge actual">実績</span></div><div><strong>${formatYen(actualResult.total)}</strong></div></div>
+      <div class="kv"><div>手取り推定（×${(takeHomeRate*100).toFixed(0)}%）</div><div style="color:var(--primary);"><strong>${formatYen(actualTakeHome)}</strong></div></div>
+    `;
+  } else if (isCurrent && predicted) {
+    const predictedTakeHome = predicted.total * takeHomeRate;
+    summaryHtml += `
+      <div class="kv"><div>現時点 総支給<span class="badge actual">実績</span></div><div><strong>${formatYen(actualResult.total)}</strong></div></div>
+      <div class="kv"><div>現時点 手取り</div><div style="color:var(--primary);"><strong>${formatYen(actualTakeHome)}</strong></div></div>
+      <hr style="border:none;border-top:1px dashed #ddd;margin:6px 0;">
+      <div class="kv"><div>月度予想 総支給<span class="badge predict">予測</span></div><div><strong>${formatYen(predicted.total)}</strong></div></div>
+      <div class="kv"><div>月度予想 手取り</div><div style="color:var(--primary);"><strong>${formatYen(predictedTakeHome)}</strong></div></div>
+      <p class="muted" style="font-size:10px;margin-top:4px;">※ 予測 = 現時点の日平均売上 × 責任出番(${respShifts})</p>
+    `;
+  } else if (isCurrent && drives.length === 0) {
+    summaryHtml += `<p class="muted" style="font-size:11px;margin-top:4px;">乗務を入力すると予想が表示されます</p>`;
+  } else {
+    summaryHtml += `<p class="muted" style="font-size:11px;margin-top:4px;">未来の月度</p>`;
+  }
+  document.getElementById('summaryCard').innerHTML = summaryHtml;
+  document.getElementById('prevBtn').onclick = () => { viewPeriod = shiftBillingPeriod(viewPeriod, -1); render(); };
+  document.getElementById('nextBtn').onclick = () => { viewPeriod = shiftBillingPeriod(viewPeriod, 1); render(); };
+
+  // 目標
+  const targetCard = document.getElementById('targetCard');
+  if (isCurrent && config.takeHomeTarget) {
+    const target = config.takeHomeTarget;
+    const requiredTotal = target / takeHomeRate;
+    const remaining = Math.max(0, requiredTotal - actualResult.total);
+    const remainingShifts = Math.max(0, respShifts - actualResult.shiftCount);
+    const monthlySales = calcMonthlySales(drives);
+    const avgRate = (actualResult.shiftCount > 0 && monthlySales.exclTax > 0) ? (actualResult.basePay / monthlySales.exclTax) : 0.65;
+    const perShiftPayRequired = remainingShifts > 0 ? remaining / remainingShifts : 0;
+    const perShiftSalesExclTax = avgRate > 0 ? perShiftPayRequired / avgRate : 0;
+    const perShiftSalesInclTax = perShiftSalesExclTax * 1.1;
+    const projectedTakeHome = (predicted ? predicted.total : actualResult.total) * takeHomeRate;
+    const willHit = projectedTakeHome >= target;
+    targetCard.style.display = '';
+    targetCard.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:baseline;">
+        <strong>手取り目標</strong>
+        <span style="color:${willHit ? 'var(--primary)' : 'var(--orange,#ff9800)'};font-weight:600;">${willHit ? '達成見込' : '未達見込'}</span>
+      </div>
+      <div class="kv"><div>目標</div><div><strong>${formatYen(target)}</strong></div></div>
+      <div class="kv"><div>予想差額</div><div style="color:${willHit ? 'var(--primary)' : 'var(--orange,#ff9800)'};"><strong>${willHit ? '+' : '−'}${formatYen(Math.abs(projectedTakeHome - target))}</strong></div></div>
+      ${remainingShifts > 0 ? `
+      <hr style="border:none;border-top:1px dashed #ddd;margin:6px 0;">
+      <div class="kv"><div>残り乗務</div><div><strong>${remainingShifts}乗務</strong></div></div>
+      <div class="kv"><div>1乗務あたり必要 売上(税込)</div><div><strong>${formatYen(perShiftSalesInclTax)}</strong></div></div>
+      ` : '<p class="muted" style="font-size:11px;margin-top:6px;">責任出番達成済</p>'}
+    `;
+  } else {
+    targetCard.style.display = 'none';
+  }
+
+  // カレンダー
+  renderCalendar(drives, range);
+}
+
+function renderCalendar(drives, range) {
+  const calCard = document.getElementById('calCard');
+  calCard.style.display = '';
+  const driveByDate = {};
+  for (const d of drives) driveByDate[d.date] = d;
+  const periodDates = eachDateInRange(range.start, range.end);
+  const firstDate = new Date(range.start + 'T00:00:00+09:00');
+  const startDow = firstDate.getDay();
+  const today = todayIso();
+
+  let html = `
+    <div class="dow-row">
+      <div class="sun">日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div class="sat">土</div>
+    </div>
+    <div class="cal-grid">
+  `;
+  for (let i = 0; i < startDow; i++) html += `<div class="cal-cell dim"></div>`;
+  for (const iso of periodDates) {
+    const day = parseInt(iso.split('-')[2]);
+    const drive = driveByDate[iso];
+    const isToday = iso === today;
+    const cls = ['cal-cell'];
+    if (drive) cls.push('actual');
+    if (isToday) cls.push('today');
+    let inner;
+    if (drive) {
+      const sales = calcDailySales(drive);
+      const wIcon = pickWeatherIcon(drive.weather);
+      inner = `<div class="day">${day}</div><div class="ic">${wIcon}</div><div class="yen">${shortYen(sales.inclTax)}</div>`;
+    } else {
+      inner = `<div class="day">${day}</div>`;
+    }
+    const onclick = drive ? ` onclick="location.href='detail.html?date=${iso}'"` : '';
+    html += `<div class="${cls.join(' ')}"${onclick}>${inner}</div>`;
+  }
+  html += `</div>`;
+  calCard.innerHTML = html;
+}
+
+function shortYen(n) {
+  if (n >= 10000) return Math.round(n / 1000) / 10 + '万';
+  return Math.round(n / 100) / 10 + '千';
+}
+
+function eachDateInRange(start, end) {
+  const dates = [];
+  const s = new Date(start + 'T00:00:00+09:00');
+  const e = new Date(end + 'T00:00:00+09:00');
+  for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
+    dates.push(toLocalIso(d));
+  }
+  return dates;
+}
+
+function predictMonthly(drives, config) {
+  const monthly = calcMonthlySales(drives);
+  const avgDailyInclTax = monthly.inclTax / drives.length;
+  const target = config.responsibilityShifts;
+  const remaining = target - drives.length;
+  if (remaining <= 0) return calcTotalPay(drives, config);
+  const simulated = [...drives];
+  for (let i = 0; i < remaining; i++) {
+    simulated.push({ trips: [{ amount: avgDailyInclTax, isCancel: false }], vehicleType: 'regular', date: '_p_' + i });
+  }
+  return calcTotalPay(simulated, config);
 }
 
 function pickWeatherIcon(w) {
   if (!w) return '';
-  // 朝/昼/夕で雨があれば☂、それ以外は☀（簡易）
   for (const p of [w.morning, w.noon, w.evening]) {
     if (!p) continue;
     if (p.code >= 51 && p.code <= 67) return '☂';

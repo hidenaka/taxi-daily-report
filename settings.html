@@ -41,6 +41,9 @@ if ('serviceWorker' in navigator) {
     <label class="muted" style="margin-top:8px;display:block;">手取り率（控除後 / 総支給）</label>
     <input class="input" id="takeHomeRateInput" type="number" step="0.01" min="0.5" max="1" value="0.75">
     <p class="muted" style="font-size:10px;margin-top:2px;">通常月74〜75%、年末調整月（12月）は還付で約85%。実績ベースで調整可。</p>
+    <label class="muted" style="margin-top:8px;display:block;">手取り目標（円/月度）</label>
+    <input class="input" id="takeHomeTargetInput" type="number" step="10000" min="0" value="500000">
+    <p class="muted" style="font-size:10px;margin-top:2px;">ホームに目標達成可否と残り乗務あたり必要売上が表示されます。</p>
   </section>
 
   <section class="card">
@@ -129,6 +132,7 @@ async function loadConfig() {
     document.getElementById('vehicleTypeSel').value = currentConfig.defaults.vehicleType;
     document.getElementById('departureInput').value = currentConfig.defaults.departureTime;
     document.getElementById('takeHomeRateInput').value = currentConfig.takeHomeRate ?? 0.75;
+    document.getElementById('takeHomeTargetInput').value = currentConfig.takeHomeTarget ?? 500000;
     document.getElementById('latInput').value = currentConfig.weatherLocation.lat;
     document.getElementById('lonInput').value = currentConfig.weatherLocation.lon;
     document.getElementById('locNameInput').value = currentConfig.weatherLocation.name;
@@ -168,6 +172,7 @@ document.getElementById('saveConfigBtn').onclick = async () => {
   currentConfig.defaults.vehicleType = document.getElementById('vehicleTypeSel').value;
   currentConfig.defaults.departureTime = document.getElementById('departureInput').value;
   currentConfig.takeHomeRate = parseFloat(document.getElementById('takeHomeRateInput').value);
+  currentConfig.takeHomeTarget = parseInt(document.getElementById('takeHomeTargetInput').value);
   currentConfig.weatherLocation = {
     lat: parseFloat(document.getElementById('latInput').value),
     lon: parseFloat(document.getElementById('lonInput').value),
