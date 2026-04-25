@@ -63,3 +63,48 @@ export async function getDrivesForMonth(yearMonth) {
   );
   return drives.filter(d => d !== null);
 }
+
+// UTF-8文字列を base64 エンコード
+function encodeContent(jsonObject) {
+  const text = JSON.stringify(jsonObject, null, 2);
+  return btoa(unescape(encodeURIComponent(text)));
+}
+
+// ファイルを作成 or 更新（コンフリクト時は409返す）
+export async function putFile(path, jsonObject, message, sha = null) {
+  const repo = getRepo();
+  const body = {
+    message,
+    content: encodeContent(jsonObject)
+  };
+  if (sha) body.sha = sha; // 更新時は必須
+
+  const res = await fetch(`${API_BASE}/repos/${repo}/contents/${path}`, {
+    method: 'PUT',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+
+  if (res.status === 409 || (res.status === 422 && (await res.clone().json()).message?.includes('sha'))) {
+    const err = new Error('Conflict');
+    err.code = 'CONFLICT';
+    throw err;
+  }
+  if (!res.ok) throw new Error(`GitHub API error: ${res.status} ${await res.text()}`);
+  return res.json();
+}
+
+export async function saveDrive(drive) {
+  const path = `data/drives/${drive.date}.json`;
+  // 既存shaを取得（更新の場合）
+  const existing = await getFile(path);
+  const sha = existing?.sha || null;
+  const message = sha ? `update drive ${drive.date}` : `add drive ${drive.date}`;
+  return putFile(path, drive, message, sha);
+}
+
+export async function saveConfig(config) {
+  const existing = await getFile('data/config.json');
+  const sha = existing?.sha || null;
+  return putFile('data/config.json', config, 'update config', sha);
+}
