@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>詳細 — タクシー日報</title>
+<link rel="stylesheet" href="css/style.css">
+<style>
+.kpi-row { display: flex; gap: 8px; }
+.kpi-row > div { flex: 1; text-align: center; }
+.kpi-row .num { font-size: 18px; font-weight: 700; }
+.kpi-row .lbl { font-size: 10px; color: var(--muted); }
+.alloc-bar { display: flex; height: 22px; border-radius: 4px; overflow: hidden; margin-top: 6px; }
+.alloc-bar > div { display: flex; align-items: center; justify-content: center; color: #fff; font-size: 11px; }
+.heatmap { display: grid; grid-template-columns: repeat(24, 1fr); gap: 1px; margin-top: 6px; }
+.heatmap > div { height: 14px; border-radius: 2px; }
+.trip-row { display: flex; padding: 6px 0; border-bottom: 1px solid #eee; font-size: 12px; }
+.trip-row .no { width: 24px; color: var(--muted); }
+.trip-row .time { width: 80px; }
+.trip-row .place { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trip-row .yen { text-align: right; font-weight: 600; }
+</style>
+</head>
+<body>
+<main style="padding:14px;">
+  <h1 id="title">乗務詳細</h1>
+
+  <section class="card" id="kpiCard"></section>
+  <section class="card" id="allocCard"></section>
+  <section class="card" id="heatCard"></section>
+  <section class="card" id="weatherCard"></section>
+  <section class="card" id="tripsCard"></section>
+
+  <button class="btn btn-block" id="editBtn" style="margin-top:8px;">この乗務を編集</button>
+</main>
+<div id="navHost"></div>
+<script type="module">
+import { renderBottomNav, formatYen, formatDate } from './js/app.js';
+import { getDrive } from './js/storage.js';
+import { calcDailySales } from './js/payroll.js';
+import { calcTimeBreakdown, salesByHour, formatMin } from './js/chart-helpers.js';
+
+document.getElementById('navHost').innerHTML = renderBottomNav('home');
+
+const params = new URLSearchParams(location.search);
+const date = params.get('date');
+
+async function load() {
+  const drive = await getDrive(date);
+  if (!drive) { document.getElementById('title').textContent = '見つかりません'; return; }
+  document.getElementById('title').textContent = `${formatDate(drive.date)} 詳細`;
+
+  // KPI
+  const sales = calcDailySales(drive);
+  const validCount = drive.trips.filter(t => !t.isCancel).length;
+  const breakdown = calcTimeBreakdown(drive);
+  const tripHours = breakdown.tripMin / 60;
+  const hourlyRate = tripHours > 0 ? sales.inclTax / tripHours : 0;
+
+  document.getElementById('kpiCard').innerHTML = `
+    <div class="kpi-row">
+      <div><div class="lbl">売上(税込)</div><div class="num">${formatYen(sales.inclTax)}</div></div>
+      <div><div class="lbl">件数</div><div class="num">${validCount}</div></div>
+      <div><div class="lbl">実車時間単価</div><div class="num">${formatYen(hourlyRate)}</div></div>
+    </div>
+  `;
+
+  // 時間配分3色帯
+  const total = Math.max(1, breakdown.totalMin);
+  document.getElementById('allocCard').innerHTML = `
+    <div class="muted">時間配分（${formatMin(total)}）</div>
+    <div class="alloc-bar">
+      <div style="background:var(--green);flex:${breakdown.tripMin}">実車 ${formatMin(breakdown.tripMin)}</div>
+      <div style="background:var(--gray);flex:${breakdown.restMin}">休 ${formatMin(breakdown.restMin)}</div>
+      <div style="background:var(--orange);flex:${breakdown.idleMin}">空車 ${formatMin(breakdown.idleMin)}</div>
+    </div>
+  `;
+
+  // ヒートマップ
+  const hours = salesByHour(drive);
+  const max = Math.max(...hours, 1);
+  const cells = hours.map((y, h) => {
+    const ratio = y / max;
+    const color = y === 0 ? '#fff' : `rgba(76, 175, 80, ${0.2 + 0.8 * ratio})`;
+    const border = y === 0 ? '1px solid #eee' : 'none';
+    return `<div title="${h}時 ¥${y}" style="background:${color};border:${border};"></div>`;
+  }).join('');
+  document.getElementById('heatCard').innerHTML = `
+    <div class="muted">時間別売上ヒートマップ（00-23時）</div>
+    <div class="heatmap">${cells}</div>
+  `;
+
+  // 天候
+  if (drive.weather) {
+    const w = drive.weather;
+    document.getElementById('weatherCard').innerHTML = `
+      <div class="muted">天候</div>
+      <div style="display:flex;gap:8px;font-size:12px;margin-top:4px;">
+        <div>朝 ${w.morning?.label || '-'} ${w.morning?.tempAvg ?? ''}℃</div>
+        <div>昼 ${w.noon?.label || '-'} ${w.noon?.tempAvg ?? ''}℃</div>
+        <div>夕夜 ${w.evening?.label || '-'} ${w.evening?.tempAvg ?? ''}℃</div>
+        <div>深夜 ${w.night?.label || '-'} ${w.night?.tempAvg ?? ''}℃</div>
+      </div>
+    `;
+  } else {
+    document.getElementById('weatherCard').innerHTML = `<div class="muted">天候未取得</div>`;
+  }
+
+  // 日報明細
+  const tripsHtml = drive.trips.map(t => `
+    <div class="trip-row" style="${t.isCancel ? 'color:var(--orange);' : ''}">
+      <div class="no">${t.no}</div>
+      <div class="time">${t.boardTime}</div>
+      <div class="place">${t.boardPlace}→${t.alightPlace}${t.isCancel ? ' [×]' : ''}</div>
+      <div class="yen">${t.isCancel ? '—' : formatYen(t.amount)}</div>
+    </div>
+  `).join('');
+  document.getElementById('tripsCard').innerHTML = `<div class="muted">日報明細</div>${tripsHtml}`;
+
+  document.getElementById('editBtn').onclick = () => location.href = `input.html?date=${date}`;
+}
+
+if (localStorage.getItem('github_token') && localStorage.getItem('github_data_repo')) load();
+</script>
+</body>
+</html>
