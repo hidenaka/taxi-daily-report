@@ -27,7 +27,7 @@ if ('serviceWorker' in navigator) {
 <button class="fab" onclick="location.href='input.html'">＋</button>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDate, currentYearMonth } from './js/app.js';
+import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod } from './js/app.js';
 import { getConfig, getDrivesForMonth, flushPendingQueue } from './js/storage.js';
 import { calcTotalPay, calcDailySales } from './js/payroll.js';
 
@@ -41,13 +41,13 @@ async function load() {
   await flushPendingQueue();
   const config = await getConfig();
   if (!config) { document.getElementById('summaryCard').innerHTML = 'config未取得'; return; }
-  const ym = currentYearMonth();
+  const ym = currentBillingPeriod();
   const drives = await getDrivesForMonth(ym);
   drives.sort((a, b) => b.date.localeCompare(a.date));
 
   // サマリー（責任出番達成前提）
   const result = calcTotalPay(drives, config);
-  const monthLabel = ym.split('-')[1].replace(/^0/, '') + '月';
+  const monthLabel = formatBillingPeriod(ym);
   const takeHomeRate = config.takeHomeRate ?? 0.75;
   const takeHome = result.total * takeHomeRate;
   document.getElementById('summaryCard').innerHTML = `

@@ -25,6 +25,61 @@ export function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// タクシー業界の月度（16日始まり〜翌月15日締め、2月のみ16-13、3月度は2/14スタート）
+// 任意の日付 (YYYY-MM-DD) → 月度ラベル (YYYY-MM)
+export function getBillingPeriod(isoDate) {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  // Feb の場合: day <= 13 → 2月度 (this year, month 2). day >= 14 → 3月度 (this year, month 3).
+  if (m === 2) {
+    if (d <= 13) return `${y}-02`;
+    return `${y}-03`;
+  }
+  // 通常: day >= 16 → 翌月度. day <= 15 → 当月度.
+  if (d >= 16) {
+    const nextMonth = m === 12 ? 1 : m + 1;
+    const nextYear = m === 12 ? y + 1 : y;
+    return `${nextYear}-${String(nextMonth).padStart(2,'0')}`;
+  }
+  return `${y}-${String(m).padStart(2,'0')}`;
+}
+
+// 月度ラベル (YYYY-MM) → 期間レンジ {start, end}
+export function getBillingPeriodRange(yearMonth) {
+  const [y, m] = yearMonth.split('-').map(Number);
+  const endDay = m === 2 ? 13 : 15;
+  let startMonth = m - 1;
+  let startYear = y;
+  if (startMonth === 0) { startMonth = 12; startYear--; }
+  let startDay = 16;
+  // 3月度: 2月度の終わり翌日 (2/14) 開始
+  if (m === 3) { startMonth = 2; startDay = 14; }
+  return {
+    start: `${startYear}-${String(startMonth).padStart(2,'0')}-${String(startDay).padStart(2,'0')}`,
+    end: `${y}-${String(m).padStart(2,'0')}-${String(endDay).padStart(2,'0')}`
+  };
+}
+
+export function currentBillingPeriod() {
+  return getBillingPeriod(todayIso());
+}
+
+// 月度ラベルを表示用フォーマット ("2026-04" → "2026年4月度")
+export function formatBillingPeriod(yearMonth) {
+  const [y, m] = yearMonth.split('-').map(Number);
+  return `${y}年${m}月度`;
+}
+
+// 月度ラベルから前/次の月度を返す
+export function shiftBillingPeriod(yearMonth, delta) {
+  const [y, m] = yearMonth.split('-').map(Number);
+  let nm = m + delta;
+  let ny = y;
+  while (nm <= 0) { nm += 12; ny--; }
+  while (nm > 12) { nm -= 12; ny++; }
+  return `${ny}-${String(nm).padStart(2,'0')}`;
+}
+
+// 後方互換 (旧コード対応): currentYearMonth は currentBillingPeriod に置換
 export function currentYearMonth() {
-  return new Date().toISOString().slice(0, 7);
+  return currentBillingPeriod();
 }

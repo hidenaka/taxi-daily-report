@@ -56,13 +56,12 @@ if ('serviceWorker' in navigator) {
 </main>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, todayIso } from './js/app.js';
+import { renderBottomNav, formatYen, todayIso, currentBillingPeriod, getBillingPeriodRange, formatBillingPeriod, shiftBillingPeriod } from './js/app.js';
 import { getConfig, saveConfig, getDrivesForMonth } from './js/storage.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('calendar');
 
-let viewYear = new Date().getFullYear();
-let viewMonth = new Date().getMonth(); // 0-indexed
+let viewPeriod = currentBillingPeriod(); // YYYY-MM (月度)
 let config = null;
 let drivesThisMonth = [];
 
@@ -75,8 +74,8 @@ async function load() {
 }
 
 async function render() {
-  document.getElementById('monthLabel').textContent = `${viewYear}年 ${viewMonth + 1}月`;
-  drivesThisMonth = await getDrivesForMonth(`${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`);
+  document.getElementById('monthLabel').textContent = formatBillingPeriod(viewPeriod);
+  drivesThisMonth = await getDrivesForMonth(viewPeriod);
   renderGrid();
   renderDowToggles();
   renderSummary();
@@ -90,30 +89,40 @@ function isActual(date) {
   return drivesThisMonth.some(d => d.date === date);
 }
 
+function eachDateInRange(start, end) {
+  const dates = [];
+  const s = new Date(start + 'T00:00:00+09:00');
+  const e = new Date(end + 'T00:00:00+09:00');
+  for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
+    dates.push(d.toISOString().slice(0, 10));
+  }
+  return dates;
+}
+
 function renderGrid() {
   const grid = document.getElementById('calGrid');
   grid.innerHTML = '';
-  const first = new Date(viewYear, viewMonth, 1);
-  const startDow = first.getDay();
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const { start, end } = getBillingPeriodRange(viewPeriod);
+  const periodDates = eachDateInRange(start, end);
 
-  // 前月の埋め
-  const prevDays = new Date(viewYear, viewMonth, 0).getDate();
-  for (let i = startDow - 1; i >= 0; i--) {
+  // 期間開始日の曜日に合わせて前のセルを空欄で埋める
+  const firstDate = new Date(start + 'T00:00:00+09:00');
+  const startDow = firstDate.getDay();
+  for (let i = 0; i < startDow; i++) {
     const d = document.createElement('div');
     d.className = 'cal-cell dim';
-    d.textContent = prevDays - i;
+    d.textContent = '';
     grid.appendChild(d);
   }
 
-  for (let d = 1; d <= daysInMonth; d++) {
-    const iso = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  for (const iso of periodDates) {
+    const day = parseInt(iso.split('-')[2]);
     const cell = document.createElement('div');
     cell.className = 'cal-cell';
     if (isActual(iso)) cell.classList.add('actual');
     else if (isPlanned(iso)) cell.classList.add('planned');
     if (iso === todayIso()) cell.classList.add('today');
-    cell.textContent = d;
+    cell.textContent = day;
     cell.onclick = () => togglePlanned(iso);
     grid.appendChild(cell);
   }
@@ -140,11 +149,10 @@ function renderDowToggles() {
     btn.onclick = async () => {
       const idx = config.shifts.patterns.indexOf(dow);
       if (idx >= 0) config.shifts.patterns.splice(idx, 1); else config.shifts.patterns.push(dow);
-      // 当月の expandedDates に該当曜日を全展開（既存はそのまま）
-      const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-      for (let d = 1; d <= daysInMonth; d++) {
-        const dt = new Date(viewYear, viewMonth, d);
-        const iso = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      // 当月度のexpandedDatesに該当曜日を全展開（実績済以外）
+      const { start, end } = getBillingPeriodRange(viewPeriod);
+      for (const iso of eachDateInRange(start, end)) {
+        const dt = new Date(iso + 'T00:00:00+09:00');
         const dowName = DOW[dt.getDay()];
         if (config.shifts.patterns.includes(dowName) && !config.shifts.expandedDates.includes(iso) && !isActual(iso)) {
           config.shifts.expandedDates.push(iso);
@@ -159,11 +167,12 @@ function renderDowToggles() {
 }
 
 function renderSummary() {
-  const ym = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
-  const planned = config.shifts.expandedDates.filter(d => d.startsWith(ym)).length;
+  const { start, end } = getBillingPeriodRange(viewPeriod);
+  const planned = config.shifts.expandedDates.filter(d => d >= start && d <= end).length;
   const actual = drivesThisMonth.length;
   const remaining = Math.max(0, planned - actual);
-  const willMakeResp = (actual + (config.shifts.expandedDates.filter(d => d.startsWith(ym) && d >= todayIso()).length)) >= config.responsibilityShifts;
+  const futurePlanned = config.shifts.expandedDates.filter(d => d >= start && d <= end && d >= todayIso()).length;
+  const willMakeResp = (actual + futurePlanned) >= config.responsibilityShifts;
   document.getElementById('summary').innerHTML = `
     <div>予定: <strong>${planned}乗務</strong></div>
     <div>実績: <strong>${actual}乗務</strong></div>
@@ -173,11 +182,11 @@ function renderSummary() {
 }
 
 document.getElementById('prevBtn').onclick = () => {
-  viewMonth--; if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+  viewPeriod = shiftBillingPeriod(viewPeriod, -1);
   render();
 };
 document.getElementById('nextBtn').onclick = () => {
-  viewMonth++; if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+  viewPeriod = shiftBillingPeriod(viewPeriod, 1);
   render();
 };
 

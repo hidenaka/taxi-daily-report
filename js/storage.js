@@ -54,12 +54,18 @@ export async function getDrive(date) {
   return result?.content || null;
 }
 
-// 当月の全drive並列取得
+// 月度（YYYY-MM）の全drive並列取得 — 16-15 サイクル対応
+import { getBillingPeriodRange } from './app.js';
 export async function getDrivesForMonth(yearMonth) {
+  const { start, end } = getBillingPeriodRange(yearMonth);
   const files = await listFiles('data/drives');
-  const monthFiles = files.filter(f => f.name.startsWith(yearMonth) && f.name.endsWith('.json'));
+  const periodFiles = files.filter(f => {
+    if (!f.name.endsWith('.json')) return false;
+    const date = f.name.replace('.json', '');
+    return date >= start && date <= end;
+  });
   const drives = await Promise.all(
-    monthFiles.map(f => getFile(f.path).then(r => r?.content))
+    periodFiles.map(f => getFile(f.path).then(r => r?.content))
   );
   return drives.filter(d => d !== null);
 }
