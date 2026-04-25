@@ -97,7 +97,15 @@ if ('serviceWorker' in navigator) {
     <div class="detail-tip" id="trendTip"></div>
   </section>
 
-  <section class="card" id="heatCard">
+  <section class="card" id="dowCard">
+    <div class="section-h">
+      <strong>曜日別 平均パフォーマンス</strong>
+      <span class="desc">どの曜日が稼げるか</span>
+    </div>
+    <div id="dowBody"></div>
+  </section>
+
+  <section class="card" id="heatCard"
     <div class="section-h">
       <strong>曜日 × 時間帯 平均売上</strong>
       <span class="desc">パターン発見</span>
@@ -145,7 +153,7 @@ if ('serviceWorker' in navigator) {
 import { renderBottomNav, formatYen, formatDate, formatDateY, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod } from './js/app.js';
 import { getDrivesForMonth } from './js/storage.js';
 import { calcDailySales, calcTotalPay, calcMonthlySales } from './js/payroll.js';
-import { calcTimeBreakdown, dowPeriodMatrix, rankDrivesBySales, weatherSalesAggregation, WEATHER_LABELS, DOW_LABELS, isSummaryOnly, formatMin } from './js/chart-helpers.js';
+import { calcTimeBreakdown, dowPeriodMatrix, dowAggregation, rankDrivesBySales, weatherSalesAggregation, WEATHER_LABELS, DOW_LABELS, isSummaryOnly, formatMin } from './js/chart-helpers.js';
 import { getConfig } from './js/storage.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('review');
@@ -206,10 +214,44 @@ async function load() {
   }
   document.getElementById('rangeInfo').textContent = `${formatBillingPeriod(periods[0])} 〜 ${formatBillingPeriod(periods[periods.length-1])} (${allDrives.length}乗務)`;
   renderTrend();
+  renderDow();
   renderHeatmap();
   renderWeather();
   renderRanks();
   renderMemos();
+}
+
+function renderDow() {
+  const agg = dowAggregation(allDrives);
+  const max = Math.max(...agg.map(a => a.days > 0 ? a.totalSales / a.days : 0), 1);
+  let html = '<div style="overflow-x:auto;"><table class="rank-table">' +
+    '<thead><tr><th class="l">曜</th><th>日数</th><th>平均営収</th><th>平均件数</th><th>平均時間単価</th><th>平均乗務</th><th>ベスト</th></tr></thead><tbody>';
+  for (let dow = 0; dow < 7; dow++) {
+    const a = agg[dow];
+    if (a.days === 0) {
+      html += `<tr><td class="l" style="color:${dow===0?'#d32f2f':dow===6?'#1976d2':'#999'};">${DOW_LABELS[dow]}</td><td colspan="6" style="color:#ccc;">—</td></tr>`;
+      continue;
+    }
+    const avgSales = a.totalSales / a.days;
+    const avgCount = a.totalCount / a.days;
+    const avgHourly = a.totalShiftMin > 0 ? a.totalSales / (a.totalShiftMin / 60) : 0;
+    const avgShiftMin = a.totalShiftMin / a.days;
+    const pct = (avgSales / max) * 100;
+    html += `<tr style="cursor:${a.bestDate ? 'pointer' : 'default'};" ${a.bestDate ? `onclick="location.href='detail.html?date=${a.bestDate}'"` : ''}>
+      <td class="l" style="color:${dow===0?'#d32f2f':dow===6?'#1976d2':''};font-weight:600;">${DOW_LABELS[dow]}</td>
+      <td>${a.days}</td>
+      <td><div style="position:relative;background:#f0f0f0;border-radius:3px;height:18px;min-width:80px;">
+        <div style="position:absolute;left:0;top:0;height:100%;width:${pct}%;background:var(--green);border-radius:3px;"></div>
+        <div style="position:relative;line-height:18px;font-size:10px;text-align:right;padding-right:4px;font-weight:600;">${formatYen(avgSales)}</div>
+      </div></td>
+      <td>${avgCount.toFixed(1)}</td>
+      <td>${formatYen(avgHourly)}</td>
+      <td>${formatMin(avgShiftMin)}</td>
+      <td><strong>${formatYen(a.bestSales)}</strong></td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  document.getElementById('dowBody').innerHTML = html;
 }
 
 function renderTrend() {

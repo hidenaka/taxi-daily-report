@@ -267,3 +267,27 @@ export function weatherSalesAggregation(drives) {
 
 export const WEATHER_LABELS = { sunny: '晴れ', cloudy: '曇り', rainy: '雨', snowy: '雪' };
 export const DOW_LABELS = ['日','月','火','水','木','金','土'];
+
+// 曜日別の集計 (各日数/平均営収/平均件数/平均時間単価/平均乗務時間/ベスト日)
+export function dowAggregation(drives) {
+  const empty = () => ({ days: 0, totalSales: 0, totalCount: 0, totalTripMin: 0, totalShiftMin: 0, bestSales: 0, bestDate: null });
+  const result = Array.from({length: 7}, empty);
+  for (const d of drives) {
+    if (isSummaryOnly(d)) continue;
+    const dow = dowOf(d.date);
+    const valid = (d.trips || []).filter(t => !t.isCancel);
+    const sales = valid.reduce((s,t) => s + (t.amount || 0), 0);
+    if (sales === 0) continue;
+    const bd = calcTimeBreakdown(d);
+    result[dow].days++;
+    result[dow].totalSales += sales;
+    result[dow].totalCount += valid.length;
+    result[dow].totalTripMin += bd.tripMin;
+    result[dow].totalShiftMin += bd.totalMin;
+    if (sales > result[dow].bestSales) {
+      result[dow].bestSales = sales;
+      result[dow].bestDate = d.date;
+    }
+  }
+  return result;
+}
