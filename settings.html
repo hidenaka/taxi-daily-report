@@ -19,11 +19,14 @@ if ('serviceWorker' in navigator) {
   <section class="card">
     <h3>GitHub（データリポジトリ）</h3>
     <label class="muted">データリポジトリ (username/repo-data)</label>
-    <input class="input" id="repoInput" placeholder="hidenaka/taxi-daily-report-data">
+    <input class="input" id="repoInput" placeholder="hidenaka/taxi-daily-report-data" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
     <label class="muted" style="margin-top:8px;display:block;">Personal Access Token (repo権限)</label>
-    <input class="input" id="tokenInput" type="password">
-    <button class="btn btn-block" id="saveGhBtn" style="margin-top:8px;">保存</button>
-    <div id="ghStatus" class="muted" style="margin-top:6px;"></div>
+    <input class="input" id="tokenInput" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <div style="display:flex;gap:6px;margin-top:8px;">
+      <button class="btn" id="saveGhBtn" style="flex:1;">保存</button>
+      <button class="btn" id="testBtn" style="flex:1;background:var(--gray);">接続テスト</button>
+    </div>
+    <div id="ghStatus" class="muted" style="margin-top:6px;white-space:pre-wrap;font-family:monospace;font-size:11px;"></div>
   </section>
 
   <section class="card">
@@ -73,10 +76,45 @@ document.getElementById('repoInput').value = localStorage.getItem('github_data_r
 document.getElementById('tokenInput').value = localStorage.getItem('github_token') || '';
 
 document.getElementById('saveGhBtn').onclick = () => {
-  localStorage.setItem('github_data_repo', document.getElementById('repoInput').value);
-  localStorage.setItem('github_token', document.getElementById('tokenInput').value);
+  localStorage.setItem('github_data_repo', document.getElementById('repoInput').value.trim());
+  localStorage.setItem('github_token', document.getElementById('tokenInput').value.trim());
   document.getElementById('ghStatus').textContent = '保存しました。設定を読み込みます…';
   loadConfig();
+};
+
+document.getElementById('testBtn').onclick = async () => {
+  const status = document.getElementById('ghStatus');
+  const log = (msg) => { status.textContent += msg + '\n'; };
+  status.textContent = '';
+  const repo = document.getElementById('repoInput').value.trim();
+  const token = document.getElementById('tokenInput').value.trim();
+  if (!repo) { log('✗ リポジトリ名が空欄'); return; }
+  if (!token) { log('✗ トークンが空欄'); return; }
+  log(`→ リポジトリ: ${repo}`);
+  log(`→ トークン: ${token.slice(0,4)}...${token.slice(-4)} (${token.length}文字)`);
+  // Test 1: API reachability + auth
+  try {
+    const r = await fetch('https://api.github.com/user', { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json' } });
+    if (r.status === 401) { log('✗ 認証失敗（トークンが無効か期限切れ）'); return; }
+    if (!r.ok) { log(`✗ /user ${r.status}: ${(await r.text()).slice(0,100)}`); return; }
+    const u = await r.json();
+    log(`✓ 認証OK (user: ${u.login})`);
+  } catch (e) { log(`✗ ネットワーク到達失敗: ${e.message}`); return; }
+  // Test 2: Repo existence
+  try {
+    const r = await fetch(`https://api.github.com/repos/${repo}`, { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json' } });
+    if (r.status === 404) { log(`✗ リポジトリが見つからない: ${repo}（タイプミス or トークンの権限不足）`); return; }
+    if (!r.ok) { log(`✗ /repos/${repo} ${r.status}`); return; }
+    log(`✓ リポジトリ存在確認OK`);
+  } catch (e) { log(`✗ リポジトリ確認失敗: ${e.message}`); return; }
+  // Test 3: config.json
+  try {
+    const r = await fetch(`https://api.github.com/repos/${repo}/contents/data/config.json`, { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json' } });
+    if (r.status === 404) { log('✗ data/config.json が見つからない'); return; }
+    if (!r.ok) { log(`✗ config.json取得失敗 ${r.status}`); return; }
+    log('✓ config.json取得OK');
+    log('→ すべて正常。「保存」を押して設定を反映してください。');
+  } catch (e) { log(`✗ config.json取得失敗: ${e.message}`); }
 };
 
 let currentConfig = null;
