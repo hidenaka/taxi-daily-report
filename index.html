@@ -97,6 +97,12 @@ async function render() {
     predicted = predictMonthly(drives, config, range.start, range.end);
   }
 
+  // 合計乗務時間 (detailedな日のみ)
+  let totalShiftMin = 0;
+  for (const d of drives) {
+    if (!isSummaryOnly(d)) totalShiftMin += calcTimeBreakdown(d).totalMin;
+  }
+
   // サマリー
   let summaryHtml = `
     <div class="period-nav">
@@ -105,6 +111,7 @@ async function render() {
       <button id="nextBtn">翌月度 ›</button>
     </div>
     <div class="kv"><div>乗務数${isPast ? '（実績）' : ''}</div><div><strong>${actualResult.shiftCount}</strong>${isCurrent || isFuture ? ` / ${respShifts}` : ''}乗務${actualResult.paidLeaveDays > 0 ? ` <span class="badge" style="background:#ce93d8;color:#fff;">有給${actualResult.paidLeaveDays}日</span>` : ''}</div></div>
+    ${totalShiftMin > 0 ? `<div class="kv"><div>合計乗務時間</div><div><strong>${formatMin(totalShiftMin)}</strong></div></div>` : ''}
   `;
 
   if (isPast || drives.length >= respShifts) {
