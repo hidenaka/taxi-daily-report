@@ -1,4 +1,4 @@
-const CACHE_NAME = 'taxi-daily-v1';
+const CACHE_NAME = 'taxi-daily-v3';
 const STATIC_FILES = [
   './',
   './index.html',
@@ -32,7 +32,17 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   // GitHub APIや天候APIはキャッシュせず素通し
   if (url.hostname === 'api.github.com' || url.hostname.includes('open-meteo')) return;
-  // 静的ファイルはキャッシュ優先
+  // HTMLとJSはネットワーク優先（更新を取りこぼさない）、失敗時のみキャッシュ
+  const isHtmlOrJs = e.request.destination === 'document' || /\.(html|js)$/i.test(url.pathname);
+  if (isHtmlOrJs) {
+    e.respondWith(
+      fetch(e.request)
+        .then(res => { caches.open(CACHE_NAME).then(c => c.put(e.request, res.clone())); return res; })
+        .catch(() => caches.match(e.request))
+    );
+    return;
+  }
+  // それ以外（CSS、画像、manifest）はキャッシュ優先
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request))
   );
