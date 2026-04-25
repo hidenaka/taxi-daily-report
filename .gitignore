@@ -6,3 +6,4 @@ node_modules/
 *.log
 data/
 icon-gen-*.png
+icon-v2-*.png
