@@ -1,5 +1,5 @@
 import { test, assert } from './run.js';
-import { calcDailySales, calcMonthlySales } from '../js/payroll.js';
+import { calcDailySales, calcMonthlySales, findRate, calcBasePay } from '../js/payroll.js';
 
 test('calcDailySales: trips のキャンセル除いた合計（税込）', () => {
   const drive = {
@@ -23,4 +23,43 @@ test('calcMonthlySales: drives全体の合計', () => {
   assert.equal(result.inclTax, 110000);
   assert.equal(result.exclTax, 110000 / 1.1);
   assert.equal(result.shiftCount, 2);
+});
+
+test('findRate: 売上ティアからrateを引く', () => {
+  const tiers = [
+    { salesMin: 0, salesMax: 500000, rate: 0.55 },
+    { salesMin: 500000, salesMax: 1000000, rate: 0.62 },
+    { salesMin: 1000000, salesMax: 2000000, rate: 0.687 }
+  ];
+  assert.equal(findRate(tiers, 300000), 0.55);
+  assert.equal(findRate(tiers, 700000), 0.62);
+  assert.equal(findRate(tiers, 1100000), 0.687);
+});
+
+test('findRate: テーブル外（最大超）→最大ティアの率', () => {
+  const tiers = [
+    { salesMin: 0, salesMax: 500000, rate: 0.55 },
+    { salesMin: 500000, salesMax: 1000000, rate: 0.62 }
+  ];
+  assert.equal(findRate(tiers, 2000000), 0.62);
+});
+
+test('calcBasePay: 11乗務、売上1,100,000(税抜) → 歩率68.7% → 755,700', () => {
+  const drives = Array(11).fill({ trips: [{ amount: 110000, isCancel: false }] });
+  // 11乗務×110,000(税込) = 1,210,000(税込) = 1,100,000(税抜)
+  const config = {
+    rateTable: {
+      "11": [
+        { salesMin: 0, salesMax: 500000, rate: 0.55 },
+        { salesMin: 500000, salesMax: 1000000, rate: 0.62 },
+        { salesMin: 1000000, salesMax: 2000000, rate: 0.687 }
+      ],
+      "12_13rate": 0.62
+    }
+  };
+  const result = calcBasePay(drives, config);
+  // 1,100,000 × 0.687 = 755,700
+  assert.equal(Math.round(result.basePay), 755700);
+  assert.equal(result.rate, 0.687);
+  assert.equal(result.shiftCount, 11);
 });
