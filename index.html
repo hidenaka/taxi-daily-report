@@ -176,7 +176,7 @@ function renderSummaryTable(drives) {
   card.style.display = '';
   const sorted = [...drives].sort((a, b) => a.date.localeCompare(b.date));
   const PKEYS = ['morning', 'noon', 'evening', 'night'];
-  let totalIncl = 0, totalKm = 0;
+  let totalIncl = 0, totalExcl = 0, totalKm = 0;
   let detIncl = 0, detCount = 0, detKm = 0, detTripMin = 0;
   const periodTotals = { morning: 0, noon: 0, evening: 0, night: 0 };
   const rows = sorted.map(d => {
@@ -186,6 +186,7 @@ function renderSummaryTable(drives) {
     const bd = calcTimeBreakdown(d);
     const summary = isSummaryOnly(d);
     totalIncl += sales.inclTax;
+    totalExcl += sales.exclTax;
     totalKm += km;
     let pb = null;
     if (!summary) {
@@ -206,6 +207,7 @@ function renderSummaryTable(drives) {
       <td class="date">${formatDate(d.date)}${summary ? '<span class="badge" style="font-size:9px;padding:0 4px;background:#ddd;color:#666;margin-left:3px;">概</span>' : ''}</td>
       <td>${summary ? dash : count}</td>
       <td>${formatYen(sales.inclTax)}</td>
+      <td>${formatYen(sales.exclTax)}</td>
       ${periodCells}
       <td>${summary ? dash : km.toFixed(1)}</td>
       <td>${summary ? dash : formatMin(bd.tripMin)}</td>
@@ -216,7 +218,7 @@ function renderSummaryTable(drives) {
     <div style="overflow-x:auto;margin-top:6px;">
       <table class="sum-table">
         <thead><tr>
-          <th class="date">日付</th><th>件数</th><th>売上</th>
+          <th class="date">日付</th><th>件数</th><th>税込</th><th>税抜</th>
           ${PKEYS.map(k => `<th>${PERIOD_LABELS[k]}</th>`).join('')}
           <th>km</th><th>実車</th>
         </tr></thead>
@@ -226,6 +228,7 @@ function renderSummaryTable(drives) {
             <td class="date">合計</td>
             <td>${detCount}</td>
             <td>${formatYen(totalIncl)}</td>
+            <td>${formatYen(totalExcl)}</td>
             ${PKEYS.map(k => `<td>${periodTotals[k] > 0 ? formatYen(periodTotals[k]) : '—'}</td>`).join('')}
             <td>${detKm.toFixed(1)}</td>
             <td>${formatMin(detTripMin)}</td>
@@ -233,7 +236,7 @@ function renderSummaryTable(drives) {
         </tbody>
       </table>
     </div>
-    <p class="muted" style="font-size:10px;margin-top:4px;">「概」=サマリーのみの日(時間帯別/距離/実車は集計外)</p>
+    <p class="muted" style="font-size:10px;margin-top:4px;">「概」=サマリーのみの日(時間帯別/距離/実車は集計外)。税抜=税込/1.1</p>
   `;
 }
 
