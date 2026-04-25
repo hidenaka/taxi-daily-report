@@ -86,3 +86,17 @@ test('parseReport: 通常乗車（km>0）はキャンセル扱いにならない
   assert.equal(result.trips[0].isCancel, false);
   assert.equal(result.trips[0].amount, 1500);
 });
+
+test('parseReport: 末尾が「休」行なら returnTime をその endTime にする', () => {
+  const text = readFileSync('tests/fixtures/sample-claude.txt', 'utf-8');
+  const result = parseReport(text);
+  // 末尾は「休 20:31 22:43」
+  assert.equal(result.returnTime, '22:43');
+});
+
+test('parseReport: 末尾が乗車行なら returnTime は null', () => {
+  const text = `No\t乗車\t降車\t時間\t迎\t乗車地\t降車地\t営Km\t合計\t待機
+1\t12:00\t12:10\t0:10\t迎\t品川区A\t品川区B\t2.0\t1500\t`;
+  const result = parseReport(text);
+  assert.equal(result.returnTime, null);
+});

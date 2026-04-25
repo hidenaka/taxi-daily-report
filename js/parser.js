@@ -97,5 +97,12 @@ export function parseReport(text) {
     }
   }
 
-  return { trips, rests, format };
+  // 末尾の行が rests の最後の要素と一致するかで判定
+  const allDataCells = dataLines.length > 0
+    ? (format === 'claude' ? dataLines[dataLines.length - 1].split('\t') : splitCsvLine(dataLines[dataLines.length - 1]))
+    : [];
+  const lastNo = allDataCells[0];
+  const returnTime = lastNo === '休' && rests.length > 0 ? rests[rests.length - 1].endTime : null;
+
+  return { trips, rests, returnTime, format };
 }
