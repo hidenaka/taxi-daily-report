@@ -22,6 +22,13 @@ export function formatDate(isoDate) {
   return `${d.getMonth() + 1}/${d.getDate()}(${days[d.getDay()]})`;
 }
 
+// 年付き: "2026/4/19(日)"
+export function formatDateY(isoDate) {
+  const d = new Date(isoDate + 'T00:00:00+09:00');
+  const days = ['日', '月', '火', '水', '木', '金', '土'];
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}(${days[d.getDay()]})`;
+}
+
 // ローカル(JST)タイムゾーンでの YYYY-MM-DD 文字列を返す
 export function toLocalIso(date) {
   const y = date.getFullYear();

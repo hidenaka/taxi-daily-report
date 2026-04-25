@@ -48,6 +48,13 @@
 .loading { padding: 30px; text-align: center; color: var(--muted); }
 .section-h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
 .section-h .desc { font-size: 10px; color: var(--muted); }
+
+.detail-tip { background: #fff8e1; border: 1px solid #ffd54f; border-radius: 4px; padding: 8px; margin-top: 8px; font-size: 12px; line-height: 1.5; min-height: 24px; display:none; }
+.detail-tip.show { display: block; }
+.detail-tip strong { color: #f57f17; }
+.heat .cell, .wbar .bar, .trend-dot, .heat-touch { cursor: pointer; }
+.heat-touch { transform: scale(1); transition: transform 0.1s; }
+.heat-touch:active { transform: scale(0.95); }
 </style>
 </head>
 <body>
@@ -85,6 +92,7 @@ if ('serviceWorker' in navigator) {
     </div>
     <svg class="trend-svg" id="trendSvg"></svg>
     <div id="trendLegend" class="muted" style="font-size:11px;"></div>
+    <div class="detail-tip" id="trendTip"></div>
   </section>
 
   <section class="card" id="heatCard">
@@ -93,7 +101,8 @@ if ('serviceWorker' in navigator) {
       <span class="desc">パターン発見</span>
     </div>
     <div id="heatBody"></div>
-    <p class="muted" style="font-size:10px;margin-top:6px;">数字は1乗務あたり平均(該当曜日×時間帯にtripがある日のみで集計)</p>
+    <div class="detail-tip" id="heatTip"></div>
+    <p class="muted" style="font-size:10px;margin-top:6px;">数字は1乗務あたり平均(該当曜日×時間帯にtripがある日のみで集計)。タップで詳細</p>
   </section>
 
   <section class="card" id="weatherCard">
@@ -102,6 +111,7 @@ if ('serviceWorker' in navigator) {
       <span class="desc">天気と稼ぎの関係</span>
     </div>
     <div id="weatherBody"></div>
+    <div class="detail-tip" id="weatherTip"></div>
   </section>
 
   <section class="card" id="bestCard">
@@ -130,7 +140,7 @@ if ('serviceWorker' in navigator) {
 </main>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod } from './js/app.js';
+import { renderBottomNav, formatYen, formatDate, formatDateY, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod } from './js/app.js';
 import { getDrivesForMonth } from './js/storage.js';
 import { calcDailySales, calcTotalPay, calcMonthlySales } from './js/payroll.js';
 import { calcTimeBreakdown, dowPeriodMatrix, rankDrivesBySales, weatherSalesAggregation, WEATHER_LABELS, DOW_LABELS, isSummaryOnly, formatMin } from './js/chart-helpers.js';
@@ -213,7 +223,7 @@ function renderTrend() {
   const points = monthSummaries.map((s, i) => {
     const x = padL + i * xStep;
     const y = padT + innerH - ((valueOf(s) - min) / (max - min)) * innerH;
-    return { x, y, value: valueOf(s), label: s.ym.slice(5) + '月' };
+    return { x, y, value: valueOf(s), summary: s };
   });
   const linePath = points.map((p, i) => (i === 0 ? 'M' : 'L') + p.x + ',' + p.y).join(' ');
   const yLabels = [0, 0.5, 1].map(r => {
@@ -222,9 +232,35 @@ function renderTrend() {
     return `<line class="trend-axis" x1="${padL}" y1="${y}" x2="${w - padR}" y2="${y}"/>
       <text class="trend-label" x="${padL - 4}" y="${y + 3}" text-anchor="end">${formatLabelValue(v)}</text>`;
   }).join('');
-  const xLabels = points.map(p => `<text class="trend-month" x="${p.x}" y="${h - 4}" text-anchor="middle">${p.label}</text>`).join('');
-  const dots = points.map(p => `<circle class="trend-dot" cx="${p.x}" cy="${p.y}" r="3"/>`).join('');
+  const xLabels = points.map((p,i) => {
+    const ym = p.summary.ym;
+    const showYear = (i === 0) || (i > 0 && ym.slice(0,4) !== monthSummaries[i-1].ym.slice(0,4));
+    const txt = showYear ? ym.slice(2,4)+"'"+ym.slice(5)+'月' : ym.slice(5)+'月';
+    return `<text class="trend-month" x="${p.x}" y="${h - 4}" text-anchor="middle">${txt}</text>`;
+  }).join('');
+  const dots = points.map((p,i) => `<circle class="trend-dot" cx="${p.x}" cy="${p.y}" r="6" data-i="${i}" style="cursor:pointer;"/>`).join('');
   svg.innerHTML = `${yLabels}<path class="trend-line" d="${linePath}"/>${dots}${xLabels}`;
+  // dotクリック
+  svg.querySelectorAll('.trend-dot').forEach(el => {
+    el.addEventListener('click', (e) => {
+      const i = parseInt(el.dataset.i);
+      const s = monthSummaries[i];
+      const prev = i > 0 ? monthSummaries[i-1] : null;
+      const v = valueOf(s);
+      let diff = '';
+      if (prev) {
+        const pv = valueOf(prev);
+        const d = v - pv;
+        const pct = pv > 0 ? (d / pv * 100) : 0;
+        const sign = d >= 0 ? '+' : '';
+        diff = ` (前月比 <strong style="color:${d>=0?'var(--primary)':'var(--orange,#ff9800)'};">${sign}${formatLabelValue(d)} ${sign}${pct.toFixed(1)}%</strong>)`;
+      }
+      const tip = document.getElementById('trendTip');
+      tip.classList.add('show');
+      tip.innerHTML = `<strong>${formatBillingPeriod(s.ym)}</strong>: ${formatLabelValue(v)}${diff}<br>
+        <span class="muted" style="font-size:11px;">乗務${s.totalShifts} / 売上${formatYen(s.totalSales)} / 時間単価${formatYen(s.hourly)}</span>`;
+    });
+  });
   const last = monthSummaries[monthSummaries.length - 1];
   const prev = monthSummaries[monthSummaries.length - 2];
   if (prev) {
@@ -237,6 +273,7 @@ function renderTrend() {
   } else {
     document.getElementById('trendLegend').textContent = '';
   }
+  document.getElementById('trendTip').classList.remove('show');
 }
 
 function formatLabelValue(v) {
@@ -248,26 +285,44 @@ function formatLabelValue(v) {
 
 function renderHeatmap() {
   const { matrix, count } = dowPeriodMatrix(allDrives);
+  const PKEYS = ['morning','noon','evening','night'];
+  const PLBL = { morning:'朝(13時まで)', noon:'昼(13〜18時)', evening:'夜(18〜23時)', night:'深夜(23時〜)' };
   const flat = matrix.flatMap(r => Object.values(r)).filter(v => v > 0);
   const max = Math.max(...flat, 1);
   let html = '<div class="heat">';
   html += '<div class="h"></div><div class="h">朝</div><div class="h">昼</div><div class="h">夜</div><div class="h">深夜</div>';
   for (let dow = 0; dow < 7; dow++) {
-    const isWeekend = dow === 0 || dow === 6;
     const dowColor = dow === 0 ? '#d32f2f' : dow === 6 ? '#1976d2' : '';
     html += `<div class="lbl" style="${dowColor ? 'color:' + dowColor : ''}">${DOW_LABELS[dow]}</div>`;
-    for (const k of ['morning','noon','evening','night']) {
+    for (const k of PKEYS) {
       const v = matrix[dow][k];
       const intensity = v > 0 ? Math.min(1, v / max) : 0;
       const bg = v > 0 ? `rgba(76, 175, 80, ${0.15 + 0.7 * intensity})` : '#fafafa';
       const text = v > 0 ? formatYen(v).replace('¥','') : '—';
       const color = intensity > 0.6 ? '#fff' : '#222';
       const days = count[dow][k];
-      html += `<div class="cell" style="background:${bg};color:${color};" title="${days}日の平均">${text}</div>`;
+      html += `<div class="cell heat-touch" data-dow="${dow}" data-k="${k}" data-v="${v}" data-days="${days}" style="background:${bg};color:${color};">${text}</div>`;
     }
   }
   html += '</div>';
   document.getElementById('heatBody').innerHTML = html;
+  document.getElementById('heatTip').classList.remove('show');
+  document.querySelectorAll('#heatBody .cell').forEach(el => {
+    el.addEventListener('click', () => {
+      const dow = parseInt(el.dataset.dow);
+      const k = el.dataset.k;
+      const v = parseFloat(el.dataset.v);
+      const days = parseInt(el.dataset.days);
+      const tip = document.getElementById('heatTip');
+      tip.classList.add('show');
+      if (v > 0) {
+        tip.innerHTML = `<strong>${DOW_LABELS[dow]}曜 × ${PLBL[k]}</strong><br>
+          1乗務あたり平均: <strong>${formatYen(v)}</strong> (該当${days}日)`;
+      } else {
+        tip.innerHTML = `<strong>${DOW_LABELS[dow]}曜 × ${PLBL[k]}</strong>: データなし`;
+      }
+    });
+  });
 }
 
 function renderWeather() {
@@ -278,13 +333,29 @@ function renderWeather() {
     const a = agg[k];
     if (a.days === 0) continue;
     const pct = (a.avg / max) * 100;
-    html += `<div class="wbar ${k}">
+    html += `<div class="wbar ${k}" data-k="${k}" style="cursor:pointer;">
       <div class="lbl">${WEATHER_LABELS[k]}</div>
       <div><div class="bar" style="width:${pct}%"></div></div>
       <div class="v">${formatYen(a.avg)}<br><span style="font-size:9px;color:var(--muted);font-weight:400;">${a.days}日</span></div>
     </div>`;
   }
   document.getElementById('weatherBody').innerHTML = html || '<p class="muted" style="font-size:11px;">データ不足</p>';
+  document.getElementById('weatherTip').classList.remove('show');
+  document.querySelectorAll('#weatherBody .wbar').forEach(el => {
+    el.addEventListener('click', () => {
+      const k = el.dataset.k;
+      const a = agg[k];
+      // 晴れ基準との差分
+      const baseAvg = agg.sunny?.days > 0 ? agg.sunny.avg : a.avg;
+      const diff = a.avg - baseAvg;
+      const pct = baseAvg > 0 ? (diff / baseAvg * 100) : 0;
+      const sign = diff >= 0 ? '+' : '';
+      const tip = document.getElementById('weatherTip');
+      tip.classList.add('show');
+      tip.innerHTML = `<strong>${WEATHER_LABELS[k]}</strong>: ${a.days}日 / 平均 <strong>${formatYen(a.avg)}</strong> / 合計 ${formatYen(a.total)}
+        ${k !== 'sunny' && agg.sunny?.days > 0 ? `<br>晴れ基準: <strong style="color:${diff>=0?'var(--primary)':'var(--orange,#ff9800)'};">${sign}${formatYen(diff)} (${sign}${pct.toFixed(1)}%)</strong>` : ''}`;
+    });
+  });
 }
 
 function renderRanks() {
@@ -306,12 +377,11 @@ function renderRankTable(rows, cls) {
     return '☀';
   };
   return `<div style="overflow-x:auto;"><table class="rank-table">
-    <thead><tr><th>#</th><th class="l">日付</th><th>曜</th><th>天気</th><th>件数</th><th>売上</th></tr></thead>
+    <thead><tr><th>#</th><th class="l">日付</th><th>天気</th><th>件数</th><th>売上</th></tr></thead>
     <tbody>${rows.map((r, i) => `
       <tr class="${i < 3 ? cls : ''}" onclick="location.href='detail.html?date=${r.date}'">
         <td class="rank">${i + 1}</td>
-        <td class="l">${formatDate(r.date)}</td>
-        <td style="color:${r.dow===0?'#d32f2f':r.dow===6?'#1976d2':''};">${DOW_LABELS[r.dow]}</td>
+        <td class="l">${formatDateY(r.date)}</td>
         <td>${wIcon(r.weather)}</td>
         <td>${r.count}</td>
         <td><strong>${formatYen(r.sales)}</strong></td>
@@ -329,7 +399,7 @@ function renderMemos() {
   }
   document.getElementById('memoBody').innerHTML = memos.map(d => `
     <div onclick="location.href='detail.html?date=${d.date}'" style="padding:8px 4px;border-bottom:1px solid #eee;cursor:pointer;">
-      <div style="font-size:11px;color:var(--muted);">${formatDate(d.date)}</div>
+      <div style="font-size:11px;color:var(--muted);">${formatDateY(d.date)}</div>
       <div style="font-size:12px;margin-top:2px;white-space:pre-wrap;">${d.reviewMemo}</div>
     </div>
   `).join('');
