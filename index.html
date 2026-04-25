@@ -26,6 +26,12 @@
 .dow-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; font-size: 10px; color: var(--muted); text-align: center; }
 .dow-row .sat { color: #1976d2; }
 .dow-row .sun { color: #d32f2f; }
+.sum-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 4px; }
+.sum-table th, .sum-table td { padding: 6px 4px; text-align: right; border-bottom: 1px solid #eee; }
+.sum-table th { font-weight: 600; color: var(--muted); font-size: 10px; }
+.sum-table td.date, .sum-table th.date { text-align: left; cursor: pointer; }
+.sum-table tr.total { background: #f5f5f5; font-weight: 600; }
+.sum-table tr.total td { border-top: 2px solid #ddd; }
 </style>
 </head>
 <body>
@@ -38,13 +44,15 @@ if ('serviceWorker' in navigator) {
   <section class="card" id="summaryCard">読み込み中…</section>
   <section class="card" id="targetCard" style="display:none;"></section>
   <section class="card" id="calCard" style="display:none;"></section>
+  <section class="card" id="sumTableCard" style="display:none;"></section>
 </main>
 <button class="fab" onclick="location.href='input.html'">＋</button>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js';
+import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js';
 import { getConfig, getDrivesForMonth, flushPendingQueue } from './js/storage.js';
 import { calcTotalPay, calcDailySales, calcMonthlySales } from './js/payroll.js';
+import { calcTimeBreakdown, formatMin } from './js/chart-helpers.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('home');
 
@@ -151,6 +159,66 @@ async function render() {
 
   // カレンダー
   renderCalendar(drives, range);
+
+  // 月度サマリー表
+  renderSummaryTable(drives);
+}
+
+function renderSummaryTable(drives) {
+  const card = document.getElementById('sumTableCard');
+  if (drives.length === 0) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const sorted = [...drives].sort((a, b) => a.date.localeCompare(b.date));
+  let totalIncl = 0, totalCount = 0, totalKm = 0, totalTripMin = 0, totalTotalMin = 0;
+  const rows = sorted.map(d => {
+    const sales = calcDailySales(d);
+    const valid = (d.trips || []).filter(t => !t.isCancel);
+    const count = valid.length;
+    const km = valid.reduce((s, t) => s + (t.km || 0), 0);
+    const bd = calcTimeBreakdown(d);
+    const tripHours = bd.tripMin / 60;
+    const hourly = tripHours > 0 ? sales.inclTax / tripHours : 0;
+    const avg = count > 0 ? sales.inclTax / count : 0;
+    totalIncl += sales.inclTax; totalCount += count; totalKm += km;
+    totalTripMin += bd.tripMin; totalTotalMin += bd.totalMin;
+    return `<tr onclick="location.href='detail.html?date=${d.date}'" style="cursor:pointer;">
+      <td class="date">${formatDate(d.date)}</td>
+      <td>${count}</td>
+      <td>${formatYen(sales.inclTax)}</td>
+      <td>${km.toFixed(1)}</td>
+      <td>${formatMin(bd.tripMin)}</td>
+      <td>${formatYen(avg)}</td>
+      <td>${formatYen(hourly)}</td>
+    </tr>`;
+  }).join('');
+  const totalAvg = totalCount > 0 ? totalIncl / totalCount : 0;
+  const totalHourly = totalTripMin > 0 ? totalIncl / (totalTripMin / 60) : 0;
+  const occRate = totalTotalMin > 0 ? (totalTripMin / totalTotalMin * 100) : 0;
+  card.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:baseline;">
+      <strong>営業サマリー</strong>
+      <span class="muted" style="font-size:11px;">実車率 ${occRate.toFixed(1)}%</span>
+    </div>
+    <div style="overflow-x:auto;margin-top:6px;">
+      <table class="sum-table">
+        <thead><tr>
+          <th class="date">日付</th><th>件数</th><th>売上(税込)</th><th>距離km</th><th>実車</th><th>単価</th><th>時間単価</th>
+        </tr></thead>
+        <tbody>
+          ${rows}
+          <tr class="total">
+            <td class="date">合計</td>
+            <td>${totalCount}</td>
+            <td>${formatYen(totalIncl)}</td>
+            <td>${totalKm.toFixed(1)}</td>
+            <td>${formatMin(totalTripMin)}</td>
+            <td>${formatYen(totalAvg)}</td>
+            <td>${formatYen(totalHourly)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  `;
 }
 
 function renderCalendar(drives, range) {
