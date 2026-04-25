@@ -8,6 +8,11 @@
 <link rel="manifest" href="manifest.webmanifest">
 </head>
 <body>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
+}
+</script>
 <main style="padding:14px;">
   <h1>設定</h1>
 
