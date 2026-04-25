@@ -59,6 +59,7 @@ if ('serviceWorker' in navigator) {
     <a href="index.html" style="font-size:12px;color:var(--muted);text-decoration:none;">ホーム</a>
   </div>
   <h1 id="title" style="margin-top:0;">乗務詳細</h1>
+  <div id="navDates" style="display:flex;justify-content:space-between;gap:8px;margin-bottom:10px;"></div>
 
   <section class="card" id="kpiCard"></section>
   <section class="card" id="periodCard"></section>
@@ -72,7 +73,7 @@ if ('serviceWorker' in navigator) {
 <div id="navHost"></div>
 <script type="module">
 import { renderBottomNav, formatYen, formatDate } from './js/app.js';
-import { getDrive } from './js/storage.js';
+import { getDrive, listFiles } from './js/storage.js';
 import { calcDailySales } from './js/payroll.js';
 import { calcTimeBreakdown, hourlyActivity, calcPeriodBreakdown, PERIOD_LABELS, formatMin, timeToMinutes } from './js/chart-helpers.js';
 
@@ -100,6 +101,7 @@ async function load() {
   const drive = await getDrive(date);
   if (!drive) { document.getElementById('title').textContent = '見つかりません'; return; }
   document.getElementById('title').textContent = `${formatDate(drive.date)} 詳細`;
+  renderDateNav(date);
 
   const sales = calcDailySales(drive);
   const valid = (drive.trips || []).filter(t => !t.isCancel);
@@ -304,6 +306,26 @@ function renderTripsTable(drive) {
     </div>
     <div class="legend">区: 迎車=お客様の指定場所までお迎え / 貸=貸切。「次まで」=このイベント終了から次イベント開始までの空車時間。橙=キャンセル、薄橙背景=貸切</div>
   `;
+}
+
+async function renderDateNav(currentDate) {
+  const host = document.getElementById('navDates');
+  try {
+    const files = await listFiles('data/drives');
+    const dates = files
+      .filter(f => f.name && f.name.endsWith('.json'))
+      .map(f => f.name.replace('.json', ''))
+      .sort();
+    const idx = dates.indexOf(currentDate);
+    const prev = idx > 0 ? dates[idx - 1] : null;
+    const next = idx >= 0 && idx < dates.length - 1 ? dates[idx + 1] : null;
+    const btn = (date, label, dir) => date
+      ? `<a href="detail.html?date=${date}" class="btn" style="background:var(--gray);padding:6px 10px;font-size:12px;text-decoration:none;color:#333;flex:1;text-align:${dir};">${label}</a>`
+      : `<span style="flex:1;"></span>`;
+    host.innerHTML = `${btn(prev, '‹ 前の乗務 ' + (prev ? formatDate(prev) : ''), 'left')}${btn(next, (next ? formatDate(next) + ' ' : '') + '次の乗務 ›', 'right')}`;
+  } catch (e) {
+    host.innerHTML = '';
+  }
 }
 
 if (localStorage.getItem('github_token') && localStorage.getItem('github_data_repo')) load();

@@ -50,7 +50,6 @@ if ('serviceWorker' in navigator) {
   <section class="card" id="summaryCard">読み込み中…</section>
   <section class="card" id="targetCard" style="display:none;"></section>
   <section class="card" id="calCard" style="display:none;"></section>
-  <section class="card" id="periodCard" style="display:none;"></section>
   <section class="card" id="sumTableCard" style="display:none;"></section>
 </main>
 <button class="fab" onclick="location.href='input.html'">＋</button>
@@ -59,7 +58,7 @@ if ('serviceWorker' in navigator) {
 import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js';
 import { getConfig, getDrivesForMonth, flushPendingQueue } from './js/storage.js';
 import { calcTotalPay, calcDailySales, calcMonthlySales } from './js/payroll.js';
-import { calcTimeBreakdown, formatMin, isSummaryOnly, aggregatePeriodBreakdowns, PERIOD_LABELS } from './js/chart-helpers.js';
+import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, PERIOD_LABELS } from './js/chart-helpers.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('home');
 
@@ -167,54 +166,8 @@ async function render() {
   // カレンダー
   renderCalendar(drives, range);
 
-  // 月度時間帯別サマリー(個別ページと同じ4時間枠)
-  renderPeriodSummary(drives);
-
-  // 月度日別サマリー表
+  // 月度日別サマリー表(各日の4時間枠売上含む)
   renderSummaryTable(drives);
-}
-
-function renderPeriodSummary(drives) {
-  const card = document.getElementById('periodCard');
-  const detailed = drives.filter(d => !isSummaryOnly(d));
-  if (detailed.length === 0) { card.style.display = 'none'; return; }
-  card.style.display = '';
-  const pb = aggregatePeriodBreakdowns(detailed);
-  const keys = ['morning', 'noon', 'evening', 'night'];
-  const totalSales = keys.reduce((s, k) => s + pb[k].sales, 0);
-  const totalCount = keys.reduce((s, k) => s + pb[k].count, 0);
-  const totalTrip = keys.reduce((s, k) => s + pb[k].tripMin, 0);
-  const totalRest = keys.reduce((s, k) => s + pb[k].restMin, 0);
-
-  const cell = (v) => `<td>${v}</td>`;
-  const row = (label, valueFn) => `
-    <tr>
-      <td class="lbl">${label}</td>
-      ${keys.map(k => cell(valueFn(pb[k]))).join('')}
-      ${cell(valueFn({ sales: totalSales, count: totalCount, tripMin: totalTrip, restMin: totalRest }))}
-    </tr>`;
-  const skipped = drives.length - detailed.length;
-  card.innerHTML = `
-    <strong>月度 時間帯別サマリー</strong>
-    <div style="overflow-x:auto;margin-top:6px;">
-    <table class="period-table">
-      <thead><tr>
-        <th class="lbl"></th>
-        ${keys.map(k => `<th>${PERIOD_LABELS[k]}</th>`).join('')}
-        <th>合計</th>
-      </tr></thead>
-      <tbody>
-        ${row('営収(税込)', d => d.sales > 0 ? formatYen(d.sales) : '—')}
-        ${row('件数', d => d.count || '—')}
-        ${row('平均単価', d => d.count > 0 ? formatYen(d.sales / d.count) : '—')}
-        ${row('実車時間', d => d.tripMin > 0 ? formatMin(d.tripMin) : '—')}
-        ${row('時間単価', d => d.tripMin > 0 ? formatYen(d.sales / (d.tripMin/60)) : '—')}
-        ${row('休憩時間', d => d.restMin > 0 ? formatMin(d.restMin) : '—')}
-      </tbody>
-    </table>
-    </div>
-    ${skipped > 0 ? `<p class="muted" style="font-size:10px;margin-top:6px;">※ サマリーのみの${skipped}日は除外(${detailed.length}日分で集計)</p>` : ''}
-  `;
 }
 
 function renderSummaryTable(drives) {
@@ -222,9 +175,10 @@ function renderSummaryTable(drives) {
   if (drives.length === 0) { card.style.display = 'none'; return; }
   card.style.display = '';
   const sorted = [...drives].sort((a, b) => a.date.localeCompare(b.date));
-  // 合計集計: 総売上は全日加算、平均/時間単価は detailed のみで計算
+  const PKEYS = ['morning', 'noon', 'evening', 'night'];
   let totalIncl = 0, totalKm = 0;
-  let detIncl = 0, detCount = 0, detKm = 0, detTripMin = 0, detTotalMin = 0;
+  let detIncl = 0, detCount = 0, detKm = 0, detTripMin = 0;
+  const periodTotals = { morning: 0, noon: 0, evening: 0, night: 0 };
   const rows = sorted.map(d => {
     const sales = calcDailySales(d);
     const valid = (d.trips || []).filter(t => !t.isCancel);
@@ -233,37 +187,38 @@ function renderSummaryTable(drives) {
     const summary = isSummaryOnly(d);
     totalIncl += sales.inclTax;
     totalKm += km;
+    let pb = null;
     if (!summary) {
       const count = valid.length;
       detIncl += sales.inclTax; detCount += count; detKm += km;
-      detTripMin += bd.tripMin; detTotalMin += bd.totalMin;
+      detTripMin += bd.tripMin;
+      pb = calcPeriodBreakdown(d);
+      for (const k of PKEYS) periodTotals[k] += pb[k].sales;
     }
     const count = valid.length;
-    const hourly = bd.tripMin > 0 ? sales.inclTax / (bd.tripMin / 60) : 0;
-    const avg = count > 0 ? sales.inclTax / count : 0;
     const dash = '<span style="color:var(--muted);">—</span>';
+    const periodCells = PKEYS.map(k => {
+      if (!pb) return `<td>${dash}</td>`;
+      const v = pb[k].sales;
+      return `<td>${v > 0 ? formatYen(v) : dash}</td>`;
+    }).join('');
     return `<tr onclick="location.href='detail.html?date=${d.date}'" style="cursor:pointer;${summary ? 'background:#fafafa;' : ''}">
       <td class="date">${formatDate(d.date)}${summary ? '<span class="badge" style="font-size:9px;padding:0 4px;background:#ddd;color:#666;margin-left:3px;">概</span>' : ''}</td>
       <td>${summary ? dash : count}</td>
       <td>${formatYen(sales.inclTax)}</td>
+      ${periodCells}
       <td>${summary ? dash : km.toFixed(1)}</td>
       <td>${summary ? dash : formatMin(bd.tripMin)}</td>
-      <td>${summary ? dash : formatYen(avg)}</td>
-      <td>${summary ? dash : formatYen(hourly)}</td>
     </tr>`;
   }).join('');
-  const totalAvg = detCount > 0 ? detIncl / detCount : 0;
-  const totalHourly = detTripMin > 0 ? detIncl / (detTripMin / 60) : 0;
-  const occRate = detTotalMin > 0 ? (detTripMin / detTotalMin * 100) : 0;
   card.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:baseline;">
-      <strong>営業サマリー</strong>
-      <span class="muted" style="font-size:11px;">実車率 ${detTotalMin > 0 ? occRate.toFixed(1) + '%' : '—'}</span>
-    </div>
+    <strong>営業サマリー(日別)</strong>
     <div style="overflow-x:auto;margin-top:6px;">
       <table class="sum-table">
         <thead><tr>
-          <th class="date">日付</th><th>件数</th><th>売上(税込)</th><th>距離km</th><th>実車</th><th>単価</th><th>時間単価</th>
+          <th class="date">日付</th><th>件数</th><th>売上</th>
+          ${PKEYS.map(k => `<th>${PERIOD_LABELS[k]}</th>`).join('')}
+          <th>km</th><th>実車</th>
         </tr></thead>
         <tbody>
           ${rows}
@@ -271,15 +226,14 @@ function renderSummaryTable(drives) {
             <td class="date">合計</td>
             <td>${detCount}</td>
             <td>${formatYen(totalIncl)}</td>
+            ${PKEYS.map(k => `<td>${periodTotals[k] > 0 ? formatYen(periodTotals[k]) : '—'}</td>`).join('')}
             <td>${detKm.toFixed(1)}</td>
             <td>${formatMin(detTripMin)}</td>
-            <td>${detCount > 0 ? formatYen(totalAvg) : '—'}</td>
-            <td>${detTripMin > 0 ? formatYen(totalHourly) : '—'}</td>
           </tr>
         </tbody>
       </table>
     </div>
-    <p class="muted" style="font-size:10px;margin-top:4px;">「概」=サマリーのみの日。単価/時間/距離は計算から除外。売上は加算。</p>
+    <p class="muted" style="font-size:10px;margin-top:4px;">「概」=サマリーのみの日(時間帯別/距離/実車は集計外)</p>
   `;
 }
 
