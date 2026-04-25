@@ -62,13 +62,33 @@ export function tripMinByHour(drive) {
   return mins;
 }
 
-// 7時スタート(または指定)の順序で {hour, sales, tripMin} を返す
+// 1時間ごとの休憩時間(分)配列
+export function restMinByHour(drive) {
+  const mins = Array(24).fill(0);
+  for (const r of (drive.rests || [])) {
+    let start = timeToMinutes(r.startTime);
+    let end = timeToMinutes(r.endTime);
+    if (end < start) end += 24 * 60;
+    let m = start;
+    while (m < end) {
+      const h = Math.floor(m / 60) % 24;
+      const nextHourMark = (Math.floor(m / 60) + 1) * 60;
+      const segEnd = Math.min(end, nextHourMark);
+      mins[h] += (segEnd - m);
+      m = segEnd;
+    }
+  }
+  return mins;
+}
+
+// 7時スタート(または指定)の順序で {hour, sales, tripMin, restMin} を返す
 export function hourlyActivity(drive, startHour = 7) {
   const sales = salesByHour(drive);
-  const mins = tripMinByHour(drive);
+  const tripMins = tripMinByHour(drive);
+  const restMins = restMinByHour(drive);
   return Array.from({ length: 24 }, (_, i) => {
     const h = (startHour + i) % 24;
-    return { hour: h, sales: sales[h], tripMin: mins[h] };
+    return { hour: h, sales: sales[h], tripMin: tripMins[h], restMin: restMins[h] };
   });
 }
 
