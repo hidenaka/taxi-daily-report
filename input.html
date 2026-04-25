@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>入力 — タクシー日報</title>
+<link rel="stylesheet" href="css/style.css">
+<style>
+.preview-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+.preview-table th, .preview-table td { padding: 4px 6px; border-bottom: 1px solid #eee; text-align: left; }
+.preview-table tr.cancel { color: var(--orange); }
+.preview-table tr.rest { color: var(--muted); background: #fafafa; }
+.preview-table input { width: 100%; border: none; padding: 2px; font-size: 12px; }
+</style>
+</head>
+<body>
+<main style="padding:14px;">
+  <h1>日報入力</h1>
+
+  <section class="card">
+    <label class="muted">乗務日</label>
+    <input class="input" id="dateInput" type="date">
+    <div class="muted" id="dateHint" style="margin-top:4px;"></div>
+  </section>
+
+  <section class="card">
+    <label class="muted">日報テキストを貼付（Claude/Gemini自動判別）</label>
+    <textarea id="rawTextInput" rows="6" style="width:100%;padding:8px;font-family:monospace;font-size:11px;"></textarea>
+    <button class="btn" id="parseBtn" style="margin-top:6px;">パース</button>
+  </section>
+
+  <section class="card" id="previewSection" style="display:none;">
+    <div id="previewSummary" style="margin-bottom:8px;"></div>
+    <table class="preview-table" id="previewTable"></table>
+  </section>
+
+  <section class="card">
+    <div style="display:flex;gap:8px;">
+      <div style="flex:1;">
+        <label class="muted">乗務種別</label>
+        <select class="select" id="vehicleTypeSel">
+          <option value="regular">普通車</option>
+          <option value="premium">プレミアム</option>
+        </select>
+      </div>
+      <div style="flex:1;">
+        <label class="muted">帰庫時刻</label>
+        <input class="input" id="returnTimeInput" type="time">
+      </div>
+    </div>
+    <label class="muted" style="margin-top:8px;display:block;">メモ</label>
+    <textarea id="memoInput" rows="2" class="input"></textarea>
+  </section>
+
+  <button class="btn btn-block" id="saveBtn" style="font-size:16px;padding:14px;">保存</button>
+  <div id="saveStatus" class="muted" style="margin-top:6px;text-align:center;"></div>
+</main>
+<div id="navHost"></div>
+<script type="module">
+import { renderBottomNav, todayIso } from './js/app.js';
+import { parseReport } from './js/parser.js';
+import { getConfig, getDrive, saveDriveSafe } from './js/storage.js';
+import { fetchWeatherForDate } from './js/weather.js';
+
+document.getElementById('navHost').innerHTML = renderBottomNav('input');
+
+let config = null;
+let parsed = null;
+let editMode = false;
+
+async function init() {
+  config = await getConfig();
+  if (!config) return alert('config.json未取得');
+  document.getElementById('vehicleTypeSel').value = config.defaults.vehicleType;
+
+  // ?date=YYYY-MM-DD があれば編集モード、既存データを復元
+  const editDate = new URLSearchParams(location.search).get('date');
+  if (editDate) {
+    const existing = await getDrive(editDate);
+    if (existing) {
+      editMode = true;
+      document.querySelector('h1').textContent = '日報を編集';
+      document.getElementById('dateInput').value = existing.date;
+      document.getElementById('dateHint').textContent = `編集モード`;
+      document.getElementById('rawTextInput').value = existing.rawText || '';
+      document.getElementById('vehicleTypeSel').value = existing.vehicleType;
+      document.getElementById('returnTimeInput').value = existing.returnTime || '';
+      document.getElementById('memoInput').value = existing.memo || '';
+      // 既存trips/restsをparsedに直接セットしてプレビュー描画
+      parsed = { trips: existing.trips, rests: existing.rests, returnTime: existing.returnTime, format: 'edit' };
+      renderPreview();
+      return;
+    }
+  }
+
+  // 新規入力時: 日付自動判定 (過去48hにシフト予定日があればそれ、なければ今日)
+  const now = new Date();
+  let candidate = todayIso();
+  for (let h = 0; h < 48; h++) {
+    const d = new Date(now); d.setHours(d.getHours() - h);
+    const iso = d.toISOString().slice(0, 10);
+    if (config.shifts.expandedDates.includes(iso)) { candidate = iso; break; }
+  }
+  document.getElementById('dateInput').value = candidate;
+  document.getElementById('dateHint').textContent = `自動判定: ${candidate}（変更可）`;
+}
+
+document.getElementById('parseBtn').onclick = () => {
+  const text = document.getElementById('rawTextInput').value;
+  if (!text.trim()) return;
+  try {
+    parsed = parseReport(text);
+    renderPreview();
+    if (parsed.returnTime) document.getElementById('returnTimeInput').value = parsed.returnTime;
+  } catch (e) {
+    alert('パース失敗: ' + e.message);
+  }
+};
+
+function renderPreview() {
+  const sec = document.getElementById('previewSection');
+  sec.style.display = 'block';
+  const cancelCount = parsed.trips.filter(t => t.isCancel).length;
+  const validCount = parsed.trips.length - cancelCount;
+  const totalSales = parsed.trips.filter(t => !t.isCancel).reduce((s, t) => s + t.amount, 0);
+  document.getElementById('previewSummary').innerHTML =
+    `<strong>${validCount}件</strong> ・ キャンセル ${cancelCount}件 ・ 売上 ¥${totalSales.toLocaleString()}（税込）`;
+
+  const tbl = document.getElementById('previewTable');
+  tbl.innerHTML = '<tr><th>No</th><th>時間</th><th>区間</th><th>km</th><th>金額</th></tr>';
+  // 簡略化: trips のみ表示（rest は省略）
+  parsed.trips.forEach((t, i) => {
+    const tr = document.createElement('tr');
+    if (t.isCancel) tr.classList.add('cancel');
+    tr.innerHTML = `
+      <td>${t.no}</td>
+      <td><input data-idx="${i}" data-key="boardTime" value="${t.boardTime}"></td>
+      <td>${t.boardPlace} → ${t.alightPlace}</td>
+      <td><input data-idx="${i}" data-key="km" type="number" step="0.1" value="${t.km}"></td>
+      <td><input data-idx="${i}" data-key="amount" type="number" value="${t.amount}"></td>
+    `;
+    tbl.appendChild(tr);
+  });
+  // インライン編集の反映
+  tbl.querySelectorAll('input[data-idx]').forEach(inp => {
+    inp.onchange = () => {
+      const i = parseInt(inp.dataset.idx); const k = inp.dataset.key;
+      const v = inp.type === 'number' ? parseFloat(inp.value) : inp.value;
+      parsed.trips[i][k] = v;
+    };
+  });
+}
+
+document.getElementById('saveBtn').onclick = async () => {
+  if (!parsed) return alert('先にテキストをパースしてください');
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = true;
+  document.getElementById('saveStatus').textContent = '天候取得中…';
+
+  const date = document.getElementById('dateInput').value;
+  let weather = null;
+  try { weather = await fetchWeatherForDate(date, config.weatherLocation); }
+  catch (e) { console.warn('天候取得失敗:', e); }
+
+  const drive = {
+    date,
+    vehicleType: document.getElementById('vehicleTypeSel').value,
+    departureTime: config.defaults.departureTime,
+    returnTime: document.getElementById('returnTimeInput').value || null,
+    memo: document.getElementById('memoInput').value,
+    rawText: document.getElementById('rawTextInput').value,
+    trips: parsed.trips,
+    rests: parsed.rests,
+    weather,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  document.getElementById('saveStatus').textContent = 'GitHubに保存中…';
+  try {
+    await saveDriveSafe(drive);
+    document.getElementById('saveStatus').textContent = '保存完了';
+    setTimeout(() => location.href = 'index.html', 800);
+  } catch (e) {
+    document.getElementById('saveStatus').textContent = 'エラー: ' + e.message;
+    btn.disabled = false;
+  }
+};
+
+if (localStorage.getItem('github_token') && localStorage.getItem('github_data_repo')) init();
+else alert('先に設定画面でGitHubトークンを設定してください');
+</script>
+</body>
+</html>
