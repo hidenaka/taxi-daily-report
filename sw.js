@@ -1,4 +1,4 @@
-const CACHE_NAME = 'taxi-daily-v22';
+const CACHE_NAME = 'taxi-daily-v23';
 const STATIC_FILES = [
   './',
   './index.html',
@@ -14,7 +14,11 @@ const STATIC_FILES = [
   './js/storage.js',
   './js/weather.js',
   './js/chart-helpers.js',
-  './manifest.webmanifest'
+  './manifest.webmanifest',
+  './icon-180.png',
+  './icon-192.png',
+  './icon-512.png',
+  './favicon-32.png'
 ];
 
 self.addEventListener('install', e => {
