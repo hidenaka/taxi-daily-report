@@ -68,12 +68,27 @@ export function calcIncentive(drives, config) {
   return total;
 }
 
-export function calcTotalPay(drives, config) {
+export function calcPaidLeavePay(config, periodStart, periodEnd) {
+  const dates = config?.shifts?.paidLeaveDates || [];
+  const inPeriod = dates.filter(d => d >= periodStart && d <= periodEnd);
+  return {
+    days: inPeriod.length,
+    amount: inPeriod.length * (config.paidLeaveAmount || 0),
+    dates: inPeriod
+  };
+}
+
+export function calcTotalPay(drives, config, periodStart, periodEnd) {
   const base = calcBasePay(drives, config);
   const incentive = calcIncentive(drives, config);
+  const paidLeave = (periodStart && periodEnd)
+    ? calcPaidLeavePay(config, periodStart, periodEnd)
+    : { days: 0, amount: 0, dates: [] };
   return {
     ...base,
     incentive,
-    total: base.basePay + incentive
+    paidLeaveDays: paidLeave.days,
+    paidLeaveAmount: paidLeave.amount,
+    total: base.basePay + incentive + paidLeave.amount
   };
 }

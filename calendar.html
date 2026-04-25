@@ -10,6 +10,7 @@
 .cal-cell { padding: 12px 0; text-align: center; background: #fff; border-radius: 4px; font-size: 14px; cursor: pointer; user-select: none; border: 1px solid #eee; }
 .cal-cell.planned { background: var(--green); color: #fff; font-weight: 600; border-color: var(--green); }
 .cal-cell.actual { background: var(--primary); color: #fff; font-weight: 600; border-color: var(--primary); }
+.cal-cell.paidleave { background: #ce93d8; color: #fff; font-weight: 600; border-color: #8e24aa; }
 .cal-cell.today { box-shadow: 0 0 0 2px #f57f17 inset; }
 .cal-cell.dim { color: #ccc; background: transparent; border: none; cursor: default; }
 .dow-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; font-size: 11px; color: var(--muted); text-align: center; }
@@ -40,9 +41,10 @@ if ('serviceWorker' in navigator) {
     <div style="margin-top:12px;font-size:11px;display:flex;gap:8px;flex-wrap:wrap;">
       <span><span style="display:inline-block;width:10px;height:10px;background:var(--primary);border-radius:2px;"></span> 実績</span>
       <span><span style="display:inline-block;width:10px;height:10px;background:var(--green);border-radius:2px;"></span> 予定</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:#ce93d8;border-radius:2px;"></span> 有給</span>
       <span><span style="display:inline-block;width:10px;height:10px;background:#fff;box-shadow:0 0 0 2px #f57f17 inset;border-radius:2px;"></span> 今日</span>
     </div>
-    <p class="help">日付タップで予定追加/解除。実績入力済の日（青）は変更不可。</p>
+    <p class="help">タップで「未→予定→有給→未」と循環。実績入力済の日（青）は変更不可。</p>
   </section>
 
   <section class="card">
@@ -87,6 +89,10 @@ function isPlanned(date) {
   return config.shifts.expandedDates.includes(date);
 }
 
+function isPaidLeave(date) {
+  return (config.shifts.paidLeaveDates || []).includes(date);
+}
+
 function isActual(date) {
   return drivesThisMonth.some(d => d.date === date);
 }
@@ -122,19 +128,31 @@ function renderGrid() {
     const cell = document.createElement('div');
     cell.className = 'cal-cell';
     if (isActual(iso)) cell.classList.add('actual');
+    else if (isPaidLeave(iso)) cell.classList.add('paidleave');
     else if (isPlanned(iso)) cell.classList.add('planned');
     if (iso === todayIso()) cell.classList.add('today');
     cell.textContent = day;
-    cell.onclick = () => togglePlanned(iso);
+    cell.onclick = () => cycleStatus(iso);
     grid.appendChild(cell);
   }
 }
 
-async function togglePlanned(iso) {
+// 状態循環: 未 → 予定 → 有給 → 未
+async function cycleStatus(iso) {
   if (isActual(iso)) return alert('実績入力済の日は変更できません');
-  const list = config.shifts.expandedDates;
-  const idx = list.indexOf(iso);
-  if (idx >= 0) list.splice(idx, 1); else { list.push(iso); list.sort(); }
+  if (!config.shifts.paidLeaveDates) config.shifts.paidLeaveDates = [];
+  const planned = config.shifts.expandedDates;
+  const paid = config.shifts.paidLeaveDates;
+  const isP = planned.includes(iso);
+  const isL = paid.includes(iso);
+  if (!isP && !isL) {
+    planned.push(iso); planned.sort();
+  } else if (isP && !isL) {
+    planned.splice(planned.indexOf(iso), 1);
+    paid.push(iso); paid.sort();
+  } else {
+    paid.splice(paid.indexOf(iso), 1);
+  }
   await saveConfig(config);
   await render();
 }
@@ -171,14 +189,17 @@ function renderDowToggles() {
 function renderSummary() {
   const { start, end } = getBillingPeriodRange(viewPeriod);
   const planned = config.shifts.expandedDates.filter(d => d >= start && d <= end).length;
+  const paid = (config.shifts.paidLeaveDates || []).filter(d => d >= start && d <= end).length;
   const actual = drivesThisMonth.length;
   const remaining = Math.max(0, planned - actual);
   const futurePlanned = config.shifts.expandedDates.filter(d => d >= start && d <= end && d >= todayIso()).length;
   const willMakeResp = (actual + futurePlanned) >= config.responsibilityShifts;
+  const paidAmount = paid * (config.paidLeaveAmount || 0);
   document.getElementById('summary').innerHTML = `
     <div>予定: <strong>${planned}乗務</strong></div>
     <div>実績: <strong>${actual}乗務</strong></div>
     <div>残り: <strong>${remaining}乗務</strong></div>
+    <div>有給: <strong>${paid}日</strong> ${paid > 0 ? `(¥${paidAmount.toLocaleString()})` : ''}</div>
     <div style="color:${willMakeResp ? 'var(--primary)' : 'var(--orange)'}">責任出番達成見込み: <strong>${willMakeResp ? '○' : '△'} (${actual + remaining}/${config.responsibilityShifts})</strong></div>
   `;
 }

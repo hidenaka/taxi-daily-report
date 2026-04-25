@@ -90,12 +90,12 @@ async function render() {
   const takeHomeRate = config.takeHomeRate ?? 0.75;
   const respShifts = config.responsibilityShifts;
 
-  const actualResult = calcTotalPay(drives, config);
+  const actualResult = calcTotalPay(drives, config, range.start, range.end);
   const actualTakeHome = actualResult.total * takeHomeRate;
 
   let predicted = null;
   if (isCurrent && drives.length > 0 && drives.length < respShifts) {
-    predicted = predictMonthly(drives, config);
+    predicted = predictMonthly(drives, config, range.start, range.end);
   }
 
   // サマリー
@@ -105,7 +105,7 @@ async function render() {
       <strong>${monthLabel}</strong>
       <button id="nextBtn">翌月度 ›</button>
     </div>
-    <div class="kv"><div>乗務数${isPast ? '（実績）' : ''}</div><div><strong>${actualResult.shiftCount}</strong>${isCurrent || isFuture ? ` / ${respShifts}` : ''}乗務</div></div>
+    <div class="kv"><div>乗務数${isPast ? '（実績）' : ''}</div><div><strong>${actualResult.shiftCount}</strong>${isCurrent || isFuture ? ` / ${respShifts}` : ''}乗務${actualResult.paidLeaveDays > 0 ? ` <span class="badge" style="background:#ce93d8;color:#fff;">有給${actualResult.paidLeaveDays}日</span>` : ''}</div></div>
   `;
 
   if (isPast || drives.length >= respShifts) {
@@ -337,17 +337,17 @@ function eachDateInRange(start, end) {
   return dates;
 }
 
-function predictMonthly(drives, config) {
+function predictMonthly(drives, config, periodStart, periodEnd) {
   const monthly = calcMonthlySales(drives);
   const avgDailyInclTax = monthly.inclTax / drives.length;
   const target = config.responsibilityShifts;
   const remaining = target - drives.length;
-  if (remaining <= 0) return calcTotalPay(drives, config);
+  if (remaining <= 0) return calcTotalPay(drives, config, periodStart, periodEnd);
   const simulated = [...drives];
   for (let i = 0; i < remaining; i++) {
     simulated.push({ trips: [{ amount: avgDailyInclTax, isCancel: false }], vehicleType: 'regular', date: '_p_' + i });
   }
-  return calcTotalPay(simulated, config);
+  return calcTotalPay(simulated, config, periodStart, periodEnd);
 }
 
 function pickWeatherIcon(w) {
