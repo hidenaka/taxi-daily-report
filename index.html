@@ -114,7 +114,7 @@ async function render() {
     <div class="kv"><div>乗務数${isPast ? '（実績）' : ''}</div><div><strong>${actualResult.shiftCount}</strong>${isCurrent || isFuture ? ` / ${respShifts}` : ''}乗務${actualResult.paidLeaveDays > 0 ? ` <span class="badge" style="background:#ce93d8;color:#fff;">有給${actualResult.paidLeaveDays}日</span>` : ''}</div></div>
   `;
 
-  // 1乗務あたりの平均営収(税込ベース、実績)
+  // 月度合計営収+1乗務平均(税込、実績ベース)
   const monthly = calcMonthlySales(drives);
   const avgSalesIncl = actualResult.shiftCount > 0 ? monthly.inclTax / actualResult.shiftCount : 0;
 
@@ -124,6 +124,7 @@ async function render() {
       <div class="kv"><div>手取り推定（×${(takeHomeRate*100).toFixed(0)}%）</div><div style="color:var(--primary);"><strong>${formatYen(actualTakeHome)}</strong></div></div>
       ${actualResult.shiftCount > 0 ? `
       <hr style="border:none;border-top:1px dashed #ddd;margin:6px 0;">
+      <div class="kv"><div>月度合計 営収(税込)</div><div><strong>${formatYen(monthly.inclTax)}</strong></div></div>
       <div class="kv"><div>1乗務平均 営収(税込)</div><div><strong>${formatYen(avgSalesIncl)}</strong></div></div>
       ` : ''}
     `;
@@ -133,6 +134,7 @@ async function render() {
       <div class="kv"><div>現時点 総支給<span class="badge actual">実績</span></div><div><strong>${formatYen(actualResult.total)}</strong></div></div>
       <div class="kv"><div>現時点 手取り</div><div style="color:var(--primary);"><strong>${formatYen(actualTakeHome)}</strong></div></div>
       <hr style="border:none;border-top:1px dashed #ddd;margin:6px 0;">
+      <div class="kv"><div>月度合計 営収(税込)</div><div><strong>${formatYen(monthly.inclTax)}</strong></div></div>
       <div class="kv"><div>1乗務平均 営収(税込)</div><div><strong>${formatYen(avgSalesIncl)}</strong></div></div>
       <hr style="border:none;border-top:1px dashed #ddd;margin:6px 0;">
       <div class="kv"><div>月度予想 総支給<span class="badge predict">予測</span></div><div><strong>${formatYen(predicted.total)}</strong></div></div>
