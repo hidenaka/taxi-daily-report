@@ -98,7 +98,7 @@ export function isSummaryOnly(drive) {
   return (drive.trips || []).some(t => t._periodCount);
 }
 
-// 時間帯キー: 朝(7-12)/昼(13-17)/夜(18-22)/深夜(23-6)
+// 時間帯キー: 朝(13時まで)/昼(13〜18時)/夜(18〜23時)/深夜(23時〜)
 export function getPeriodKey(timeStr) {
   const m = timeToMinutes(timeStr);
   if (m >= 23 * 60 || m < 7 * 60) return 'night';
@@ -108,10 +108,10 @@ export function getPeriodKey(timeStr) {
 }
 
 export const PERIOD_LABELS = {
-  morning: '朝(7-12)',
-  noon: '昼(13-17)',
-  evening: '夜(18-22)',
-  night: '深夜(23-6)'
+  morning: '朝(13時まで)',
+  noon: '昼(13〜18時)',
+  evening: '夜(18〜23時)',
+  night: '深夜(23時〜)'
 };
 
 // 1乗務を時間帯別に集計
