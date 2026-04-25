@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>タクシー日報</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+.fab { position: fixed; right: 18px; bottom: 76px; width: 56px; height: 56px; border-radius: 50%; background: var(--primary); color: #fff; border: none; font-size: 28px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+.drive-row { display: flex; padding: 12px; border-bottom: 1px solid #eee; align-items: center; cursor: pointer; }
+.drive-row .date { font-weight: 600; flex: 0 0 80px; }
+.drive-row .meta { flex: 1; font-size: 12px; color: var(--muted); }
+.drive-row .yen { font-weight: 600; }
+</style>
+</head>
+<body>
+<main style="padding:14px;">
+  <section class="card" id="summaryCard">読み込み中…</section>
+  <section class="card" style="padding:0;" id="listCard"></section>
+</main>
+<button class="fab" onclick="location.href='input.html'">＋</button>
+<div id="navHost"></div>
+<script type="module">
+import { renderBottomNav, formatYen, formatDate, currentYearMonth } from './js/app.js';
+import { getConfig, getDrivesForMonth, flushPendingQueue } from './js/storage.js';
+import { calcTotalPay, calcDailySales } from './js/payroll.js';
+
+document.getElementById('navHost').innerHTML = renderBottomNav('home');
+
+async function load() {
+  if (!localStorage.getItem('github_token') || !localStorage.getItem('github_data_repo')) {
+    document.getElementById('summaryCard').innerHTML = '<a href="settings.html">設定からGitHubトークンとデータリポジトリ名を設定</a>';
+    return;
+  }
+  await flushPendingQueue();
+  const config = await getConfig();
+  if (!config) { document.getElementById('summaryCard').innerHTML = 'config未取得'; return; }
+  const ym = currentYearMonth();
+  const drives = await getDrivesForMonth(ym);
+  drives.sort((a, b) => b.date.localeCompare(a.date));
+
+  // サマリー（責任出番達成前提）
+  const result = calcTotalPay(drives, config);
+  const monthLabel = ym.split('-')[1].replace(/^0/, '') + '月';
+  document.getElementById('summaryCard').innerHTML = `
+    <div style="display:flex;justify-content:space-between;font-size:12px;">
+      <div><strong>${monthLabel}</strong> ${result.shiftCount}/${config.responsibilityShifts}乗務</div>
+      <div>暫定 <strong>${formatYen(result.total)}</strong></div>
+    </div>
+  `;
+
+  // 直近乗務リスト
+  const list = document.getElementById('listCard');
+  list.innerHTML = drives.length === 0
+    ? '<div style="padding:14px;color:var(--muted);">乗務記録なし</div>'
+    : drives.map(d => {
+        const sales = calcDailySales(d);
+        const validCount = d.trips.filter(t => !t.isCancel).length;
+        const wIcon = pickWeatherIcon(d.weather);
+        return `<div class="drive-row" onclick="location.href='detail.html?date=${d.date}'">
+          <div class="date">${formatDate(d.date)}</div>
+          <div class="meta">${wIcon} ${validCount}件</div>
+          <div class="yen">${formatYen(sales.inclTax)}</div>
+        </div>`;
+      }).join('');
+}
+
+function pickWeatherIcon(w) {
+  if (!w) return '';
+  // 朝/昼/夕で雨があれば☂、それ以外は☀（簡易）
+  for (const p of [w.morning, w.noon, w.evening]) {
+    if (!p) continue;
+    if (p.code >= 51 && p.code <= 67) return '☂';
+    if (p.code >= 71 && p.code <= 77) return '❄';
+    if (p.code >= 80) return '☂';
+  }
+  return '☀';
+}
+
+load();
+</script>
+</body>
+</html>
