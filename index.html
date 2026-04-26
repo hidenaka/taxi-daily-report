@@ -51,6 +51,7 @@ if ('serviceWorker' in navigator) {
 </script>
 <main style="padding:14px;">
   <section class="card" id="todayHintCard" style="display:none;"></section>
+  <section class="card" id="paceCard" style="display:none;"></section>
   <section class="card" id="summaryCard">読み込み中…</section>
   <section class="card" id="targetCard" style="display:none;"></section>
   <section class="card" id="calCard" style="display:none;"></section>
@@ -62,7 +63,7 @@ if ('serviceWorker' in navigator) {
 import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js';
 import { getConfig, getDrivesForMonth, flushPendingQueue } from './js/storage.js';
 import { calcTotalPay, calcDailySales, calcMonthlySales } from './js/payroll.js';
-import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js';
+import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, PERIOD_LABELS, dowOf, DOW_LABELS, calcPaceReference, depHourDistribution } from './js/chart-helpers.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('home');
 
@@ -91,6 +92,7 @@ async function render() {
 
   // 今日の傾向(当月度表示時のみ・過去データから) ← 後追いで非同期実行(UIをブロックしない)
   if (isCurrent) renderTodayHint();
+  if (isCurrent) renderPaceCard();
 
   const monthLabel = formatBillingPeriod(viewPeriod);
   const takeHomeRate = config.takeHomeRate ?? 0.75;
@@ -383,6 +385,65 @@ async function renderTodayHint() {
     <div class="kv" style="margin-top:6px;"><div>平均日売上</div><div><strong>${formatYen(avg)}</strong></div></div>
     <div class="kv"><div>ベスト</div><div><strong>${formatYen(max)}</strong></div></div>
   `;
+}
+
+// 出庫時刻別ペース参考カード
+let paceState = { dist: null, allDrives: null };
+async function renderPaceCard() {
+  const card = document.getElementById('paceCard');
+  card.style.display = '';
+  card.innerHTML = '<div class="muted" style="font-size:11px;">出庫ペース参考を集計中…</div>';
+  // 過去6ヶ月度を並列取得 (出庫別データのため)
+  const periods = [];
+  let p = currentBillingPeriod();
+  for (let i = 0; i < 6; i++) { periods.push(p); p = shiftBillingPeriod(p, -1); }
+  const all = await Promise.all(periods.map(ym => getDrivesForMonth(ym)));
+  const allDrives = all.flat();
+  const dist = depHourDistribution(allDrives);
+  const hours = Object.keys(dist).map(Number).sort((a,b) => a-b);
+  if (hours.length === 0) { card.style.display = 'none'; return; }
+  paceState = { dist, allDrives };
+  // デフォルト: 最頻出
+  let defaultHour = hours[0];
+  for (const h of hours) if (dist[h] > dist[defaultHour]) defaultHour = h;
+  renderPaceBody(defaultHour);
+}
+
+function renderPaceBody(depHour) {
+  const card = document.getElementById('paceCard');
+  const { dist, allDrives } = paceState;
+  const hours = Object.keys(dist).map(Number).sort((a,b) => a-b);
+  const ref = calcPaceReference(allDrives, depHour);
+  const tabs = hours.map(h => {
+    const active = h === depHour ? ' style="background:var(--primary);color:#fff;font-weight:600;"' : ' style="background:#f0f0f0;color:#333;"';
+    return `<button data-h="${h}"${active} class="pace-tab" style="border:none;padding:6px 10px;border-radius:4px;font-size:12px;cursor:pointer;">${h}時 (${dist[h]}日)</button>`;
+  }).join('');
+  let body = `<p class="muted" style="font-size:11px;">出庫から経過時間ごとの過去平均</p>`;
+  if (ref.points.length === 0) {
+    body += `<p class="muted" style="font-size:11px;">該当データなし</p>`;
+  } else {
+    body += `<div style="overflow-x:auto;margin-top:6px;"><table class="sum-table">
+      <thead><tr><th class="date">経過</th><th>累積営収</th><th>件数</th><th>実車</th><th>休憩</th><th>ペース</th></tr></thead>
+      <tbody>${ref.points.map(p => `
+        <tr><td class="date">${p.hoursAfterDep}h後</td>
+        <td>${formatYen(p.avgSales)}</td>
+        <td>${p.avgCount.toFixed(1)}</td>
+        <td>${formatMin(p.avgTripMin)}</td>
+        <td>${formatMin(p.avgRestMin)}</td>
+        <td>${formatYen(p.avgSales / p.hoursAfterDep)}/h</td>
+        </tr>`).join('')}</tbody></table></div>`;
+  }
+  card.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
+      <strong>出庫ペース参考 (過去データ)</strong>
+      <span class="muted" style="font-size:10px;">${ref.days}日分の平均</span>
+    </div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;">${tabs}</div>
+    ${body}
+  `;
+  card.querySelectorAll('.pace-tab').forEach(b => {
+    b.onclick = () => renderPaceBody(parseInt(b.dataset.h));
+  });
 }
 
 function predictMonthly(drives, config, periodStart, periodEnd) {

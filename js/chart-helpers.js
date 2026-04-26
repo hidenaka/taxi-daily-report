@@ -268,6 +268,91 @@ export function weatherSalesAggregation(drives) {
 export const WEATHER_LABELS = { sunny: '晴れ', cloudy: '曇り', rainy: '雨', snowy: '雪' };
 export const DOW_LABELS = ['日','月','火','水','木','金','土'];
 
+// 出庫時刻基準で時刻文字列→minutes (0=出庫、出庫前は翌日扱い)
+function minsFromDep(timeStr, depHour) {
+  if (!timeStr) return null;
+  const parts = timeStr.split(':');
+  if (parts.length < 2) return null;
+  const h = parseInt(parts[0]), m = parseInt(parts[1]);
+  if (isNaN(h) || isNaN(m)) return null;
+  let mins = h * 60 + m;
+  if (mins < depHour * 60) mins += 24 * 60;
+  return mins - depHour * 60;
+}
+
+// 出庫時刻別ペース参考: 経過時間(1h刻み)ごとの平均累積営収/実車/休憩
+export function calcPaceReference(drives, depHour, intervalH = 1, maxH = 14) {
+  const matched = drives.filter(d => {
+    if (isSummaryOnly(d)) return false;
+    if (!d.departureTime) return false;
+    return parseInt(d.departureTime.split(':')[0]) === depHour;
+  });
+  if (matched.length === 0) return { days: 0, points: [] };
+  const points = [];
+  for (let off = intervalH; off <= maxH; off += intervalH) {
+    const cutMin = off * 60;
+    let sumSales = 0, sumTrip = 0, sumRest = 0, sumKm = 0, daysActive = 0, sumCount = 0;
+    for (const d of matched) {
+      let s = 0, tm = 0, rm = 0, km = 0, cnt = 0, active = false;
+      for (const t of (d.trips || [])) {
+        if (t.isCancel) continue;
+        const bm = minsFromDep(t.boardTime, depHour);
+        if (bm == null || bm >= cutMin) continue;
+        s += (t.amount || 0);
+        cnt++;
+        const am = minsFromDep(t.alightTime, depHour);
+        if (am != null) {
+          let dur = am - bm;
+          if (dur < 0) dur += 24 * 60;
+          if (bm + dur > cutMin) dur = cutMin - bm;
+          tm += Math.max(0, dur);
+        }
+        km += (t.km || 0);
+        active = true;
+      }
+      for (const r of (d.rests || [])) {
+        const sm = minsFromDep(r.startTime, depHour);
+        if (sm == null || sm >= cutMin) continue;
+        const em = minsFromDep(r.endTime, depHour);
+        if (em != null) {
+          let dur = em - sm;
+          if (dur < 0) dur += 24 * 60;
+          if (sm + dur > cutMin) dur = cutMin - sm;
+          rm += Math.max(0, dur);
+        }
+        active = true;
+      }
+      if (active) {
+        sumSales += s; sumTrip += tm; sumRest += rm; sumKm += km; sumCount += cnt;
+        daysActive++;
+      }
+    }
+    if (daysActive === 0) continue;
+    points.push({
+      hoursAfterDep: off,
+      avgSales: sumSales / daysActive,
+      avgTripMin: sumTrip / daysActive,
+      avgRestMin: sumRest / daysActive,
+      avgKm: sumKm / daysActive,
+      avgCount: sumCount / daysActive,
+      days: daysActive
+    });
+  }
+  return { days: matched.length, points };
+}
+
+// drives中に存在する出庫時刻のhour一覧 (件数付き)
+export function depHourDistribution(drives) {
+  const counts = {};
+  for (const d of drives) {
+    if (isSummaryOnly(d)) continue;
+    if (!d.departureTime) continue;
+    const h = parseInt(d.departureTime.split(':')[0]);
+    if (!isNaN(h)) counts[h] = (counts[h] || 0) + 1;
+  }
+  return counts;
+}
+
 // 曜日別の集計 (各日数/平均営収/平均件数/平均時間単価/平均乗務時間/ベスト日)
 export function dowAggregation(drives) {
   const empty = () => ({ days: 0, totalSales: 0, totalCount: 0, totalTripMin: 0, totalShiftMin: 0, bestSales: 0, bestDate: null });
