@@ -177,8 +177,9 @@ export function aggregatePeriodBreakdowns(drives) {
 }
 
 export function formatMin(min) {
-  const h = Math.floor(min / 60);
-  const m = Math.round(min % 60);
+  const total = Math.round(min);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
   return `${h}:${String(m).padStart(2, '0')}`;
 }
 
@@ -472,16 +473,24 @@ export function buildNeighborMap(drives, { minPairs = 2, maxWaitMin = 25 } = {})
 }
 
 // 特定の降車エリアで降ろした後、次にどのエリアで乗車した時の効率が良かったか
+// 待ち時間 30分以内のtripのみを集計 (=降ろした近辺で取れた仕事)
 // periodFilter: null=全時間帯, 'morning'/'noon'/'evening'/'night' のいずれか (alightTime基準)
 // neighbors: buildNeighborMap の結果。指定すれば降車エリアの近隣も対象に含める
-// 戻り値: { rows: [...効率降順], includedAreas: [近隣含めて集計対象としたエリア] }
+// 戻り値: { rows, includedAreas, totalDropoffs, totalNextWithin30 }
+//   各row: { area, count, avgWait, avgSales, avgDur, efficiency, ratio15, ratio30, totalSeen }
+//     totalSeen: そのエリアで降ろした件数(母数)
+//     count: そのうち30分以内に次が取れた件数
+//     ratio15: 15分以内取得率(=count15/totalSeen)
+//     ratio30: 30分以内取得率(=count/totalSeen)
 export function nextBoardBreakdown(drives, dropoffArea, periodFilter = null, neighbors = null) {
   const targetAreas = new Set([dropoffArea]);
   if (neighbors && neighbors[dropoffArea]) {
     for (const n of neighbors[dropoffArea]) targetAreas.add(n);
   }
-  const groups = {};
+  const groups = {};   // nextArea → { count, totalWait, totalSales, totalDur, count15 }
+  const seenByNextArea = {}; // nextArea ごとの母数(降車後の機会総数) は計算しないので、別途totalSeenだけ管理
   let totalDropoffs = 0;
+  let totalNextWithin30 = 0;
   for (const d of drives) {
     if (isSummaryOnly(d)) continue;
     const trips = (d.trips || []).filter(t => !t.isCancel);
@@ -495,11 +504,14 @@ export function nextBoardBreakdown(drives, dropoffArea, periodFilter = null, nei
       if (!nextArea) continue;
       let wait = timeToMinutes(next.boardTime) - timeToMinutes(t.alightTime);
       if (wait < 0) wait += 24 * 60;
-      if (wait >= 4 * 60) continue;
+      // 30分超は集計対象外 (=移動先で取った扱い、近隣の判断材料にしない)
+      if (wait > 30) continue;
+      totalNextWithin30++;
       let nd = timeToMinutes(next.alightTime) - timeToMinutes(next.boardTime);
       if (nd < 0) nd += 24 * 60;
-      if (!groups[nextArea]) groups[nextArea] = { count: 0, totalWait: 0, totalSales: 0, totalDur: 0 };
+      if (!groups[nextArea]) groups[nextArea] = { count: 0, count15: 0, totalWait: 0, totalSales: 0, totalDur: 0 };
       groups[nextArea].count++;
+      if (wait <= 15) groups[nextArea].count15++;
       groups[nextArea].totalWait += wait;
       groups[nextArea].totalSales += (next.amount || 0);
       groups[nextArea].totalDur += nd;
@@ -510,9 +522,47 @@ export function nextBoardBreakdown(drives, dropoffArea, periodFilter = null, nei
     const avgSales = g.totalSales / g.count;
     const avgDur = g.totalDur / g.count;
     const efficiency = (avgWait + avgDur) > 0 ? avgSales / (avgWait + avgDur) * 60 : 0;
-    return { area, count: g.count, avgWait, avgSales, avgDur, efficiency };
+    // 取得率は「降車機会(totalDropoffs)に対する」割合
+    const ratio15 = totalDropoffs > 0 ? g.count15 / totalDropoffs : 0;
+    const ratio30 = totalDropoffs > 0 ? g.count / totalDropoffs : 0;
+    return { area, count: g.count, count15: g.count15, avgWait, avgSales, avgDur, efficiency, ratio15, ratio30 };
   }).sort((a, b) => b.efficiency - a.efficiency);
-  return { rows, includedAreas: Array.from(targetAreas), totalDropoffs };
+  return { rows, includedAreas: Array.from(targetAreas), totalDropoffs, totalNextWithin30 };
+}
+
+// 高期待値エリア × 時間帯
+// 各trip(乗車)を boardPlace × 時間帯(4区切り) で集計、平均単価高い順
+// 「待ちは長いが期待値高い」エリア(羽田空港等)を発見するための指標
+// 戻り値: [{ area, period, count, avgSales, avgDur, hourlyDuringTrip }]
+export function highValueAreas(drives, { minSamples = 5 } = {}) {
+  const groups = {}; // "area|period" → {count, sumSales, sumDur}
+  for (const d of drives) {
+    if (isSummaryOnly(d)) continue;
+    for (const t of (d.trips || [])) {
+      if (t.isCancel) continue;
+      const area = extractArea(t.boardPlace);
+      if (!area) continue;
+      const period = getPeriodKey(t.boardTime);
+      let dur = timeToMinutes(t.alightTime) - timeToMinutes(t.boardTime);
+      if (dur < 0) dur += 24 * 60;
+      const key = `${area}|${period}`;
+      if (!groups[key]) groups[key] = { count: 0, sumSales: 0, sumDur: 0 };
+      groups[key].count++;
+      groups[key].sumSales += (t.amount || 0);
+      groups[key].sumDur += dur;
+    }
+  }
+  const rows = [];
+  for (const [key, g] of Object.entries(groups)) {
+    if (g.count < minSamples) continue;
+    const [area, period] = key.split('|');
+    const avgSales = g.sumSales / g.count;
+    const avgDur = g.sumDur / g.count;
+    const hourlyDuringTrip = avgDur > 0 ? avgSales / (avgDur / 60) : 0;
+    rows.push({ area, period, count: g.count, avgSales, avgDur, hourlyDuringTrip });
+  }
+  rows.sort((a, b) => b.avgSales - a.avgSales);
+  return rows;
 }
 
 // 降車エリア別 効率分析

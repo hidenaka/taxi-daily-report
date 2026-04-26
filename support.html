@@ -49,6 +49,8 @@ if ('serviceWorker' in navigator) {
   <h1 style="margin-top:0;">営業サポート</h1>
   <p class="muted" style="font-size:11px;margin-top:-6px;">過去データから「効率の悪い時間/降ろし方」を可視化して営業スタイルを最適化</p>
 
+  <section class="card" id="paceCard"></section>
+
   <section class="card">
     <div class="section-h">
       <strong>分析期間</strong>
@@ -102,6 +104,15 @@ if ('serviceWorker' in navigator) {
     <p class="muted" style="font-size:10px;margin-top:6px;">A=その時間にいた1hあたりの売上(空車・休憩含む実労働時間ベース)。B=その時間帯に1日平均で立った売上。サンプル少(&lt;3件)はグレー、タップで詳細</p>
   </section>
 
+  <section class="card" id="highValueCard">
+    <div class="section-h">
+      <strong>高期待値エリア × 時間帯</strong>
+      <span class="desc">単価が大きく出る場所と時間</span>
+    </div>
+    <div id="highValueBody"></div>
+    <p class="muted" style="font-size:10px;margin-top:6px;">乗車地エリア × 時間帯(4区切り)で平均単価が高い順TOP15。羽田空港のように「待ちは長いが期待値大」のエリアを発見する用途。最低5件以上</p>
+  </section>
+
   <section class="card" id="areaCard">
     <div class="section-h">
       <strong>降車エリア別 効率(区+町名)</strong>
@@ -120,11 +131,13 @@ if ('serviceWorker' in navigator) {
 </main>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod } from './js/app.js';
+import { renderBottomNav, formatYen, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, toLocalIso } from './js/app.js';
 import { getDrivesForMonth } from './js/storage.js';
-import { hourlyDowEfficiency, dropoffAreaAnalysis, nextBoardBreakdown, buildNeighborMap, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin } from './js/chart-helpers.js';
+import { hourlyDowEfficiency, dropoffAreaAnalysis, nextBoardBreakdown, buildNeighborMap, highValueAreas, calcPaceAtElapsed, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin, dowOf } from './js/chart-helpers.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('support');
+
+const todayIso = () => toLocalIso(new Date());
 
 let monthsRange = 6;
 let allDrives = [];
@@ -132,6 +145,119 @@ let areaSort = 'dropoffs';
 let neighborMap = {};
 let hourMetric = 'A'; // A=実労働時間効率, B=1日平均売上
 const HOUR_ORDER = [7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,0,1,2,3,4,5,6];
+
+// === 出庫ペース参考カード (元 index.html から移植) ===
+const PACE_DEP_HOURS = [7, 8, 9];
+let paceState = { allDrives: null, dowFilter: null, manualElapsedMin: null, monthsRange: 12, todayDepHour: 7 };
+const paceCache = {};
+function shiftBillingPeriodLocal(ym, delta) { return shiftBillingPeriod(ym, delta); }
+async function renderPaceCard(months = 12) {
+  const card = document.getElementById('paceCard');
+  card.style.display = '';
+  card.innerHTML = '<div class="muted" style="font-size:11px;">出庫ペース参考を集計中…</div>';
+  let drives;
+  if (paceCache[months]) { drives = paceCache[months]; }
+  else {
+    const periods = []; let p = currentBillingPeriod();
+    for (let i = 0; i < months; i++) { periods.push(p); p = shiftBillingPeriod(p, -1); }
+    const all = await Promise.all(periods.map(ym => getDrivesForMonth(ym)));
+    drives = all.flat();
+    paceCache[months] = drives;
+  }
+  const todayDow = paceState.dowFilter !== undefined && paceState.dowFilter !== null ? paceState.dowFilter : dowOf(todayIso());
+  paceState = { allDrives: drives, dowFilter: todayDow, manualElapsedMin: paceState.manualElapsedMin, monthsRange: months, todayDepHour: paceState.todayDepHour || 7 };
+  renderPaceBody();
+}
+function renderPaceBody() {
+  const card = document.getElementById('paceCard');
+  const { allDrives: drives, dowFilter, manualElapsedMin, monthsRange: months, todayDepHour } = paceState;
+  const now = new Date();
+  let nowMin = now.getHours() * 60 + now.getMinutes();
+  let autoElapsed = nowMin - todayDepHour * 60;
+  if (autoElapsed < 0) autoElapsed += 24 * 60;
+  if (autoElapsed > 20 * 60) autoElapsed = 0;
+  const elapsedMin = manualElapsedMin != null ? manualElapsedMin : autoElapsed;
+  const isManual = manualElapsedMin != null;
+  const ref = calcPaceAtElapsed(drives, PACE_DEP_HOURS, elapsedMin, dowFilter);
+  const elapsedH = (elapsedMin / 60).toFixed(1);
+  const dowItems = [{v: null, l: '全'}, ...DOW_LABELS.map((l,i) => ({v: i, l}))];
+  const dowTabs = dowItems.map(d => {
+    const active = d.v === dowFilter;
+    const color = d.v === 0 ? '#d32f2f' : d.v === 6 ? '#1976d2' : '';
+    const style = active ? 'background:var(--primary);color:#fff;font-weight:600;' : `background:#f0f0f0;color:${color || '#333'};`;
+    return `<button data-d="${d.v == null ? '' : d.v}" class="pace-dtab" style="${style}border:none;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;min-width:28px;">${d.l}</button>`;
+  }).join('');
+  const elapsedItems = [{m: null, l: '今'}];
+  for (let h = 1; h <= 20; h++) elapsedItems.push({m: h * 60, l: `${h}h`});
+  const elapsedTabs = elapsedItems.map(e => {
+    const active = (e.m == null && !isManual) || (e.m != null && manualElapsedMin === e.m);
+    const style = active ? 'background:var(--orange,#ff9800);color:#fff;font-weight:600;' : 'background:#f0f0f0;color:#333;';
+    return `<button data-em="${e.m == null ? '' : e.m}" class="pace-etab" style="${style}border:none;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;min-width:28px;">${e.l}</button>`;
+  }).join('');
+  const dowName = dowFilter == null ? '全曜日' : DOW_LABELS[dowFilter] + '曜のみ';
+  const targetTime = (() => {
+    const m = todayDepHour * 60 + elapsedMin;
+    const h = Math.floor(m / 60) % 24;
+    const mm = Math.round(m % 60);
+    return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+  })();
+  const ctxLabel = `出庫から${elapsedH}時間経過(${targetTime}時点) ・ ${dowName}`;
+  const rangeItems = [{r: 3, l: '3ヶ月'}, {r: 6, l: '6ヶ月'}, {r: 12, l: '12ヶ月'}, {r: 36, l: '全'}];
+  const rangeTabs = rangeItems.map(r => {
+    const active = r.r === months;
+    const style = active ? 'background:var(--primary);color:#fff;font-weight:600;' : 'background:#f0f0f0;color:#333;';
+    return `<button data-r="${r.r}" class="pace-rtab" style="${style}border:none;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;">${r.l}</button>`;
+  }).join('');
+  const todayHourTabs = [7, 8, 9].map(h => {
+    const active = h === todayDepHour;
+    const dim = isManual ? 'opacity:0.45;' : '';
+    const style = active ? `background:var(--primary);color:#fff;font-weight:600;${dim}` : `background:#f0f0f0;color:#333;${dim}`;
+    return `<button data-th="${h}" class="pace-thtab" style="${style}border:none;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;">${h}時</button>`;
+  }).join('');
+  let body;
+  if (elapsedMin <= 0 || ref.days === 0) {
+    body = `<p class="muted" style="font-size:11px;margin-top:8px;">該当データなし</p>`;
+  } else {
+    const pace = ref.avgSales / (elapsedMin / 60);
+    body = `
+      <div style="margin-top:8px;font-size:11px;color:var(--muted);">${ctxLabel} ・ 過去${ref.days}日</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px;">
+        <div style="background:#f5f5f5;padding:8px;border-radius:6px;">
+          <div style="font-size:10px;color:var(--muted);">平均累積営収</div>
+          <div style="font-size:16px;font-weight:700;color:#1b5e20;">${formatYen(ref.avgSales)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;">最大 ${formatYen(ref.maxSales)}<br>最小 ${formatYen(ref.minSales)}</div>
+        </div>
+        <div style="background:#f5f5f5;padding:8px;border-radius:6px;">
+          <div style="font-size:10px;color:var(--muted);">平均休憩</div>
+          <div style="font-size:16px;font-weight:700;color:#555;">${formatMin(ref.avgRest)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;">最大 ${formatMin(ref.maxRest)}<br>最小 ${formatMin(ref.minRest)}</div>
+        </div>
+        <div style="background:#f5f5f5;padding:8px;border-radius:6px;">
+          <div style="font-size:10px;color:var(--muted);">平均件数</div>
+          <div style="font-size:16px;font-weight:700;color:#555;">${ref.avgCount.toFixed(1)}件</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;">最大 ${ref.maxCount}件<br>最小 ${ref.minCount}件</div>
+        </div>
+      </div>
+      <div class="kv" style="margin-top:6px;display:flex;justify-content:space-between;"><span>平均ペース</span><strong>${formatYen(pace)}/h</strong></div>
+    `;
+  }
+  card.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
+      <strong>出庫ペース参考</strong><span class="muted" style="font-size:10px;">7-9時出庫の平均</span>
+    </div>
+    <div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:6px;">${rangeTabs}</div>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
+      <span class="muted" style="font-size:10px;">今日の出庫</span>${todayHourTabs}
+    </div>
+    <div style="display:flex;gap:3px;flex-wrap:wrap;">${dowTabs}</div>
+    <div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:6px;overflow-x:auto;">${elapsedTabs}</div>
+    ${body}
+  `;
+  card.querySelectorAll('.pace-rtab').forEach(b => { b.onclick = () => renderPaceCard(parseInt(b.dataset.r)); });
+  card.querySelectorAll('.pace-thtab').forEach(b => { b.onclick = () => { paceState.todayDepHour = parseInt(b.dataset.th); paceState.manualElapsedMin = null; renderPaceBody(); }; });
+  card.querySelectorAll('.pace-dtab').forEach(b => { b.onclick = () => { paceState.dowFilter = b.dataset.d === '' ? null : parseInt(b.dataset.d); renderPaceBody(); }; });
+  card.querySelectorAll('.pace-etab').forEach(b => { b.onclick = () => { paceState.manualElapsedMin = b.dataset.em === '' ? null : parseInt(b.dataset.em); renderPaceBody(); }; });
+}
 
 document.querySelectorAll('.range-tabs button').forEach(b => {
   b.onclick = () => {
@@ -174,6 +300,7 @@ async function load() {
   populateRecommendArea();
   updateNeighborInfo();
   renderHourEff();
+  renderHighValue();
   renderArea();
 }
 
@@ -212,34 +339,61 @@ document.getElementById('recSearch').onclick = () => {
   if (!area || !time) return;
   const period = getPeriodKey(time);
   const result = nextBoardBreakdown(allDrives, area, period, expand ? neighborMap : null);
-  const filtered = result.rows.filter(r => r.count >= 2);
+  const filtered = result.rows.filter(r => r.count >= 3);
   const body = document.getElementById('recBody');
   const includedLabel = result.includedAreas.length > 1
-    ? `(近隣含む${result.includedAreas.length}エリアから${result.totalDropoffs}件)`
-    : `(${result.totalDropoffs}件)`;
+    ? `(近隣含む${result.includedAreas.length}エリア・降車${result.totalDropoffs}件中30分以内取得${result.totalNextWithin30}件)`
+    : `(降車${result.totalDropoffs}件中30分以内取得${result.totalNextWithin30}件)`;
   if (filtered.length === 0) {
-    body.innerHTML = `<p class="muted" style="font-size:11px;">該当データなし${includedLabel}。近隣を含めるか期間を広げてください</p>`;
+    body.innerHTML = `<p class="muted" style="font-size:11px;">3件以上の該当データなし${includedLabel}。近隣を含めるか期間を広げてください</p>`;
     return;
   }
   const top = filtered.slice(0, 10);
   const maxEff = Math.max(...top.map(r => r.efficiency), 1);
-  let html = `<div class="muted" style="font-size:11px;margin-bottom:6px;"><strong>${area}</strong>${expand && result.includedAreas.length > 1 ? '+近隣' : ''} で <strong>${PERIOD_LABELS[period]}</strong> に降ろした後の次乗車TOP${top.length} ${includedLabel}</div>`;
+  let html = `<div class="muted" style="font-size:11px;margin-bottom:6px;"><strong>${area}</strong>${expand && result.includedAreas.length > 1 ? '+近隣' : ''} で <strong>${PERIOD_LABELS[period]}</strong> に降ろした後、30分以内に取れた次乗車TOP${top.length} ${includedLabel}</div>`;
   html += '<div style="overflow-x:auto;"><table class="area-table"><thead><tr>'
-    + '<th class="l">次乗車エリア</th><th>件数</th><th>待ち</th><th>単価</th><th>時間効率¥/h</th>'
+    + '<th class="l">次乗車エリア</th><th>件数</th><th>15分内</th><th>30分内</th><th>待ち平均</th><th>単価</th><th>効率¥/h</th>'
     + '</tr></thead><tbody>';
   for (const r of top) {
     const effPct = r.efficiency / maxEff * 100;
+    const r15 = Math.round(r.ratio15 * 100);
+    const r30 = Math.round(r.ratio30 * 100);
     html += `<tr>
       <td class="l">${r.area}</td>
       <td>${r.count}</td>
+      <td>${r15}%</td>
+      <td>${r30}%</td>
       <td>${formatMin(r.avgWait)}</td>
       <td>${formatYen(r.avgSales)}</td>
       <td><div class="bar"><div class="fill" style="width:${effPct}%;"></div><div class="v">${formatYen(r.efficiency)}</div></div></td>
     </tr>`;
   }
   html += '</tbody></table></div>';
+  html += '<p class="muted" style="font-size:10px;margin-top:4px;">「15分内」=降車後15分以内に乗車できた件数比率(=反応速いエリア)。「30分内」=30分以内に乗車できた比率(=仕事はあるエリア)</p>';
   body.innerHTML = html;
 };
+
+function renderHighValue() {
+  const rows = highValueAreas(allDrives, { minSamples: 5 }).slice(0, 15);
+  const body = document.getElementById('highValueBody');
+  if (rows.length === 0) { body.innerHTML = '<p class="muted" style="font-size:11px;">該当データなし</p>'; return; }
+  const maxSales = Math.max(...rows.map(r => r.avgSales), 1);
+  let html = '<div style="overflow-x:auto;"><table class="area-table"><thead><tr>'
+    + '<th class="l">エリア</th><th>時間帯</th><th>件数</th><th>平均実車</th><th>平均単価</th>'
+    + '</tr></thead><tbody>';
+  for (const r of rows) {
+    const pct = r.avgSales / maxSales * 100;
+    html += `<tr>
+      <td class="l">${r.area}</td>
+      <td>${PERIOD_LABELS[r.period]}</td>
+      <td>${r.count}</td>
+      <td>${formatMin(r.avgDur)}</td>
+      <td><div class="bar"><div class="fill" style="width:${pct}%;background:#1976d2;"></div><div class="v">${formatYen(r.avgSales)}</div></div></td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  body.innerHTML = html;
+}
 
 function renderHourEff() {
   const matrix = hourlyDowEfficiency(allDrives);
@@ -358,6 +512,7 @@ function renderArea() {
   });
 }
 
+renderPaceCard();
 load();
 </script>
 </body>

@@ -51,7 +51,6 @@ if ('serviceWorker' in navigator) {
 </script>
 <main style="padding:14px;">
   <section class="card" id="todayHintCard" style="display:none;"></section>
-  <section class="card" id="paceCard" style="display:none;"></section>
   <section class="card" id="summaryCard">読み込み中…</section>
   <section class="card" id="targetCard" style="display:none;"></section>
   <section class="card" id="calCard" style="display:none;"></section>
@@ -63,7 +62,7 @@ if ('serviceWorker' in navigator) {
 import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js';
 import { getConfig, getDrivesForMonth, flushPendingQueue } from './js/storage.js';
 import { calcTotalPay, calcDailySales, calcMonthlySales } from './js/payroll.js';
-import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, PERIOD_LABELS, dowOf, DOW_LABELS, calcPaceAtElapsed } from './js/chart-helpers.js';
+import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('home');
 
@@ -92,7 +91,6 @@ async function render() {
 
   // 今日の傾向(当月度表示時のみ・過去データから) ← 後追いで非同期実行(UIをブロックしない)
   if (isCurrent) renderTodayHint();
-  if (isCurrent) renderPaceCard();
 
   const monthLabel = formatBillingPeriod(viewPeriod);
   const takeHomeRate = config.takeHomeRate ?? 0.75;
@@ -387,157 +385,6 @@ async function renderTodayHint() {
   `;
 }
 
-// 出庫ペース参考カード (午前出庫7-9時固定、経過時間で参照)
-const PACE_DEP_HOURS = [7, 8, 9];
-let paceState = { allDrives: null, dowFilter: null, manualElapsedMin: null, monthsRange: 12, todayDepHour: 7 };
-const paceCache = {};
-async function renderPaceCard(monthsRange = 12) {
-  const card = document.getElementById('paceCard');
-  card.style.display = '';
-  card.innerHTML = '<div class="muted" style="font-size:11px;">出庫ペース参考を集計中…</div>';
-  let allDrives;
-  if (paceCache[monthsRange]) {
-    allDrives = paceCache[monthsRange];
-  } else {
-    const periods = [];
-    let p = currentBillingPeriod();
-    for (let i = 0; i < monthsRange; i++) { periods.push(p); p = shiftBillingPeriod(p, -1); }
-    const all = await Promise.all(periods.map(ym => getDrivesForMonth(ym)));
-    allDrives = all.flat();
-    paceCache[monthsRange] = allDrives;
-  }
-  const todayDow = paceState.dowFilter !== undefined && paceState.dowFilter !== null
-    ? paceState.dowFilter
-    : dowOf(todayIso());
-  paceState = {
-    allDrives,
-    dowFilter: todayDow,
-    manualElapsedMin: paceState.manualElapsedMin,
-    monthsRange,
-    todayDepHour: paceState.todayDepHour || 7
-  };
-  renderPaceBody();
-}
-
-function renderPaceBody() {
-  const card = document.getElementById('paceCard');
-  const { allDrives, dowFilter, manualElapsedMin, monthsRange, todayDepHour } = paceState;
-  // 経過時間: 手動指定があればそれ、なければ「今日の出庫時刻」ベース
-  const now = new Date();
-  let nowMin = now.getHours() * 60 + now.getMinutes();
-  let autoElapsed = nowMin - todayDepHour * 60;
-  if (autoElapsed < 0) autoElapsed += 24 * 60;
-  if (autoElapsed > 20 * 60) autoElapsed = 0;
-  const elapsedMin = manualElapsedMin != null ? manualElapsedMin : autoElapsed;
-  const isManual = manualElapsedMin != null;
-  const ref = calcPaceAtElapsed(allDrives, PACE_DEP_HOURS, elapsedMin, dowFilter);
-  const elapsedH = (elapsedMin / 60).toFixed(1);
-  const dowItems = [{v: null, l: '全'}, ...DOW_LABELS.map((l,i) => ({v: i, l}))];
-  const dowTabs = dowItems.map(d => {
-    const active = d.v === dowFilter;
-    const color = d.v === 0 ? '#d32f2f' : d.v === 6 ? '#1976d2' : '';
-    const style = active
-      ? 'background:var(--primary);color:#fff;font-weight:600;'
-      : `background:#f0f0f0;color:${color || '#333'};`;
-    return `<button data-d="${d.v == null ? '' : d.v}" class="pace-dtab" style="${style}border:none;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;min-width:28px;">${d.l}</button>`;
-  }).join('');
-  // 経過時間タブ: 「今」+ 1h刻みボタン (1〜20h)
-  const elapsedItems = [{m: null, l: '今'}];
-  for (let h = 1; h <= 20; h++) elapsedItems.push({m: h * 60, l: `${h}h`});
-  const elapsedTabs = elapsedItems.map(e => {
-    const active = (e.m == null && !isManual) || (e.m != null && manualElapsedMin === e.m);
-    const style = active ? 'background:var(--orange,#ff9800);color:#fff;font-weight:600;' : 'background:#f0f0f0;color:#333;';
-    return `<button data-em="${e.m == null ? '' : e.m}" class="pace-etab" style="${style}border:none;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;min-width:28px;">${e.l}</button>`;
-  }).join('');
-  const dowName = dowFilter == null ? '全曜日' : DOW_LABELS[dowFilter] + '曜のみ';
-  const targetTime = (() => {
-    const m = todayDepHour * 60 + elapsedMin;
-    const h = Math.floor(m / 60) % 24;
-    const mm = Math.round(m % 60);
-    return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
-  })();
-  const ctxLabel = `出庫から${elapsedH}時間経過(${targetTime}時点) ・ ${dowName}`;
-  // 期間レンジタブ
-  const rangeItems = [{r: 3, l: '3ヶ月'}, {r: 6, l: '6ヶ月'}, {r: 12, l: '12ヶ月'}, {r: 36, l: '全'}];
-  const rangeTabs = rangeItems.map(r => {
-    const active = r.r === monthsRange;
-    const style = active ? 'background:var(--primary);color:#fff;font-weight:600;' : 'background:#f0f0f0;color:#333;';
-    return `<button data-r="${r.r}" class="pace-rtab" style="${style}border:none;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;">${r.l}</button>`;
-  }).join('');
-  // 今日の出庫時刻タブ ("今"モード時のみ有効)
-  const todayHourTabs = [7, 8, 9].map(h => {
-    const active = h === todayDepHour;
-    const dim = isManual ? 'opacity:0.45;' : '';
-    const style = active
-      ? `background:var(--primary);color:#fff;font-weight:600;${dim}`
-      : `background:#f0f0f0;color:#333;${dim}`;
-    return `<button data-th="${h}" class="pace-thtab" style="${style}border:none;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;">${h}時</button>`;
-  }).join('');
-  let body;
-  if (elapsedMin <= 0 || ref.days === 0) {
-    body = `<p class="muted" style="font-size:11px;margin-top:8px;">該当データなし</p>`;
-  } else {
-    const pace = ref.avgSales / (elapsedMin / 60);
-    body = `
-      <div style="margin-top:8px;font-size:11px;color:var(--muted);">
-        ${ctxLabel} ・ 過去${ref.days}日
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px;">
-        <div style="background:#f5f5f5;padding:8px;border-radius:6px;">
-          <div style="font-size:10px;color:var(--muted);">平均累積営収</div>
-          <div style="font-size:16px;font-weight:700;color:#1b5e20;">${formatYen(ref.avgSales)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px;">最大 ${formatYen(ref.maxSales)}<br>最小 ${formatYen(ref.minSales)}</div>
-        </div>
-        <div style="background:#f5f5f5;padding:8px;border-radius:6px;">
-          <div style="font-size:10px;color:var(--muted);">平均休憩</div>
-          <div style="font-size:16px;font-weight:700;color:#555;">${formatMin(ref.avgRest)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px;">最大 ${formatMin(ref.maxRest)}<br>最小 ${formatMin(ref.minRest)}</div>
-        </div>
-        <div style="background:#f5f5f5;padding:8px;border-radius:6px;">
-          <div style="font-size:10px;color:var(--muted);">平均件数</div>
-          <div style="font-size:16px;font-weight:700;color:#555;">${ref.avgCount.toFixed(1)}件</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px;">最大 ${ref.maxCount}件<br>最小 ${ref.minCount}件</div>
-        </div>
-      </div>
-      <div class="kv" style="margin-top:6px;"><div>平均ペース</div><div><strong>${formatYen(pace)}/h</strong></div></div>
-    `;
-  }
-  card.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
-      <strong>出庫ペース参考</strong>
-      <span class="muted" style="font-size:10px;">7-9時出庫の平均</span>
-    </div>
-    <div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:6px;">${rangeTabs}</div>
-    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
-      <span class="muted" style="font-size:10px;">今日の出庫</span>${todayHourTabs}
-    </div>
-    <div style="display:flex;gap:3px;flex-wrap:wrap;">${dowTabs}</div>
-    <div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:6px;overflow-x:auto;">${elapsedTabs}</div>
-    ${body}
-  `;
-  card.querySelectorAll('.pace-rtab').forEach(b => {
-    b.onclick = () => { renderPaceCard(parseInt(b.dataset.r)); };
-  });
-  card.querySelectorAll('.pace-thtab').forEach(b => {
-    b.onclick = () => {
-      paceState.todayDepHour = parseInt(b.dataset.th);
-      paceState.manualElapsedMin = null; // 「今」モードに戻す
-      renderPaceBody();
-    };
-  });
-  card.querySelectorAll('.pace-dtab').forEach(b => {
-    b.onclick = () => {
-      paceState.dowFilter = b.dataset.d === '' ? null : parseInt(b.dataset.d);
-      renderPaceBody();
-    };
-  });
-  card.querySelectorAll('.pace-etab').forEach(b => {
-    b.onclick = () => {
-      paceState.manualElapsedMin = b.dataset.em === '' ? null : parseInt(b.dataset.em);
-      renderPaceBody();
-    };
-  });
-}
 
 function predictMonthly(drives, config, periodStart, periodEnd) {
   const monthly = calcMonthlySales(drives);
