@@ -368,28 +368,37 @@ export function depHourDistribution(drives) {
 
 // 曜日別の集計 (各日数/平均営収/平均件数/平均時間単価/平均乗務時間/ベスト日)
 // 曜日(0-6) × 時間(0-23) × 効率 マトリクス
-// 各セル: { sales, activeMin, count, hourly, days }
+// 各セル: { sales, activeMin, presentMin, count, days, hourlyA, hourlyB }
 //   sales: その時間バケットに発生した売上 (時間按分)
-//   activeMin: その時間バケットの実車合計分
+//   activeMin: 実車中だった合計分
+//   presentMin: 乗務中(出庫〜帰庫)だった合計分 (=空車+実車+休憩 全て含む)
 //   count: その時間バケット開始のtrip数
-//   days: その時間バケットに乗務していた日数 (シフト在籍数)
-//   hourly: sales / (activeMin/60)
+//   days: その時間バケットに乗務していた日数
+//   hourlyA: 実労働時間効率 sales / (presentMin/60)  ← A: 「その時間にいると1hあたりいくら稼げるか」
+//   hourlyB: 1日あたり売上 sales / days  ← B: 「その時間帯に1日平均いくら売上が立つか」
 export function hourlyDowEfficiency(drives) {
   const matrix = Array.from({length: 7}, () =>
-    Array.from({length: 24}, () => ({ sales: 0, activeMin: 0, count: 0, days: 0 }))
+    Array.from({length: 24}, () => ({ sales: 0, activeMin: 0, presentMin: 0, count: 0, days: 0 }))
   );
   for (const d of drives) {
     if (isSummaryOnly(d)) continue;
     if (!d.date) continue;
     const dow = dowOf(d.date);
-    // この日に乗務していた時間バケットをマーク
     if (d.departureTime && d.returnTime) {
       const dep = timeToMinutes(d.departureTime);
       let ret = timeToMinutes(d.returnTime);
       if (ret < dep) ret += 24 * 60;
+      // 各時間バケットに乗務範囲が重なる分数を集計
+      const startBucket = Math.floor(dep / 60);
+      const endBucket = Math.floor((ret - 1) / 60);
       const seen = new Set();
-      for (let m = dep; m < ret; m += 30) {
-        const h = Math.floor(m / 60) % 24;
+      for (let bi = startBucket; bi <= endBucket; bi++) {
+        const bucketStart = bi * 60;
+        const bucketEnd = bucketStart + 60;
+        const overlap = Math.max(0, Math.min(bucketEnd, ret) - Math.max(bucketStart, dep));
+        if (overlap <= 0) continue;
+        const h = bi % 24;
+        matrix[dow][h].presentMin += overlap;
         if (!seen.has(h)) { seen.add(h); matrix[dow][h].days++; }
       }
     }
@@ -415,7 +424,8 @@ export function hourlyDowEfficiency(drives) {
   for (let dow = 0; dow < 7; dow++) {
     for (let h = 0; h < 24; h++) {
       const c = matrix[dow][h];
-      c.hourly = c.activeMin > 0 ? c.sales / (c.activeMin / 60) : 0;
+      c.hourlyA = c.presentMin > 0 ? c.sales / (c.presentMin / 60) : 0;
+      c.hourlyB = c.days > 0 ? c.sales / c.days : 0;
     }
   }
   return matrix;
