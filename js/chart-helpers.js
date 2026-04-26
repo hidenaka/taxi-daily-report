@@ -530,6 +530,53 @@ export function nextBoardBreakdown(drives, dropoffArea, periodFilter = null, nei
   return { rows, includedAreas: Array.from(targetAreas), totalDropoffs, totalNextWithin30 };
 }
 
+// 全trip の平均単価 (全期間・キャンセル除外)
+export function avgTripSales(drives) {
+  let sum = 0, count = 0;
+  for (const d of drives) {
+    if (isSummaryOnly(d)) continue;
+    for (const t of (d.trips || [])) {
+      if (t.isCancel) continue;
+      sum += (t.amount || 0);
+      count++;
+    }
+  }
+  return count > 0 ? sum / count : 0;
+}
+
+// 目標時給(¥/h) = 手取り目標 ÷ 控除前必要売上比 ÷ 月乗務数 ÷ 平均乗務時間
+// config: { takeHomeTarget, takeHomeRate, responsibilityShifts }
+export function calcTargetHourly(drives, config) {
+  const target = config.takeHomeTarget || 500000;
+  const rate = config.takeHomeRate || 0.75;
+  const shifts = config.responsibilityShifts || 12;
+  const requiredSales = target / rate;
+  // 平均乗務時間 (過去データから算出。データなしなら18h想定)
+  const detailed = drives.filter(d => !isSummaryOnly(d) && d.departureTime && d.returnTime);
+  let totalMin = 0;
+  for (const d of detailed) totalMin += calcTimeBreakdown(d).totalMin;
+  const avgShiftHours = detailed.length > 0 ? (totalMin / detailed.length / 60) : 18;
+  return requiredSales / shifts / avgShiftHours;
+}
+
+// 推奨スコア化: 1行を評価
+// efficiency, avgSales を targetHourly, avgSalesBaseline に対する比率で評価
+// ratio30 = 取得率(0-1)
+// 戻り値: { score, mark, effRatio, salesRatio }
+//   mark: ◎(両方優秀) / ○(平均的) / △(片方が著しく低い) / ✕(両方低い=移動推奨)
+export function evaluateRecommendRow({ efficiency, avgSales, ratio30 }, targetHourly, avgSalesBaseline) {
+  const effRatio = targetHourly > 0 ? efficiency / targetHourly : 0;
+  const salesRatio = avgSalesBaseline > 0 ? avgSales / avgSalesBaseline : 0;
+  // スコア: 効率55% + 単価30% + 取得率15%
+  const score = effRatio * 0.55 + salesRatio * 0.30 + (ratio30 || 0) * 0.15;
+  let mark;
+  if (effRatio < 0.7 && salesRatio < 0.7) mark = '✕';
+  else if (effRatio < 0.7 || salesRatio < 0.65) mark = '△';
+  else if (effRatio >= 1.3 && salesRatio >= 1.1) mark = '◎';
+  else mark = '○';
+  return { score, mark, effRatio, salesRatio };
+}
+
 // 高期待値エリア × 時間帯
 // 各trip(乗車)を boardPlace × 時間帯(4区切り) で集計、平均単価高い順
 // 「待ちは長いが期待値高い」エリア(羽田空港等)を発見するための指標
