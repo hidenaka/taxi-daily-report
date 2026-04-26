@@ -427,7 +427,7 @@ function renderPaceBody() {
   let nowMin = now.getHours() * 60 + now.getMinutes();
   let autoElapsed = nowMin - todayDepHour * 60;
   if (autoElapsed < 0) autoElapsed += 24 * 60;
-  if (autoElapsed > 22 * 60) autoElapsed = 0;
+  if (autoElapsed > 20 * 60) autoElapsed = 0;
   const elapsedMin = manualElapsedMin != null ? manualElapsedMin : autoElapsed;
   const isManual = manualElapsedMin != null;
   const ref = calcPaceAtElapsed(allDrives, PACE_DEP_HOURS, elapsedMin, dowFilter);
@@ -441,9 +441,9 @@ function renderPaceBody() {
       : `background:#f0f0f0;color:${color || '#333'};`;
     return `<button data-d="${d.v == null ? '' : d.v}" class="pace-dtab" style="${style}border:none;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;min-width:28px;">${d.l}</button>`;
   }).join('');
-  // 経過時間タブ: 「今」+ 1h刻みボタン (1〜22h)
+  // 経過時間タブ: 「今」+ 1h刻みボタン (1〜20h)
   const elapsedItems = [{m: null, l: '今'}];
-  for (let h = 1; h <= 22; h++) elapsedItems.push({m: h * 60, l: `${h}h`});
+  for (let h = 1; h <= 20; h++) elapsedItems.push({m: h * 60, l: `${h}h`});
   const elapsedTabs = elapsedItems.map(e => {
     const active = (e.m == null && !isManual) || (e.m != null && manualElapsedMin === e.m);
     const style = active ? 'background:var(--orange,#ff9800);color:#fff;font-weight:600;' : 'background:#f0f0f0;color:#333;';
