@@ -63,7 +63,7 @@ if ('serviceWorker' in navigator) {
 import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js';
 import { getConfig, getDrivesForMonth, flushPendingQueue } from './js/storage.js';
 import { calcTotalPay, calcDailySales, calcMonthlySales } from './js/payroll.js';
-import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, PERIOD_LABELS, dowOf, DOW_LABELS, calcPaceAtElapsed, depHourDistribution } from './js/chart-helpers.js';
+import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, PERIOD_LABELS, dowOf, DOW_LABELS, calcPaceAtElapsed } from './js/chart-helpers.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('home');
 
@@ -387,8 +387,9 @@ async function renderTodayHint() {
   `;
 }
 
-// 出庫時刻別ペース参考カード
-let paceState = { dist: null, allDrives: null, depHour: null, dowFilter: null, manualElapsedMin: null, monthsRange: 12 };
+// 出庫ペース参考カード (午前出庫7-9時固定、経過時間で参照)
+const PACE_DEP_HOURS = [7, 8, 9];
+let paceState = { allDrives: null, dowFilter: null, manualElapsedMin: null, monthsRange: 12 };
 const paceCache = {};
 async function renderPaceCard(monthsRange = 12) {
   const card = document.getElementById('paceCard');
@@ -405,19 +406,11 @@ async function renderPaceCard(monthsRange = 12) {
     allDrives = all.flat();
     paceCache[monthsRange] = allDrives;
   }
-  const dist = depHourDistribution(allDrives);
-  const hours = Object.keys(dist).map(Number).sort((a,b) => a-b);
-  if (hours.length === 0) { card.style.display = 'none'; return; }
-  // デフォルト: 最頻出 (既存選択あれば維持)
-  let defaultHour = paceState.depHour;
-  if (defaultHour == null || !dist[defaultHour]) {
-    defaultHour = hours[0];
-    for (const h of hours) if (dist[h] > dist[defaultHour]) defaultHour = h;
-  }
-  const todayDow = paceState.dowFilter != null ? paceState.dowFilter : dowOf(todayIso());
+  const todayDow = paceState.dowFilter !== undefined && paceState.dowFilter !== null
+    ? paceState.dowFilter
+    : dowOf(todayIso());
   paceState = {
-    dist, allDrives,
-    depHour: defaultHour,
+    allDrives,
     dowFilter: todayDow,
     manualElapsedMin: paceState.manualElapsedMin,
     monthsRange
@@ -427,23 +420,17 @@ async function renderPaceCard(monthsRange = 12) {
 
 function renderPaceBody() {
   const card = document.getElementById('paceCard');
-  const { dist, allDrives, depHour, dowFilter, manualElapsedMin, monthsRange } = paceState;
-  const hours = Object.keys(dist).map(Number).sort((a,b) => a-b);
-  // 経過時間: 手動指定があればそれ、なければ現在時刻ベース
+  const { allDrives, dowFilter, manualElapsedMin, monthsRange } = paceState;
+  // 経過時間: 手動指定があればそれ、なければ現在時刻ベース (8時出庫想定)
   const now = new Date();
   let nowMin = now.getHours() * 60 + now.getMinutes();
-  let autoElapsed = nowMin - depHour * 60;
+  let autoElapsed = nowMin - 8 * 60;
   if (autoElapsed < 0) autoElapsed += 24 * 60;
-  if (autoElapsed > 18 * 60) autoElapsed = 0;
+  if (autoElapsed > 22 * 60) autoElapsed = 0;
   const elapsedMin = manualElapsedMin != null ? manualElapsedMin : autoElapsed;
   const isManual = manualElapsedMin != null;
-  const ref = calcPaceAtElapsed(allDrives, depHour, elapsedMin, dowFilter);
+  const ref = calcPaceAtElapsed(allDrives, PACE_DEP_HOURS, elapsedMin, dowFilter);
   const elapsedH = (elapsedMin / 60).toFixed(1);
-  const hourTabs = hours.map(h => {
-    const active = h === depHour;
-    const style = active ? 'background:var(--primary);color:#fff;font-weight:600;' : 'background:#f0f0f0;color:#333;';
-    return `<button data-h="${h}" class="pace-htab" style="${style}border:none;padding:5px 9px;border-radius:4px;font-size:12px;cursor:pointer;">${h}時(${dist[h]})</button>`;
-  }).join('');
   const dowItems = [{v: null, l: '全'}, ...DOW_LABELS.map((l,i) => ({v: i, l}))];
   const dowTabs = dowItems.map(d => {
     const active = d.v === dowFilter;
@@ -461,15 +448,8 @@ function renderPaceBody() {
     const style = active ? 'background:var(--orange,#ff9800);color:#fff;font-weight:600;' : 'background:#f0f0f0;color:#333;';
     return `<button data-em="${e.m == null ? '' : e.m}" class="pace-etab" style="${style}border:none;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;min-width:28px;">${e.l}</button>`;
   }).join('');
-  const nowStr = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
   const dowName = dowFilter == null ? '全曜日' : DOW_LABELS[dowFilter] + '曜のみ';
-  const targetTime = (() => {
-    let m = depHour * 60 + elapsedMin;
-    const h = Math.floor(m / 60) % 24;
-    const mm = m % 60;
-    return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
-  })();
-  const ctxLabel = isManual ? `${depHour}時出庫から${elapsedH}時間後 (${targetTime})` : `${depHour}時出庫 / 現在${nowStr} → 経過${elapsedH}時間`;
+  const ctxLabel = `出庫から${elapsedH}時間経過 ・ ${dowName}`;
   // 期間レンジタブ
   const rangeItems = [{r: 3, l: '3ヶ月'}, {r: 6, l: '6ヶ月'}, {r: 12, l: '12ヶ月'}, {r: 36, l: '全'}];
   const rangeTabs = rangeItems.map(r => {
@@ -479,12 +459,12 @@ function renderPaceBody() {
   }).join('');
   let body;
   if (elapsedMin <= 0 || ref.days === 0) {
-    body = `<p class="muted" style="font-size:11px;margin-top:8px;">${depHour}時出庫(${dowName})の経過参考値なし</p>`;
+    body = `<p class="muted" style="font-size:11px;margin-top:8px;">該当データなし</p>`;
   } else {
     const pace = ref.avgSales / (elapsedMin / 60);
     body = `
       <div style="margin-top:8px;font-size:11px;color:var(--muted);">
-        ${ctxLabel} ・ ${dowName} 過去${ref.days}日
+        ${ctxLabel} ・ 過去${ref.days}日
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
         <div style="background:#f5f5f5;padding:8px;border-radius:6px;">
@@ -504,19 +484,15 @@ function renderPaceBody() {
   card.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
       <strong>出庫ペース参考</strong>
-      <span class="muted" style="font-size:10px;">過去同時刻の平均</span>
+      <span class="muted" style="font-size:10px;">7-9時出庫の平均</span>
     </div>
     <div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:6px;">${rangeTabs}</div>
-    <div style="display:flex;gap:4px;flex-wrap:wrap;">${hourTabs}</div>
-    <div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:6px;">${dowTabs}</div>
+    <div style="display:flex;gap:3px;flex-wrap:wrap;">${dowTabs}</div>
     <div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:6px;overflow-x:auto;">${elapsedTabs}</div>
     ${body}
   `;
   card.querySelectorAll('.pace-rtab').forEach(b => {
     b.onclick = () => { renderPaceCard(parseInt(b.dataset.r)); };
-  });
-  card.querySelectorAll('.pace-htab').forEach(b => {
-    b.onclick = () => { paceState.depHour = parseInt(b.dataset.h); renderPaceBody(); };
   });
   card.querySelectorAll('.pace-dtab').forEach(b => {
     b.onclick = () => {

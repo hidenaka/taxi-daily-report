@@ -281,26 +281,30 @@ function minsFromDep(timeStr, depHour) {
 }
 
 // 出庫時刻別+任意の経過分単位での平均/最大/最小累積
+// depHour: 数値 or 数値配列(複数許容、例: [7,8,9])
 // dowFilter: null=全曜日, 0-6=その曜日のみ
 export function calcPaceAtElapsed(drives, depHour, elapsedMin, dowFilter = null) {
+  const allowedHours = Array.isArray(depHour) ? depHour : [depHour];
   const matched = drives.filter(d => {
     if (isSummaryOnly(d)) return false;
     if (!d.departureTime) return false;
-    if (parseInt(d.departureTime.split(':')[0]) !== depHour) return false;
+    const h = parseInt(d.departureTime.split(':')[0]);
+    if (!allowedHours.includes(h)) return false;
     if (dowFilter != null && dowOf(d.date) !== dowFilter) return false;
     return true;
   });
   if (matched.length === 0 || elapsedMin <= 0) return { days: 0, totalDays: matched.length, samples: [] };
   const samples = [];
   for (const d of matched) {
+    const dh = parseInt(d.departureTime.split(':')[0]);
     let s = 0, tm = 0, rm = 0, cnt = 0, active = false;
     for (const t of (d.trips || [])) {
       if (t.isCancel) continue;
-      const bm = minsFromDep(t.boardTime, depHour);
+      const bm = minsFromDep(t.boardTime, dh);
       if (bm == null || bm >= elapsedMin) continue;
       s += (t.amount || 0);
       cnt++;
-      const am = minsFromDep(t.alightTime, depHour);
+      const am = minsFromDep(t.alightTime, dh);
       if (am != null) {
         let dur = am - bm;
         if (dur < 0) dur += 24 * 60;
@@ -310,9 +314,9 @@ export function calcPaceAtElapsed(drives, depHour, elapsedMin, dowFilter = null)
       active = true;
     }
     for (const r of (d.rests || [])) {
-      const sm = minsFromDep(r.startTime, depHour);
+      const sm = minsFromDep(r.startTime, dh);
       if (sm == null || sm >= elapsedMin) continue;
-      const em = minsFromDep(r.endTime, depHour);
+      const em = minsFromDep(r.endTime, dh);
       if (em != null) {
         let dur = em - sm;
         if (dur < 0) dur += 24 * 60;
