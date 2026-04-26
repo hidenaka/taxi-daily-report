@@ -77,9 +77,15 @@ if ('serviceWorker' in navigator) {
         <input type="time" id="recTime" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:12px;">
       </div>
     </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer;">
+        <input type="checkbox" id="recExpand" checked> 近隣エリアも含める
+      </label>
+      <span class="muted" style="font-size:10px;" id="recNeighborInfo"></span>
+    </div>
     <button id="recSearch" style="width:100%;background:var(--primary);color:#fff;border:none;padding:8px;border-radius:4px;font-size:13px;font-weight:600;cursor:pointer;">推奨を表示</button>
     <div id="recBody" style="margin-top:10px;"></div>
-    <p class="muted" style="font-size:10px;margin-top:6px;">過去同条件(降車エリア+時間帯)で実際に取れた次のtripを集計。効率順に表示。GPS連動は今後対応予定</p>
+    <p class="muted" style="font-size:10px;margin-top:6px;">過去同条件で実際に取れた次のtripを集計、効率順に表示。「近隣」=過去データから自動学習(降車後25分以内に乗車したペアが2回以上)。GPS連動は今後対応予定</p>
   </section>
 
   <section class="card" id="hourEffCard">
@@ -112,13 +118,14 @@ if ('serviceWorker' in navigator) {
 <script type="module">
 import { renderBottomNav, formatYen, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod } from './js/app.js';
 import { getDrivesForMonth } from './js/storage.js';
-import { hourlyDowEfficiency, dropoffAreaAnalysis, nextBoardBreakdown, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin } from './js/chart-helpers.js';
+import { hourlyDowEfficiency, dropoffAreaAnalysis, nextBoardBreakdown, buildNeighborMap, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin } from './js/chart-helpers.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('support');
 
 let monthsRange = 6;
 let allDrives = [];
 let areaSort = 'dropoffs';
+let neighborMap = {};
 
 document.querySelectorAll('.range-tabs button').forEach(b => {
   b.onclick = () => {
@@ -149,7 +156,9 @@ async function load() {
   const results = await Promise.all(periods.map(ym => getDrivesForMonth(ym)));
   allDrives = results.flat();
   document.getElementById('rangeInfo').textContent = `${formatBillingPeriod(periods[0])} 〜 ${formatBillingPeriod(periods[periods.length-1])} (${allDrives.length}乗務)`;
+  neighborMap = buildNeighborMap(allDrives);
   populateRecommendArea();
+  updateNeighborInfo();
   renderHourEff();
   renderArea();
 }
@@ -169,22 +178,38 @@ function populateRecommendArea() {
   }
 }
 
+function updateNeighborInfo() {
+  const area = document.getElementById('recArea').value;
+  const info = document.getElementById('recNeighborInfo');
+  const expand = document.getElementById('recExpand').checked;
+  if (!area || !expand) { info.textContent = ''; return; }
+  const ns = neighborMap[area];
+  if (!ns || ns.size === 0) { info.textContent = '(近隣なし)'; return; }
+  const list = Array.from(ns).slice(0, 5).join(', ');
+  info.textContent = `近隣${ns.size}: ${list}${ns.size > 5 ? '…' : ''}`;
+}
+document.getElementById('recArea').addEventListener('change', updateNeighborInfo);
+document.getElementById('recExpand').addEventListener('change', updateNeighborInfo);
+
 document.getElementById('recSearch').onclick = () => {
   const area = document.getElementById('recArea').value;
   const time = document.getElementById('recTime').value;
+  const expand = document.getElementById('recExpand').checked;
   if (!area || !time) return;
   const period = getPeriodKey(time);
-  const results = nextBoardBreakdown(allDrives, area, period);
-  // 件数2以上のみ表示 (信頼性)
-  const filtered = results.filter(r => r.count >= 2);
+  const result = nextBoardBreakdown(allDrives, area, period, expand ? neighborMap : null);
+  const filtered = result.rows.filter(r => r.count >= 2);
   const body = document.getElementById('recBody');
+  const includedLabel = result.includedAreas.length > 1
+    ? `(近隣含む${result.includedAreas.length}エリアから${result.totalDropoffs}件)`
+    : `(${result.totalDropoffs}件)`;
   if (filtered.length === 0) {
-    body.innerHTML = `<p class="muted" style="font-size:11px;">該当データなし(${area}・${PERIOD_LABELS[period]}で2件以上の次乗車記録なし)</p>`;
+    body.innerHTML = `<p class="muted" style="font-size:11px;">該当データなし${includedLabel}。近隣を含めるか期間を広げてください</p>`;
     return;
   }
   const top = filtered.slice(0, 10);
   const maxEff = Math.max(...top.map(r => r.efficiency), 1);
-  let html = `<div class="muted" style="font-size:11px;margin-bottom:6px;"><strong>${area}</strong> で <strong>${PERIOD_LABELS[period]}</strong> に降ろした後、次の乗車エリア別 効率TOP${top.length}</div>`;
+  let html = `<div class="muted" style="font-size:11px;margin-bottom:6px;"><strong>${area}</strong>${expand && result.includedAreas.length > 1 ? '+近隣' : ''} で <strong>${PERIOD_LABELS[period]}</strong> に降ろした後の次乗車TOP${top.length} ${includedLabel}</div>`;
   html += '<div style="overflow-x:auto;"><table class="area-table"><thead><tr>'
     + '<th class="l">次乗車エリア</th><th>件数</th><th>待ち</th><th>単価</th><th>時間効率¥/h</th>'
     + '</tr></thead><tbody>';

@@ -428,18 +428,58 @@ export function extractArea(place) {
   return place.replace(/\d+$/, '').trim();
 }
 
-// 特定の降車エリアで降ろした後、次にどのエリアで乗車した時の効率が良かったか
-// periodFilter: null=全時間帯, 'morning'/'noon'/'evening'/'night' のいずれか (alightTime基準)
-// 戻り値: [{ area, count, avgWait, avgSales, avgDur, efficiency }] (効率降順)
-export function nextBoardBreakdown(drives, dropoffArea, periodFilter = null) {
-  const groups = {};
+// 過去データから近隣エリアを自動推定
+// 「降車→短時間(maxWaitMin以内)で次乗車」のペアが minPairs 件以上発生したエリア同士を近隣と判定
+// 戻り値: { area: Set<neighborArea> }
+export function buildNeighborMap(drives, { minPairs = 2, maxWaitMin = 25 } = {}) {
+  const pairs = {};
   for (const d of drives) {
     if (isSummaryOnly(d)) continue;
     const trips = (d.trips || []).filter(t => !t.isCancel);
     for (let i = 0; i < trips.length - 1; i++) {
       const t = trips[i];
-      if (extractArea(t.alightPlace) !== dropoffArea) continue;
+      const next = trips[i + 1];
+      const a = extractArea(t.alightPlace);
+      const b = extractArea(next.boardPlace);
+      if (!a || !b || a === b) continue;
+      let wait = timeToMinutes(next.boardTime) - timeToMinutes(t.alightTime);
+      if (wait < 0) wait += 24 * 60;
+      if (wait > maxWaitMin) continue;
+      const key = a < b ? `${a}|${b}` : `${b}|${a}`;
+      pairs[key] = (pairs[key] || 0) + 1;
+    }
+  }
+  const neighbors = {};
+  for (const [key, count] of Object.entries(pairs)) {
+    if (count < minPairs) continue;
+    const [a, b] = key.split('|');
+    if (!neighbors[a]) neighbors[a] = new Set();
+    if (!neighbors[b]) neighbors[b] = new Set();
+    neighbors[a].add(b);
+    neighbors[b].add(a);
+  }
+  return neighbors;
+}
+
+// 特定の降車エリアで降ろした後、次にどのエリアで乗車した時の効率が良かったか
+// periodFilter: null=全時間帯, 'morning'/'noon'/'evening'/'night' のいずれか (alightTime基準)
+// neighbors: buildNeighborMap の結果。指定すれば降車エリアの近隣も対象に含める
+// 戻り値: { rows: [...効率降順], includedAreas: [近隣含めて集計対象としたエリア] }
+export function nextBoardBreakdown(drives, dropoffArea, periodFilter = null, neighbors = null) {
+  const targetAreas = new Set([dropoffArea]);
+  if (neighbors && neighbors[dropoffArea]) {
+    for (const n of neighbors[dropoffArea]) targetAreas.add(n);
+  }
+  const groups = {};
+  let totalDropoffs = 0;
+  for (const d of drives) {
+    if (isSummaryOnly(d)) continue;
+    const trips = (d.trips || []).filter(t => !t.isCancel);
+    for (let i = 0; i < trips.length - 1; i++) {
+      const t = trips[i];
+      if (!targetAreas.has(extractArea(t.alightPlace))) continue;
       if (periodFilter && getPeriodKey(t.alightTime) !== periodFilter) continue;
+      totalDropoffs++;
       const next = trips[i + 1];
       const nextArea = extractArea(next.boardPlace);
       if (!nextArea) continue;
@@ -455,13 +495,14 @@ export function nextBoardBreakdown(drives, dropoffArea, periodFilter = null) {
       groups[nextArea].totalDur += nd;
     }
   }
-  return Object.entries(groups).map(([area, g]) => {
+  const rows = Object.entries(groups).map(([area, g]) => {
     const avgWait = g.totalWait / g.count;
     const avgSales = g.totalSales / g.count;
     const avgDur = g.totalDur / g.count;
     const efficiency = (avgWait + avgDur) > 0 ? avgSales / (avgWait + avgDur) * 60 : 0;
     return { area, count: g.count, avgWait, avgSales, avgDur, efficiency };
   }).sort((a, b) => b.efficiency - a.efficiency);
+  return { rows, includedAreas: Array.from(targetAreas), totalDropoffs };
 }
 
 // 降車エリア別 効率分析
