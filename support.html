@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>営業サポート — タクシー日報</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+.range-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+.range-tabs button { flex: 1; background: #f0f0f0; color: #333; border: none; padding: 8px; border-radius: 4px; font-size: 12px; cursor: pointer; }
+.range-tabs button.active { background: var(--primary); color: #fff; font-weight: 600; }
+
+.heatgrid { display: grid; grid-template-columns: 24px repeat(24, 1fr); gap: 1px; font-size: 9px; }
+.heatgrid .hh { text-align: center; color: var(--muted); font-size: 8px; padding: 2px 0; }
+.heatgrid .dlbl { text-align: center; color: var(--muted); font-size: 9px; padding: 4px 0; font-weight: 600; }
+.heatgrid .cell { aspect-ratio: 1; border-radius: 2px; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #fff; cursor: pointer; min-height: 22px; font-weight: 600; }
+.heatgrid .cell.empty { background: #eceff1; color: #b0bec5; }
+.heatgrid .cell.low-sample { opacity: 0.4; }
+
+.area-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.area-table th, .area-table td { padding: 5px 4px; border-bottom: 1px solid #eee; text-align: right; }
+.area-table th { color: var(--muted); font-size: 10px; font-weight: 600; cursor: pointer; }
+.area-table td.l, .area-table th.l { text-align: left; }
+.area-table .bar { position: relative; height: 16px; background: #f0f0f0; border-radius: 2px; overflow: hidden; }
+.area-table .bar .fill { position: absolute; left: 0; top: 0; height: 100%; background: var(--green); }
+.area-table .bar .v { position: relative; line-height: 16px; font-size: 9px; padding-right: 3px; text-align: right; font-weight: 600; }
+
+.sort-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+.sort-tabs button { background: #f0f0f0; color: #333; border: none; padding: 5px 10px; border-radius: 4px; font-size: 11px; cursor: pointer; }
+.sort-tabs button.active { background: var(--primary); color: #fff; font-weight: 600; }
+
+.section-h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.section-h .desc { font-size: 10px; color: var(--muted); }
+.detail-tip { background: #fff8e1; border: 1px solid #ffd54f; border-radius: 4px; padding: 8px; margin-top: 8px; font-size: 12px; line-height: 1.5; display:none; }
+.detail-tip.show { display: block; }
+.loading { padding: 30px; text-align: center; color: var(--muted); }
+</style>
+</head>
+<body>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
+}
+</script>
+<main style="padding:14px;">
+  <h1 style="margin-top:0;">営業サポート</h1>
+  <p class="muted" style="font-size:11px;margin-top:-6px;">過去データから「効率の悪い時間/降ろし方」を可視化して営業スタイルを最適化</p>
+
+  <section class="card">
+    <div class="section-h">
+      <strong>分析期間</strong>
+      <span class="desc">過去N月度のデータで分析</span>
+    </div>
+    <div class="range-tabs">
+      <button data-months="3">3ヶ月</button>
+      <button data-months="6" class="active">6ヶ月</button>
+      <button data-months="12">12ヶ月</button>
+    </div>
+    <div id="rangeInfo" class="muted" style="font-size:11px;"></div>
+  </section>
+
+  <section class="card" id="hourEffCard">
+    <div class="section-h">
+      <strong>曜日 × 時間 効率(時給ベース)</strong>
+      <span class="desc">何時が稼げて何時が時間ムダか</span>
+    </div>
+    <div id="hourEffBody"></div>
+    <div class="detail-tip" id="hourEffTip"></div>
+    <p class="muted" style="font-size:10px;margin-top:6px;">セル=その時間1hあたりの売上(実車中分で割る)。タップで詳細。サンプル少(&lt;3件)はグレー</p>
+  </section>
+
+  <section class="card" id="areaCard">
+    <div class="section-h">
+      <strong>降車エリア別 効率(区+町名)</strong>
+      <span class="desc">降ろした後どう動く</span>
+    </div>
+    <div class="sort-tabs" id="areaSortTabs">
+      <button data-s="dropoffs" class="active">件数順</button>
+      <button data-s="efficiency">時間効率順</button>
+      <button data-s="avgNextSales">単価順</button>
+      <button data-s="avgWait">待ち短い順</button>
+    </div>
+    <div id="areaBody"></div>
+    <div class="detail-tip" id="areaTip"></div>
+    <p class="muted" style="font-size:10px;margin-top:6px;">「単価」=降ろした次のtripの平均売上(=1件いくら稼げたか)。「時間効率」=次売上÷(待ち+次実車時間) ¥/h(=単位時間で稼げたか)。両方高いエリアが理想。最低5件以上のみ</p>
+  </section>
+</main>
+<div id="navHost"></div>
+<script type="module">
+import { renderBottomNav, formatYen, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod } from './js/app.js';
+import { getDrivesForMonth } from './js/storage.js';
+import { hourlyDowEfficiency, dropoffAreaAnalysis, DOW_LABELS, formatMin } from './js/chart-helpers.js';
+
+document.getElementById('navHost').innerHTML = renderBottomNav('support');
+
+let monthsRange = 6;
+let allDrives = [];
+let areaSort = 'dropoffs';
+
+document.querySelectorAll('.range-tabs button').forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll('.range-tabs button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    monthsRange = parseInt(b.dataset.months);
+    load();
+  };
+});
+document.querySelectorAll('#areaSortTabs button').forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll('#areaSortTabs button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    areaSort = b.dataset.s;
+    renderArea();
+  };
+});
+
+async function load() {
+  if (!localStorage.getItem('github_token') || !localStorage.getItem('github_data_repo')) {
+    document.querySelector('main').innerHTML = '<div class="loading">設定からGitHubトークンを設定してください</div>';
+    return;
+  }
+  document.getElementById('rangeInfo').textContent = '読み込み中…';
+  const current = currentBillingPeriod();
+  const periods = [];
+  for (let i = monthsRange - 1; i >= 0; i--) periods.push(shiftBillingPeriod(current, -i));
+  const results = await Promise.all(periods.map(ym => getDrivesForMonth(ym)));
+  allDrives = results.flat();
+  document.getElementById('rangeInfo').textContent = `${formatBillingPeriod(periods[0])} 〜 ${formatBillingPeriod(periods[periods.length-1])} (${allDrives.length}乗務)`;
+  renderHourEff();
+  renderArea();
+}
+
+function renderHourEff() {
+  const matrix = hourlyDowEfficiency(allDrives);
+  // 全セルの hourly 値で max を取る (色スケール)
+  let max = 0;
+  for (let dow = 0; dow < 7; dow++) for (let h = 0; h < 24; h++) {
+    if (matrix[dow][h].count >= 3 && matrix[dow][h].hourly > max) max = matrix[dow][h].hourly;
+  }
+  if (max === 0) max = 1;
+  let html = '<div style="overflow-x:auto;"><div class="heatgrid" style="min-width:480px;">';
+  html += '<div></div>';
+  for (let h = 0; h < 24; h++) html += `<div class="hh">${h}</div>`;
+  for (let dow = 0; dow < 7; dow++) {
+    const dowColor = dow === 0 ? '#d32f2f' : dow === 6 ? '#1976d2' : '#333';
+    html += `<div class="dlbl" style="color:${dowColor};">${DOW_LABELS[dow]}</div>`;
+    for (let h = 0; h < 24; h++) {
+      const c = matrix[dow][h];
+      if (c.count === 0) {
+        html += `<div class="cell empty" data-dow="${dow}" data-h="${h}">·</div>`;
+        continue;
+      }
+      const ratio = Math.min(1, c.hourly / max);
+      // 色: 赤(低) → 黄(中) → 緑(高)
+      let r, g, b;
+      if (ratio < 0.5) {
+        const t = ratio * 2;
+        r = 244; g = Math.round(67 + t * (193 - 67)); b = Math.round(54 + t * (7 - 54));
+      } else {
+        const t = (ratio - 0.5) * 2;
+        r = Math.round(244 - t * (244 - 76)); g = Math.round(193 + t * (175 - 193)); b = Math.round(7 + t * (80 - 7));
+      }
+      const lowSample = c.count < 3 ? ' low-sample' : '';
+      const display = c.hourly >= 1000 ? Math.round(c.hourly / 100) / 10 + 'k' : Math.round(c.hourly);
+      html += `<div class="cell${lowSample}" style="background:rgb(${r},${g},${b});" data-dow="${dow}" data-h="${h}">${display}</div>`;
+    }
+  }
+  html += '</div></div>';
+  document.getElementById('hourEffBody').innerHTML = html;
+  document.querySelectorAll('#hourEffBody .cell').forEach(el => {
+    el.onclick = () => {
+      const dow = parseInt(el.dataset.dow);
+      const h = parseInt(el.dataset.h);
+      const c = matrix[dow][h];
+      const tip = document.getElementById('hourEffTip');
+      tip.classList.add('show');
+      if (c.count === 0) {
+        tip.innerHTML = `<strong>${DOW_LABELS[dow]} ${h}時</strong>: データなし`;
+        return;
+      }
+      tip.innerHTML = `
+        <strong>${DOW_LABELS[dow]} ${h}時台</strong> (過去${c.days}日この時間に乗務)<br>
+        時給換算 <strong>${formatYen(c.hourly)}/h</strong> ・ trip ${c.count}件 ・ 売上計 ${formatYen(c.sales)} ・ 実車計 ${formatMin(c.activeMin)}
+      `;
+    };
+  });
+}
+
+function renderArea() {
+  const all = dropoffAreaAnalysis(allDrives);
+  // 5件未満は除外
+  let rows = all.filter(a => a.dropoffs >= 5);
+  // ソート
+  rows.sort((a, b) => {
+    if (areaSort === 'dropoffs') return b.dropoffs - a.dropoffs;
+    if (areaSort === 'efficiency') return (b.efficiency || 0) - (a.efficiency || 0);
+    if (areaSort === 'avgWait') return (a.avgWait ?? 9999) - (b.avgWait ?? 9999);
+    if (areaSort === 'avgNextSales') return (b.avgNextSales || 0) - (a.avgNextSales || 0);
+    return 0;
+  });
+  const top = rows.slice(0, 30);
+  const maxEff = Math.max(...top.map(r => r.efficiency || 0), 1);
+  const maxSales = Math.max(...top.map(r => r.avgNextSales || 0), 1);
+  let html = '<div style="overflow-x:auto;"><table class="area-table"><thead><tr>'
+    + '<th class="l">降車エリア</th><th>件数</th><th>待ち</th><th>単価</th><th>時間効率¥/h</th>'
+    + '</tr></thead><tbody>';
+  for (const r of top) {
+    const effPct = r.efficiency ? (r.efficiency / maxEff * 100) : 0;
+    const salesPct = r.avgNextSales ? (r.avgNextSales / maxSales * 100) : 0;
+    html += `<tr data-area="${r.area}" style="cursor:pointer;">
+      <td class="l">${r.area}</td>
+      <td>${r.dropoffs}</td>
+      <td>${r.avgWait != null ? formatMin(r.avgWait) : '—'}</td>
+      <td><div class="bar"><div class="fill" style="width:${salesPct}%;background:#1976d2;"></div><div class="v">${r.avgNextSales != null ? formatYen(r.avgNextSales) : '—'}</div></div></td>
+      <td><div class="bar"><div class="fill" style="width:${effPct}%;"></div><div class="v">${r.efficiency != null ? formatYen(r.efficiency) : '—'}</div></div></td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  if (top.length === 0) html = '<p class="muted" style="font-size:11px;">5件以上のエリアがありません</p>';
+  document.getElementById('areaBody').innerHTML = html;
+  document.querySelectorAll('#areaBody tr[data-area]').forEach(tr => {
+    tr.onclick = () => {
+      const area = tr.dataset.area;
+      const r = all.find(x => x.area === area);
+      if (!r) return;
+      const tip = document.getElementById('areaTip');
+      tip.classList.add('show');
+      const idleRate = (r.avgWait != null && r.avgNextDur != null && (r.avgWait + r.avgNextDur) > 0)
+        ? r.avgWait / (r.avgWait + r.avgNextDur) * 100
+        : null;
+      // 単価良し悪し / 時間効率良し悪し の組み合わせで判断
+      const salesGood = r.avgNextSales != null && r.avgNextSales >= 2500;
+      const effGood = r.efficiency != null && r.efficiency >= 4500;
+      let judgement;
+      if (salesGood && effGood) judgement = '◎ 単価・時間効率とも良 → 留まる価値あり';
+      else if (effGood && !salesGood) judgement = '◯ 時間効率は良いが単価は低め(短距離が多い)';
+      else if (salesGood && !effGood) judgement = '△ 単価高いが時間効率悪 → 待ちが長すぎる';
+      else judgement = '✕ 単価・効率とも悪 → 別エリアへ移動推奨';
+      tip.innerHTML = `
+        <strong>${area}</strong> で降ろした後 (${r.dropoffs}件)<br>
+        単価 <strong>${r.avgNextSales != null ? formatYen(r.avgNextSales) : '—'}</strong> ・ 時間効率 <strong>${r.efficiency != null ? formatYen(r.efficiency) + '/h' : '—'}</strong><br>
+        <span style="font-size:11px;color:var(--muted);">待ち ${r.avgWait != null ? formatMin(r.avgWait) : '—'} + 実車 ${r.avgNextDur != null ? formatMin(r.avgNextDur) : '—'} (空車比率${idleRate != null ? idleRate.toFixed(0) + '%' : '—'})</span><br>
+        <span style="color:#f57f17;">${judgement}</span>
+      `;
+    };
+  });
+}
+
+load();
+</script>
+</body>
+</html>

@@ -367,6 +367,125 @@ export function depHourDistribution(drives) {
 }
 
 // 曜日別の集計 (各日数/平均営収/平均件数/平均時間単価/平均乗務時間/ベスト日)
+// 曜日(0-6) × 時間(0-23) × 効率 マトリクス
+// 各セル: { sales, activeMin, count, hourly, days }
+//   sales: その時間バケットに発生した売上 (時間按分)
+//   activeMin: その時間バケットの実車合計分
+//   count: その時間バケット開始のtrip数
+//   days: その時間バケットに乗務していた日数 (シフト在籍数)
+//   hourly: sales / (activeMin/60)
+export function hourlyDowEfficiency(drives) {
+  const matrix = Array.from({length: 7}, () =>
+    Array.from({length: 24}, () => ({ sales: 0, activeMin: 0, count: 0, days: 0 }))
+  );
+  for (const d of drives) {
+    if (isSummaryOnly(d)) continue;
+    if (!d.date) continue;
+    const dow = dowOf(d.date);
+    // この日に乗務していた時間バケットをマーク
+    if (d.departureTime && d.returnTime) {
+      const dep = timeToMinutes(d.departureTime);
+      let ret = timeToMinutes(d.returnTime);
+      if (ret < dep) ret += 24 * 60;
+      const seen = new Set();
+      for (let m = dep; m < ret; m += 30) {
+        const h = Math.floor(m / 60) % 24;
+        if (!seen.has(h)) { seen.add(h); matrix[dow][h].days++; }
+      }
+    }
+    for (const t of (d.trips || [])) {
+      if (t.isCancel) continue;
+      const start = timeToMinutes(t.boardTime);
+      let end = timeToMinutes(t.alightTime);
+      if (end < start) end += 24 * 60;
+      const dur = Math.max(1, end - start);
+      let cur = start;
+      while (cur < end) {
+        const h = Math.floor(cur / 60) % 24;
+        const next = Math.min(end, (Math.floor(cur / 60) + 1) * 60);
+        const slice = next - cur;
+        matrix[dow][h].activeMin += slice;
+        matrix[dow][h].sales += (t.amount || 0) * (slice / dur);
+        cur = next;
+      }
+      const bh = Math.floor(start / 60) % 24;
+      matrix[dow][bh].count++;
+    }
+  }
+  for (let dow = 0; dow < 7; dow++) {
+    for (let h = 0; h < 24; h++) {
+      const c = matrix[dow][h];
+      c.hourly = c.activeMin > 0 ? c.sales / (c.activeMin / 60) : 0;
+    }
+  }
+  return matrix;
+}
+
+// 場所文字列から区+町名 (丁目番号を除いた地名) を抽出
+// 例: "大田区羽田空港3" → "大田区羽田空港", "新宿区霞ヶ丘町" → "新宿区霞ヶ丘町"
+export function extractArea(place) {
+  if (!place) return '';
+  return place.replace(/\d+$/, '').trim();
+}
+
+// 降車エリア別 効率分析
+// 各trip 直後 (同日内) のwait時間と次trip売上を集計
+// 「次の乗車エリア」分布も記録 → 降ろしたあとどこで次が取れる傾向かが分かる
+export function dropoffAreaAnalysis(drives) {
+  const areas = {};
+  for (const d of drives) {
+    if (isSummaryOnly(d)) continue;
+    const trips = (d.trips || []).filter(t => !t.isCancel);
+    for (let i = 0; i < trips.length; i++) {
+      const t = trips[i];
+      const area = extractArea(t.alightPlace);
+      if (!area) continue;
+      if (!areas[area]) areas[area] = {
+        dropoffs: 0,
+        totalWaitMin: 0, waitCount: 0,
+        totalNextSales: 0, nextCount: 0,
+        totalNextDur: 0,
+        nextBoards: {},
+      };
+      const a = areas[area];
+      a.dropoffs++;
+      const next = trips[i + 1];
+      if (next) {
+        let wait = timeToMinutes(next.boardTime) - timeToMinutes(t.alightTime);
+        if (wait < 0) wait += 24 * 60;
+        if (wait < 4 * 60) {
+          a.totalWaitMin += wait;
+          a.waitCount++;
+        }
+        a.totalNextSales += (next.amount || 0);
+        a.nextCount++;
+        let nd = timeToMinutes(next.alightTime) - timeToMinutes(next.boardTime);
+        if (nd < 0) nd += 24 * 60;
+        a.totalNextDur += nd;
+        const nextBoardArea = extractArea(next.boardPlace);
+        if (nextBoardArea) a.nextBoards[nextBoardArea] = (a.nextBoards[nextBoardArea] || 0) + 1;
+      }
+    }
+  }
+  const result = [];
+  for (const [area, v] of Object.entries(areas)) {
+    const avgWait = v.waitCount > 0 ? v.totalWaitMin / v.waitCount : null;
+    const avgNextSales = v.nextCount > 0 ? v.totalNextSales / v.nextCount : null;
+    const avgNextDur = v.nextCount > 0 ? v.totalNextDur / v.nextCount : null;
+    let efficiency = null;
+    if (avgWait != null && avgNextSales != null && avgNextDur != null) {
+      const denom = avgWait + avgNextDur;
+      if (denom > 0) efficiency = avgNextSales / denom * 60;
+    }
+    const topNextBoards = Object.entries(v.nextBoards)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([area, count]) => ({ area, count, pct: count / v.nextCount }));
+    result.push({ area, dropoffs: v.dropoffs, avgWait, avgNextSales, avgNextDur, efficiency, nextCount: v.nextCount, topNextBoards });
+  }
+  return result;
+}
+
 export function dowAggregation(drives) {
   const empty = () => ({ days: 0, totalSales: 0, totalCount: 0, totalTripMin: 0, totalShiftMin: 0, bestSales: 0, bestDate: null });
   const result = Array.from({length: 7}, empty);
