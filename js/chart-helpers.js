@@ -280,65 +280,65 @@ function minsFromDep(timeStr, depHour) {
   return mins - depHour * 60;
 }
 
-// 出庫時刻別ペース参考: 経過時間(1h刻み)ごとの平均累積営収/実車/休憩
-export function calcPaceReference(drives, depHour, intervalH = 1, maxH = 14) {
+// 出庫時刻別+任意の経過分単位での平均/最大/最小累積
+export function calcPaceAtElapsed(drives, depHour, elapsedMin) {
   const matched = drives.filter(d => {
     if (isSummaryOnly(d)) return false;
     if (!d.departureTime) return false;
     return parseInt(d.departureTime.split(':')[0]) === depHour;
   });
-  if (matched.length === 0) return { days: 0, points: [] };
-  const points = [];
-  for (let off = intervalH; off <= maxH; off += intervalH) {
-    const cutMin = off * 60;
-    let sumSales = 0, sumTrip = 0, sumRest = 0, sumKm = 0, daysActive = 0, sumCount = 0;
-    for (const d of matched) {
-      let s = 0, tm = 0, rm = 0, km = 0, cnt = 0, active = false;
-      for (const t of (d.trips || [])) {
-        if (t.isCancel) continue;
-        const bm = minsFromDep(t.boardTime, depHour);
-        if (bm == null || bm >= cutMin) continue;
-        s += (t.amount || 0);
-        cnt++;
-        const am = minsFromDep(t.alightTime, depHour);
-        if (am != null) {
-          let dur = am - bm;
-          if (dur < 0) dur += 24 * 60;
-          if (bm + dur > cutMin) dur = cutMin - bm;
-          tm += Math.max(0, dur);
-        }
-        km += (t.km || 0);
-        active = true;
+  if (matched.length === 0 || elapsedMin <= 0) return { days: 0, totalDays: matched.length, samples: [] };
+  const samples = [];
+  for (const d of matched) {
+    let s = 0, tm = 0, rm = 0, cnt = 0, active = false;
+    for (const t of (d.trips || [])) {
+      if (t.isCancel) continue;
+      const bm = minsFromDep(t.boardTime, depHour);
+      if (bm == null || bm >= elapsedMin) continue;
+      s += (t.amount || 0);
+      cnt++;
+      const am = minsFromDep(t.alightTime, depHour);
+      if (am != null) {
+        let dur = am - bm;
+        if (dur < 0) dur += 24 * 60;
+        if (bm + dur > elapsedMin) dur = elapsedMin - bm;
+        tm += Math.max(0, dur);
       }
-      for (const r of (d.rests || [])) {
-        const sm = minsFromDep(r.startTime, depHour);
-        if (sm == null || sm >= cutMin) continue;
-        const em = minsFromDep(r.endTime, depHour);
-        if (em != null) {
-          let dur = em - sm;
-          if (dur < 0) dur += 24 * 60;
-          if (sm + dur > cutMin) dur = cutMin - sm;
-          rm += Math.max(0, dur);
-        }
-        active = true;
-      }
-      if (active) {
-        sumSales += s; sumTrip += tm; sumRest += rm; sumKm += km; sumCount += cnt;
-        daysActive++;
-      }
+      active = true;
     }
-    if (daysActive === 0) continue;
-    points.push({
-      hoursAfterDep: off,
-      avgSales: sumSales / daysActive,
-      avgTripMin: sumTrip / daysActive,
-      avgRestMin: sumRest / daysActive,
-      avgKm: sumKm / daysActive,
-      avgCount: sumCount / daysActive,
-      days: daysActive
-    });
+    for (const r of (d.rests || [])) {
+      const sm = minsFromDep(r.startTime, depHour);
+      if (sm == null || sm >= elapsedMin) continue;
+      const em = minsFromDep(r.endTime, depHour);
+      if (em != null) {
+        let dur = em - sm;
+        if (dur < 0) dur += 24 * 60;
+        if (sm + dur > elapsedMin) dur = elapsedMin - sm;
+        rm += Math.max(0, dur);
+      }
+      active = true;
+    }
+    if (active) samples.push({ date: d.date, sales: s, count: cnt, tripMin: tm, restMin: rm });
   }
-  return { days: matched.length, points };
+  if (samples.length === 0) return { days: 0, totalDays: matched.length, samples };
+  const sumSales = samples.reduce((s,v) => s + v.sales, 0);
+  const sumRest = samples.reduce((s,v) => s + v.restMin, 0);
+  const sumTrip = samples.reduce((s,v) => s + v.tripMin, 0);
+  const sumCount = samples.reduce((s,v) => s + v.count, 0);
+  const maxSamp = samples.reduce((a,b) => a.sales >= b.sales ? a : b);
+  const minSamp = samples.reduce((a,b) => a.sales <= b.sales ? a : b);
+  return {
+    days: samples.length,
+    totalDays: matched.length,
+    avgSales: sumSales / samples.length,
+    avgRest: sumRest / samples.length,
+    avgTrip: sumTrip / samples.length,
+    avgCount: sumCount / samples.length,
+    maxSales: maxSamp.sales,
+    maxDate: maxSamp.date,
+    minSales: minSamp.sales,
+    minDate: minSamp.date,
+  };
 }
 
 // drives中に存在する出庫時刻のhour一覧 (件数付き)

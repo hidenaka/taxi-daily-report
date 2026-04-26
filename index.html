@@ -63,7 +63,7 @@ if ('serviceWorker' in navigator) {
 import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js';
 import { getConfig, getDrivesForMonth, flushPendingQueue } from './js/storage.js';
 import { calcTotalPay, calcDailySales, calcMonthlySales } from './js/payroll.js';
-import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, PERIOD_LABELS, dowOf, DOW_LABELS, calcPaceReference, depHourDistribution } from './js/chart-helpers.js';
+import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, PERIOD_LABELS, dowOf, DOW_LABELS, calcPaceAtElapsed, depHourDistribution } from './js/chart-helpers.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('home');
 
@@ -413,32 +413,52 @@ function renderPaceBody(depHour) {
   const card = document.getElementById('paceCard');
   const { dist, allDrives } = paceState;
   const hours = Object.keys(dist).map(Number).sort((a,b) => a-b);
-  const ref = calcPaceReference(allDrives, depHour);
+  // 経過時間 = 現在時刻 - 出庫時刻 (分単位)
+  const now = new Date();
+  let nowMin = now.getHours() * 60 + now.getMinutes();
+  let elapsedMin = nowMin - depHour * 60;
+  if (elapsedMin < 0) elapsedMin += 24 * 60;
+  if (elapsedMin > 18 * 60) elapsedMin = 0; // 出庫から18h超 = 翌日扱いせずデータなし
+  const ref = calcPaceAtElapsed(allDrives, depHour, elapsedMin);
+  const elapsedH = (elapsedMin / 60).toFixed(1);
   const tabs = hours.map(h => {
-    const active = h === depHour ? ' style="background:var(--primary);color:#fff;font-weight:600;"' : ' style="background:#f0f0f0;color:#333;"';
-    return `<button data-h="${h}"${active} class="pace-tab" style="border:none;padding:6px 10px;border-radius:4px;font-size:12px;cursor:pointer;">${h}時 (${dist[h]}日)</button>`;
+    const active = h === depHour;
+    const style = active
+      ? 'background:var(--primary);color:#fff;font-weight:600;'
+      : 'background:#f0f0f0;color:#333;';
+    return `<button data-h="${h}" class="pace-tab" style="${style}border:none;padding:5px 9px;border-radius:4px;font-size:12px;cursor:pointer;">${h}時(${dist[h]})</button>`;
   }).join('');
-  let body = `<p class="muted" style="font-size:11px;">出庫から経過時間ごとの過去平均</p>`;
-  if (ref.points.length === 0) {
-    body += `<p class="muted" style="font-size:11px;">該当データなし</p>`;
+  const nowStr = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+  let body;
+  if (elapsedMin <= 0 || ref.days === 0) {
+    body = `<p class="muted" style="font-size:11px;margin-top:6px;">${depHour}時出庫からの経過参考値なし(現在${nowStr})</p>`;
   } else {
-    body += `<div style="overflow-x:auto;margin-top:6px;"><table class="sum-table">
-      <thead><tr><th class="date">経過</th><th>累積営収</th><th>件数</th><th>実車</th><th>休憩</th><th>ペース</th></tr></thead>
-      <tbody>${ref.points.map(p => `
-        <tr><td class="date">${p.hoursAfterDep}h後</td>
-        <td>${formatYen(p.avgSales)}</td>
-        <td>${p.avgCount.toFixed(1)}</td>
-        <td>${formatMin(p.avgTripMin)}</td>
-        <td>${formatMin(p.avgRestMin)}</td>
-        <td>${formatYen(p.avgSales / p.hoursAfterDep)}/h</td>
-        </tr>`).join('')}</tbody></table></div>`;
+    const pace = ref.avgSales / (elapsedMin / 60);
+    body = `
+      <div style="margin-top:6px;font-size:11px;color:var(--muted);">
+        ${depHour}時出庫想定 / 現在${nowStr} → 経過 <strong style="color:#333;">${elapsedH}時間</strong> ・ 過去${ref.days}日の同時刻データ
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+        <div style="background:#f5f5f5;padding:8px;border-radius:6px;">
+          <div style="font-size:10px;color:var(--muted);">平均累積営収</div>
+          <div style="font-size:18px;font-weight:700;color:#1b5e20;">${formatYen(ref.avgSales)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;">最大 ${formatYen(ref.maxSales)} / 最小 ${formatYen(ref.minSales)}</div>
+        </div>
+        <div style="background:#f5f5f5;padding:8px;border-radius:6px;">
+          <div style="font-size:10px;color:var(--muted);">平均休憩</div>
+          <div style="font-size:18px;font-weight:700;color:#555;">${formatMin(ref.avgRest)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;">実車 ${formatMin(ref.avgTrip)} / ${ref.avgCount.toFixed(1)}件</div>
+        </div>
+      </div>
+      <div class="kv" style="margin-top:6px;"><div>平均ペース</div><div><strong>${formatYen(pace)}/h</strong></div></div>
+    `;
   }
   card.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
-      <strong>出庫ペース参考 (過去データ)</strong>
-      <span class="muted" style="font-size:10px;">${ref.days}日分の平均</span>
+      <strong>出庫ペース参考</strong>
+      <span class="muted" style="font-size:10px;">過去同時刻の平均</span>
     </div>
-    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;">${tabs}</div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;">${tabs}</div>
     ${body}
   `;
   card.querySelectorAll('.pace-tab').forEach(b => {
