@@ -334,6 +334,8 @@ export function calcPaceAtElapsed(drives, depHour, elapsedMin, dowFilter = null)
   const sumCount = samples.reduce((s,v) => s + v.count, 0);
   const maxSamp = samples.reduce((a,b) => a.sales >= b.sales ? a : b);
   const minSamp = samples.reduce((a,b) => a.sales <= b.sales ? a : b);
+  const restVals = samples.map(v => v.restMin);
+  const countVals = samples.map(v => v.count);
   return {
     days: samples.length,
     totalDays: matched.length,
@@ -345,6 +347,10 @@ export function calcPaceAtElapsed(drives, depHour, elapsedMin, dowFilter = null)
     maxDate: maxSamp.date,
     minSales: minSamp.sales,
     minDate: minSamp.date,
+    maxRest: Math.max(...restVals),
+    minRest: Math.min(...restVals),
+    maxCount: Math.max(...countVals),
+    minCount: Math.min(...countVals),
   };
 }
 
