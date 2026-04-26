@@ -428,6 +428,42 @@ export function extractArea(place) {
   return place.replace(/\d+$/, '').trim();
 }
 
+// 特定の降車エリアで降ろした後、次にどのエリアで乗車した時の効率が良かったか
+// periodFilter: null=全時間帯, 'morning'/'noon'/'evening'/'night' のいずれか (alightTime基準)
+// 戻り値: [{ area, count, avgWait, avgSales, avgDur, efficiency }] (効率降順)
+export function nextBoardBreakdown(drives, dropoffArea, periodFilter = null) {
+  const groups = {};
+  for (const d of drives) {
+    if (isSummaryOnly(d)) continue;
+    const trips = (d.trips || []).filter(t => !t.isCancel);
+    for (let i = 0; i < trips.length - 1; i++) {
+      const t = trips[i];
+      if (extractArea(t.alightPlace) !== dropoffArea) continue;
+      if (periodFilter && getPeriodKey(t.alightTime) !== periodFilter) continue;
+      const next = trips[i + 1];
+      const nextArea = extractArea(next.boardPlace);
+      if (!nextArea) continue;
+      let wait = timeToMinutes(next.boardTime) - timeToMinutes(t.alightTime);
+      if (wait < 0) wait += 24 * 60;
+      if (wait >= 4 * 60) continue;
+      let nd = timeToMinutes(next.alightTime) - timeToMinutes(next.boardTime);
+      if (nd < 0) nd += 24 * 60;
+      if (!groups[nextArea]) groups[nextArea] = { count: 0, totalWait: 0, totalSales: 0, totalDur: 0 };
+      groups[nextArea].count++;
+      groups[nextArea].totalWait += wait;
+      groups[nextArea].totalSales += (next.amount || 0);
+      groups[nextArea].totalDur += nd;
+    }
+  }
+  return Object.entries(groups).map(([area, g]) => {
+    const avgWait = g.totalWait / g.count;
+    const avgSales = g.totalSales / g.count;
+    const avgDur = g.totalDur / g.count;
+    const efficiency = (avgWait + avgDur) > 0 ? avgSales / (avgWait + avgDur) * 60 : 0;
+    return { area, count: g.count, avgWait, avgSales, avgDur, efficiency };
+  }).sort((a, b) => b.efficiency - a.efficiency);
+}
+
 // 降車エリア別 効率分析
 // 各trip 直後 (同日内) のwait時間と次trip売上を集計
 // 「次の乗車エリア」分布も記録 → 降ろしたあとどこで次が取れる傾向かが分かる

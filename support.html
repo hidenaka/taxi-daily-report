@@ -62,6 +62,26 @@ if ('serviceWorker' in navigator) {
     <div id="rangeInfo" class="muted" style="font-size:11px;"></div>
   </section>
 
+  <section class="card" id="recommendCard">
+    <div class="section-h">
+      <strong>次の営業先 推奨検索</strong>
+      <span class="desc">どこで降ろした×時刻 → 次に行くべきエリア</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+      <div>
+        <label style="font-size:10px;color:var(--muted);">降ろした場所</label>
+        <select id="recArea" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:12px;"></select>
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--muted);">降ろした時刻</label>
+        <input type="time" id="recTime" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:12px;">
+      </div>
+    </div>
+    <button id="recSearch" style="width:100%;background:var(--primary);color:#fff;border:none;padding:8px;border-radius:4px;font-size:13px;font-weight:600;cursor:pointer;">推奨を表示</button>
+    <div id="recBody" style="margin-top:10px;"></div>
+    <p class="muted" style="font-size:10px;margin-top:6px;">過去同条件(降車エリア+時間帯)で実際に取れた次のtripを集計。効率順に表示。GPS連動は今後対応予定</p>
+  </section>
+
   <section class="card" id="hourEffCard">
     <div class="section-h">
       <strong>曜日 × 時間 効率(時給ベース)</strong>
@@ -92,7 +112,7 @@ if ('serviceWorker' in navigator) {
 <script type="module">
 import { renderBottomNav, formatYen, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod } from './js/app.js';
 import { getDrivesForMonth } from './js/storage.js';
-import { hourlyDowEfficiency, dropoffAreaAnalysis, DOW_LABELS, formatMin } from './js/chart-helpers.js';
+import { hourlyDowEfficiency, dropoffAreaAnalysis, nextBoardBreakdown, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin } from './js/chart-helpers.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('support');
 
@@ -129,9 +149,58 @@ async function load() {
   const results = await Promise.all(periods.map(ym => getDrivesForMonth(ym)));
   allDrives = results.flat();
   document.getElementById('rangeInfo').textContent = `${formatBillingPeriod(periods[0])} 〜 ${formatBillingPeriod(periods[periods.length-1])} (${allDrives.length}乗務)`;
+  populateRecommendArea();
   renderHourEff();
   renderArea();
 }
+
+function populateRecommendArea() {
+  // 降車エリア候補 (過去5件以上)
+  const all = dropoffAreaAnalysis(allDrives).filter(a => a.dropoffs >= 5);
+  all.sort((a, b) => b.dropoffs - a.dropoffs);
+  const sel = document.getElementById('recArea');
+  const prev = sel.value;
+  sel.innerHTML = all.map(a => `<option value="${a.area}">${a.area} (${a.dropoffs}件)</option>`).join('');
+  if (prev && all.find(a => a.area === prev)) sel.value = prev;
+  // 時刻はデフォルト現在時刻
+  if (!document.getElementById('recTime').value) {
+    const now = new Date();
+    document.getElementById('recTime').value = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  }
+}
+
+document.getElementById('recSearch').onclick = () => {
+  const area = document.getElementById('recArea').value;
+  const time = document.getElementById('recTime').value;
+  if (!area || !time) return;
+  const period = getPeriodKey(time);
+  const results = nextBoardBreakdown(allDrives, area, period);
+  // 件数2以上のみ表示 (信頼性)
+  const filtered = results.filter(r => r.count >= 2);
+  const body = document.getElementById('recBody');
+  if (filtered.length === 0) {
+    body.innerHTML = `<p class="muted" style="font-size:11px;">該当データなし(${area}・${PERIOD_LABELS[period]}で2件以上の次乗車記録なし)</p>`;
+    return;
+  }
+  const top = filtered.slice(0, 10);
+  const maxEff = Math.max(...top.map(r => r.efficiency), 1);
+  let html = `<div class="muted" style="font-size:11px;margin-bottom:6px;"><strong>${area}</strong> で <strong>${PERIOD_LABELS[period]}</strong> に降ろした後、次の乗車エリア別 効率TOP${top.length}</div>`;
+  html += '<div style="overflow-x:auto;"><table class="area-table"><thead><tr>'
+    + '<th class="l">次乗車エリア</th><th>件数</th><th>待ち</th><th>単価</th><th>時間効率¥/h</th>'
+    + '</tr></thead><tbody>';
+  for (const r of top) {
+    const effPct = r.efficiency / maxEff * 100;
+    html += `<tr>
+      <td class="l">${r.area}</td>
+      <td>${r.count}</td>
+      <td>${formatMin(r.avgWait)}</td>
+      <td>${formatYen(r.avgSales)}</td>
+      <td><div class="bar"><div class="fill" style="width:${effPct}%;"></div><div class="v">${formatYen(r.efficiency)}</div></div></td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  body.innerHTML = html;
+};
 
 function renderHourEff() {
   const matrix = hourlyDowEfficiency(allDrives);
