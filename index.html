@@ -405,7 +405,9 @@ async function renderPaceCard() {
   // デフォルト: 最頻出
   let defaultHour = hours[0];
   for (const h of hours) if (dist[h] > dist[defaultHour]) defaultHour = h;
-  paceState = { dist, allDrives, depHour: defaultHour, dowFilter: null, manualElapsedMin: null };
+  // デフォルト曜日: 今日の曜日
+  const todayDow = dowOf(todayIso());
+  paceState = { dist, allDrives, depHour: defaultHour, dowFilter: todayDow, manualElapsedMin: null };
   renderPaceBody();
 }
 
