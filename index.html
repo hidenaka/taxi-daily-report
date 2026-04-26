@@ -450,7 +450,13 @@ function renderPaceBody() {
     return `<button data-em="${e.m == null ? '' : e.m}" class="pace-etab" style="${style}border:none;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;min-width:28px;">${e.l}</button>`;
   }).join('');
   const dowName = dowFilter == null ? '全曜日' : DOW_LABELS[dowFilter] + '曜のみ';
-  const ctxLabel = `出庫から${elapsedH}時間経過 ・ ${dowName}`;
+  const targetTime = (() => {
+    const m = todayDepHour * 60 + elapsedMin;
+    const h = Math.floor(m / 60) % 24;
+    const mm = Math.round(m % 60);
+    return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+  })();
+  const ctxLabel = `出庫から${elapsedH}時間経過(${targetTime}時点) ・ ${dowName}`;
   // 期間レンジタブ
   const rangeItems = [{r: 3, l: '3ヶ月'}, {r: 6, l: '6ヶ月'}, {r: 12, l: '12ヶ月'}, {r: 36, l: '全'}];
   const rangeTabs = rangeItems.map(r => {
