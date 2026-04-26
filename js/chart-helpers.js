@@ -281,11 +281,14 @@ function minsFromDep(timeStr, depHour) {
 }
 
 // 出庫時刻別+任意の経過分単位での平均/最大/最小累積
-export function calcPaceAtElapsed(drives, depHour, elapsedMin) {
+// dowFilter: null=全曜日, 0-6=その曜日のみ
+export function calcPaceAtElapsed(drives, depHour, elapsedMin, dowFilter = null) {
   const matched = drives.filter(d => {
     if (isSummaryOnly(d)) return false;
     if (!d.departureTime) return false;
-    return parseInt(d.departureTime.split(':')[0]) === depHour;
+    if (parseInt(d.departureTime.split(':')[0]) !== depHour) return false;
+    if (dowFilter != null && dowOf(d.date) !== dowFilter) return false;
+    return true;
   });
   if (matched.length === 0 || elapsedMin <= 0) return { days: 0, totalDays: matched.length, samples: [] };
   const samples = [];
