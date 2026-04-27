@@ -759,10 +759,9 @@ export function boardHistoryAtArea(drives, area, period = null, maxEntries = 30)
 }
 
 // 高期待値エリア × 時間帯
-// 各trip(乗車)を boardPlace × 時間帯(4区切り) で集計、平均単価高い順
-// 「待ちは長いが期待値高い」エリア(羽田空港等)を発見するための指標
-// 戻り値: [{ area, period, count, avgSales, avgDur }]
-// 実労働時間効率は呼び出し側で areaTimeHourly map から引く
+// 各trip(乗車)を boardPlace × 時間帯(4区切り) で集計、中央単価が高い順
+// 中央値ベースで並べることでイレギュラー案件の影響を排除
+// 戻り値: [{ area, period, count, avgSales, medianSales, avgDur }]
 export function highValueAreas(drives, { minSamples = 5 } = {}) {
   const groups = {};
   for (const d of drives) {
@@ -776,10 +775,11 @@ export function highValueAreas(drives, { minSamples = 5 } = {}) {
       let dur = timeToMinutes(t.alightTime) - timeToMinutes(t.boardTime);
       if (dur < 0) dur += 24 * 60;
       const key = `${area}|${period}`;
-      if (!groups[key]) groups[key] = { count: 0, sumSales: 0, sumDur: 0 };
+      if (!groups[key]) groups[key] = { count: 0, sumSales: 0, sumDur: 0, salesList: [] };
       groups[key].count++;
       groups[key].sumSales += t.amount;
       groups[key].sumDur += dur;
+      groups[key].salesList.push(t.amount);
     }
   }
   const rows = [];
@@ -787,10 +787,11 @@ export function highValueAreas(drives, { minSamples = 5 } = {}) {
     if (g.count < minSamples) continue;
     const [area, period] = key.split('|');
     const avgSales = g.sumSales / g.count;
+    const medianSales = median(g.salesList);
     const avgDur = g.sumDur / g.count;
-    rows.push({ area, period, count: g.count, avgSales, avgDur });
+    rows.push({ area, period, count: g.count, avgSales, medianSales, avgDur });
   }
-  rows.sort((a, b) => b.avgSales - a.avgSales);
+  rows.sort((a, b) => b.medianSales - a.medianSales);
   return rows;
 }
 
@@ -830,6 +831,7 @@ export function dropoffAreaAnalysis(drives) {
         totalNextSales: 0, nextCount: 0,
         totalNextDur: 0,
         nextBoards: {},
+        nextSalesList: [], waitList: [],
       };
       const a = areas[area];
       a.dropoffs++;
@@ -840,9 +842,12 @@ export function dropoffAreaAnalysis(drives) {
         if (wait < 4 * 60) {
           a.totalWaitMin += wait;
           a.waitCount++;
+          a.waitList.push(wait);
         }
-        a.totalNextSales += (next.amount || 0);
+        const nextAmt = next.amount || 0;
+        a.totalNextSales += nextAmt;
         a.nextCount++;
+        if (nextAmt > 0) a.nextSalesList.push(nextAmt);
         let nd = timeToMinutes(next.alightTime) - timeToMinutes(next.boardTime);
         if (nd < 0) nd += 24 * 60;
         a.totalNextDur += nd;
@@ -854,14 +859,15 @@ export function dropoffAreaAnalysis(drives) {
   const result = [];
   for (const [area, v] of Object.entries(areas)) {
     const avgWait = v.waitCount > 0 ? v.totalWaitMin / v.waitCount : null;
+    const medianWait = v.waitList.length > 0 ? median(v.waitList) : null;
     const avgNextSales = v.nextCount > 0 ? v.totalNextSales / v.nextCount : null;
+    const medianNextSales = v.nextSalesList.length > 0 ? median(v.nextSalesList) : null;
     const avgNextDur = v.nextCount > 0 ? v.totalNextDur / v.nextCount : null;
     const topNextBoards = Object.entries(v.nextBoards)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 3)
       .map(([area, count]) => ({ area, count, pct: count / v.nextCount }));
-    // efficiency は呼び出し側で areaTimeHourly map から引いて結合する
-    result.push({ area, dropoffs: v.dropoffs, avgWait, avgNextSales, avgNextDur, nextCount: v.nextCount, topNextBoards });
+    result.push({ area, dropoffs: v.dropoffs, avgWait, medianWait, avgNextSales, medianNextSales, avgNextDur, nextCount: v.nextCount, topNextBoards });
   }
   return result;
 }

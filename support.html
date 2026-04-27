@@ -85,9 +85,13 @@ if ('serviceWorker' in navigator) {
       </label>
       <span class="muted" style="font-size:10px;" id="recNeighborInfo"></span>
     </div>
-    <button id="recSearch" style="width:100%;background:var(--primary);color:#fff;border:none;padding:8px;border-radius:4px;font-size:13px;font-weight:600;cursor:pointer;">推奨を表示</button>
+    <div style="display:flex;gap:6px;margin-bottom:8px;">
+      <button id="recGps" style="flex:1;background:#fff;color:var(--primary);border:1px solid var(--primary);padding:8px;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;">📍 現在地から自動入力</button>
+      <button id="recSearch" style="flex:2;background:var(--primary);color:#fff;border:none;padding:8px;border-radius:4px;font-size:13px;font-weight:600;cursor:pointer;">推奨を表示</button>
+    </div>
+    <div id="recGpsInfo" class="muted" style="font-size:10px;margin-bottom:6px;"></div>
     <div id="recBody" style="margin-top:10px;"></div>
-    <p class="muted" style="font-size:10px;margin-top:6px;">過去同条件で実際に取れた次のtripを集計、効率順に表示。「近隣」=過去データから自動学習(降車後25分以内に乗車したペアが2回以上)。GPS連動は今後対応予定</p>
+    <p class="muted" style="font-size:10px;margin-top:6px;">過去同条件で実際に取れた次のtripを集計、30分内取得率順に表示。「近隣」=過去データから自動学習(降車後25分以内に乗車したペアが2回以上)。GPSは国土地理院APIで町名取得、ズレた場合は近隣エリアも候補に</p>
   </section>
 
   <section class="card" id="hourEffCard">
@@ -111,7 +115,7 @@ if ('serviceWorker' in navigator) {
     </div>
     <div id="highValueBody"></div>
     <div class="detail-tip" id="highValueTip"></div>
-    <p class="muted" style="font-size:10px;margin-top:6px;">乗車地エリア × 時間帯(4区切り)で平均単価が高い順TOP15。羽田空港のように「待ちは長いが期待値大」のエリアを発見する用途。タップで過去乗車履歴を表示。最低5件以上</p>
+    <p class="muted" style="font-size:10px;margin-top:6px;">乗車地エリア × 時間帯(4区切り)で<strong>中央単価</strong>が高い順TOP15。中央値ベースのため、たまの高額案件で平均が引き上がる影響を排除。タップで過去乗車履歴を表示。最低5件以上</p>
   </section>
 
   <section class="card" id="areaCard">
@@ -126,7 +130,7 @@ if ('serviceWorker' in navigator) {
     </div>
     <div id="areaBody"></div>
     <div class="detail-tip" id="areaTip"></div>
-    <p class="muted" style="font-size:10px;margin-top:6px;">「単価」=降ろした次のtripの平均運賃。「待ち」=次乗車までの平均時間。タップでそのエリアの過去履歴を表示。最低5件以上のみ</p>
+    <p class="muted" style="font-size:10px;margin-top:6px;">「単価」=降ろした次のtripの中央値/平均、「待ち」=次乗車までの中央値/平均(中央値ベースでイレギュラーの影響を抑制)。タップでそのエリアの過去履歴を表示。最低5件以上のみ</p>
   </section>
 </main>
 <div id="navHost"></div>
@@ -371,6 +375,67 @@ function sortByDowAndTime(entries, todayDow, centerMin) {
   });
 }
 
+// GPS取得 → 国土地理院reverse geocoding → エリア推定 → recArea セット
+document.getElementById('recGps').onclick = async () => {
+  const info = document.getElementById('recGpsInfo');
+  const btn = document.getElementById('recGps');
+  if (!navigator.geolocation) { info.textContent = 'このブラウザは位置情報非対応'; return; }
+  btn.disabled = true; btn.textContent = '📍 取得中…';
+  info.textContent = '位置情報取得中…';
+  try {
+    const pos = await new Promise((resolve, reject) =>
+      navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000, enableHighAccuracy: true })
+    );
+    const { latitude: lat, longitude: lon } = pos.coords;
+    info.textContent = `緯度${lat.toFixed(5)}, 経度${lon.toFixed(5)} → 町名取得中…`;
+    // 国土地理院 reverse geocoder
+    const res = await fetch(`https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress?lat=${lat}&lon=${lon}`);
+    const data = await res.json();
+    if (!data.results) { info.textContent = '町名取得失敗'; return; }
+    const muniCd = data.results.muniCd;
+    const lv01Nm = data.results.lv01Nm; // 町名 (例: "羽田空港3丁目")
+    // muniCd → 市区町村名 (国土地理院の muniCd は5桁、JIS市区町村コード)
+    let muniName = '';
+    try {
+      const muniRes = await fetch(`https://maps.gsi.go.jp/js/muni.js`);
+      const muniText = await muniRes.text();
+      // muni.js は GSI.MUNI_ARRAY = [...] 形式。安全に抽出
+      const match = muniText.match(new RegExp(`'${muniCd}',[^']*'([^']+)'`));
+      if (match) {
+        const fullName = match[1]; // 例: "東京都,大田区"
+        muniName = fullName.split(',').pop();
+      }
+    } catch (e) { muniName = ''; }
+    const detected = (muniName + (lv01Nm || '')).replace(/\d+$/, '').replace(/丁目$/, '');
+    info.innerHTML = `📍 推定エリア: <strong>${detected || '(取得不能)'}</strong>`;
+    // recArea セレクトに該当 or 近隣を選ぶ
+    const sel = document.getElementById('recArea');
+    const options = Array.from(sel.options).map(o => o.value);
+    let matched = options.find(v => v === detected);
+    if (!matched && detected) {
+      // 同じ区名で始まるものを探す
+      const wardMatch = detected.match(/^([^区]+区)/);
+      if (wardMatch) {
+        const ward = wardMatch[1];
+        matched = options.find(v => v.startsWith(ward));
+        if (matched) info.innerHTML += ` (一致なし → 同区の <strong>${matched}</strong> を選択)`;
+      }
+    }
+    if (matched) {
+      sel.value = matched;
+      updateNeighborInfo();
+      // 自動的に検索実行
+      document.getElementById('recSearch').click();
+    } else {
+      info.innerHTML += ' (過去データに該当・近隣エリアなし)';
+    }
+  } catch (err) {
+    info.textContent = '位置情報取得エラー: ' + (err.message || err.code);
+  } finally {
+    btn.disabled = false; btn.textContent = '📍 現在地から自動入力';
+  }
+};
+
 function renderHistoryFallback(area, hour, expand) {
   const result = dropoffHistoryAtArea(allDrives, area, hour, 1, expand ? neighborMap : null, 30);
   const s = result.stats;
@@ -504,17 +569,18 @@ function renderHighValue() {
   const body = document.getElementById('highValueBody');
   if (rows.length === 0) { body.innerHTML = '<p class="muted" style="font-size:11px;">該当データなし</p>'; return; }
   const maxSales = Math.max(...rows.map(r => r.avgSales), 1);
+  const maxMedian = Math.max(...rows.map(r => r.medianSales || 0), 1);
   let html = '<div style="overflow-x:auto;"><table class="area-table"><thead><tr>'
-    + '<th class="l">エリア</th><th>時間帯</th><th>件数</th><th>平均実車</th><th>平均単価</th>'
+    + '<th class="l">エリア</th><th>時間帯</th><th>件数</th><th>平均実車</th><th>単価(中央/平均)</th>'
     + '</tr></thead><tbody>';
   for (const r of rows) {
-    const pct = r.avgSales / maxSales * 100;
+    const pct = (r.medianSales || 0) / maxMedian * 100;
     html += `<tr data-area="${r.area}" data-period="${r.period}" style="cursor:pointer;">
       <td class="l">${r.area}</td>
       <td>${PERIOD_LABELS[r.period]}</td>
       <td>${r.count}</td>
       <td>${formatMin(r.avgDur)}</td>
-      <td><div class="bar"><div class="fill" style="width:${pct}%;"></div><div class="v">${formatYen(r.avgSales)}</div></div></td>
+      <td><div class="bar"><div class="fill" style="width:${pct}%;"></div><div class="v">${formatYen(r.medianSales)}<span style="color:rgba(255,255,255,0.85);font-size:9px;margin-left:4px;">平${formatYen(r.avgSales)}</span></div></div></td>
     </tr>`;
   }
   html += '</tbody></table></div>';
@@ -619,22 +685,24 @@ function renderArea() {
   let rows = all.filter(a => a.dropoffs >= 5);
   rows.sort((a, b) => {
     if (areaSort === 'dropoffs') return b.dropoffs - a.dropoffs;
-    if (areaSort === 'avgWait') return (a.avgWait ?? 9999) - (b.avgWait ?? 9999);
-    if (areaSort === 'avgNextSales') return (b.avgNextSales || 0) - (a.avgNextSales || 0);
+    if (areaSort === 'avgWait') return (a.medianWait ?? 9999) - (b.medianWait ?? 9999);
+    if (areaSort === 'avgNextSales') return (b.medianNextSales || 0) - (a.medianNextSales || 0);
     return 0;
   });
   const top = rows.slice(0, 30);
-  const maxSales = Math.max(...top.map(r => r.avgNextSales || 0), 1);
+  const maxMedSales = Math.max(...top.map(r => r.medianNextSales || 0), 1);
   let html = '<div style="overflow-x:auto;"><table class="area-table"><thead><tr>'
-    + '<th class="l">降車エリア</th><th>件数</th><th>次まで待ち</th><th>単価</th>'
+    + '<th class="l">降車エリア</th><th>件数</th><th>次まで待ち(中央/平均)</th><th>単価(中央/平均)</th>'
     + '</tr></thead><tbody>';
   for (const r of top) {
-    const salesPct = r.avgNextSales ? (r.avgNextSales / maxSales * 100) : 0;
+    const salesPct = r.medianNextSales ? (r.medianNextSales / maxMedSales * 100) : 0;
+    const waitMed = r.medianWait != null ? formatMin(r.medianWait) : '—';
+    const waitAvg = r.avgWait != null ? formatMin(r.avgWait) : '—';
     html += `<tr data-area="${r.area}" style="cursor:pointer;">
       <td class="l">${r.area}</td>
       <td>${r.dropoffs}</td>
-      <td>${r.avgWait != null ? formatMin(r.avgWait) : '—'}</td>
-      <td><div class="bar"><div class="fill" style="width:${salesPct}%;background:#1976d2;"></div><div class="v">${r.avgNextSales != null ? formatYen(r.avgNextSales) : '—'}</div></div></td>
+      <td>${waitMed}<br><span style="font-size:9px;color:var(--muted);">平${waitAvg}</span></td>
+      <td><div class="bar"><div class="fill" style="width:${salesPct}%;"></div><div class="v">${r.medianNextSales != null ? formatYen(r.medianNextSales) : '—'}<span style="color:rgba(255,255,255,0.85);font-size:9px;margin-left:4px;">平${r.avgNextSales != null ? formatYen(r.avgNextSales) : '—'}</span></div></div></td>
     </tr>`;
   }
   html += '</tbody></table></div>';
