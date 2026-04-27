@@ -190,7 +190,7 @@ export async function listActiveUserIds() {
     return [getMyUserId()];
   }
   return result.content.users
-    .filter(u => u.active === true)
+    .filter(u => u.active === true && isValidUserId(u.userId))
     .map(u => u.userId);
 }
 
@@ -203,7 +203,7 @@ export async function getAllUsersDrivesForMonth(yearMonth) {
     try {
       files = await listFiles(`data/drives/${userId}`);
     } catch (e) {
-      // フォルダ未作成のユーザーはスキップ
+      // GitHub API エラー(401/500等)時はそのユーザーをスキップ
       return [];
     }
     const periodFiles = files.filter(f => {
