@@ -573,6 +573,7 @@ export function nextBoardBreakdown(drives, dropoffArea, hourCenter = null, hourW
       groups[nextArea].salesList.push(nextAmount);
       groups[nextArea].samples.push({
         date: d.date,
+        dow: d.date ? dowOf(d.date) : null,
         alightTime: t.alightTime,
         dropoffPlace: t.alightPlace,
         nextBoardTime: next.boardTime,
@@ -678,6 +679,7 @@ export function dropoffHistoryAtArea(drives, area, hourCenter = null, hourWindow
       }
       entries.push({
         date: d.date,
+        dow: d.date ? dowOf(d.date) : null,
         alightTime: t.alightTime,
         dropoffPlace: t.alightPlace,
         nextBoardTime, nextBoardPlace, nextAlightTime, nextAlightPlace,
