@@ -70,7 +70,8 @@ async function listFiles(repo, token, dir) {
       continue;
     }
     if (!res.ok) throw new Error(`listFiles: HTTP ${res.status} for ${dir}`);
-    return res.json();
+    // NOTE: GitHub Contents API returns max ~1000 items per directory listing.
+    return await res.json();
   }
 }
 
@@ -139,7 +140,7 @@ async function putFile(repo, token, path, base64, message) {
       const text = await res.text();
       throw new Error(`putFile: HTTP ${res.status} for ${path}: ${text}`);
     }
-    return res.json();
+    return await res.json();
   }
 }
 
@@ -153,20 +154,22 @@ function parseConfig() {
   const args = process.argv.slice(2);
   let token = process.env.GITHUB_TOKEN || null;
   let repo = process.env.DATA_REPO || null;
+  let dryRun = process.env.DRY_RUN === '1';
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--token' && args[i + 1]) token = args[++i];
     if (args[i] === '--repo' && args[i + 1]) repo = args[++i];
+    if (args[i] === '--dry-run') dryRun = true;
   }
 
-  return { token, repo };
+  return { token, repo, dryRun };
 }
 
 /**
  * メイン処理
  */
 async function main() {
-  const { token, repo } = parseConfig();
+  const { token, repo, dryRun } = parseConfig();
 
   // ─── バリデーション
   if (!token || !repo) {
@@ -179,11 +182,13 @@ async function main() {
     process.exit(1);
   }
 
+  if (dryRun) console.log('[DRY RUN] 書き込みはスキップします。');
   console.log(`マイグレーション開始: repo=${repo}`);
   console.log('');
 
   let copied = 0;
-  let skipped = 0;
+  let skippedExists = 0;   // destination already exists (idempotent re-run)
+  let skippedMissing = 0;  // source vanished mid-run (warn condition)
   let errors = 0;
 
   // ─── Step 1: data/drives/ 直下の .json ファイルを user_self/ にコピー
@@ -213,7 +218,7 @@ async function main() {
       const existing = await getFile(repo, token, destPath);
       if (existing !== null) {
         console.log(`${progress} ${file.name} SKIP (既に存在)`);
-        skipped++;
+        skippedExists++;
         continue;
       }
 
@@ -221,7 +226,13 @@ async function main() {
       const src = await getFile(repo, token, srcPath);
       if (src === null) {
         console.warn(`${progress} ${file.name} WARN (元ファイルが見つからない、スキップ)`);
-        skipped++;
+        skippedMissing++;
+        continue;
+      }
+
+      if (dryRun) {
+        console.log(`${progress} WOULD COPY: ${srcPath} → ${destPath}`);
+        copied++;
         continue;
       }
 
@@ -254,7 +265,10 @@ async function main() {
       const configDest = await getFile(repo, token, 'data/config/user_self.json');
       if (configDest !== null) {
         console.log('data/config/user_self.json SKIP (既に存在)');
-        skipped++;
+        skippedExists++;
+      } else if (dryRun) {
+        console.log('WOULD COPY: data/config.json → data/config/user_self.json');
+        copied++;
       } else {
         await putFile(
           repo,
@@ -280,7 +294,10 @@ async function main() {
     const usersExisting = await getFile(repo, token, 'data/users.json');
     if (usersExisting !== null) {
       console.log('data/users.json SKIP (既に存在)');
-      skipped++;
+      skippedExists++;
+    } else if (dryRun) {
+      console.log('WOULD CREATE: data/users.json');
+      copied++;
     } else {
       const usersContent = JSON.stringify(
         {
@@ -307,14 +324,19 @@ async function main() {
   }
 
   // ─── サマリ
+  const runLabel = dryRun ? ' (DRY RUN)' : '';
   console.log('');
   console.log('========================================');
-  console.log(`マイグレーション完了`);
-  console.log(`  コピー  : ${copied} 件`);
-  console.log(`  スキップ: ${skipped} 件`);
-  console.log(`  エラー  : ${errors} 件`);
+  console.log(`マイグレーション完了${runLabel}`);
+  console.log(`  コピー              : ${copied} 件`);
+  console.log(`  スキップ(既存)      : ${skippedExists} 件`);
+  console.log(`  スキップ(欠落)      : ${skippedMissing} 件`);
+  console.log(`  エラー              : ${errors} 件`);
   console.log('========================================');
 
+  if (skippedMissing > 0) {
+    console.warn(`警告: ${skippedMissing} 件のソースファイルが実行中に見つかりませんでした。リポジトリを確認してください。`);
+  }
   if (errors > 0) {
     console.error(`${errors} 件のエラーが発生しました。上記ログを確認してください。`);
     process.exit(1);
