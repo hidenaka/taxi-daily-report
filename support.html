@@ -47,6 +47,7 @@ if ('serviceWorker' in navigator) {
 </script>
 <main style="padding:14px;">
   <h1 style="margin-top:0;">営業サポート</h1>
+  <div id="dataSourceInfo" style="font-size:11px;color:var(--muted);margin-bottom:12px;"></div>
   <p class="muted" style="font-size:11px;margin-top:-6px;">過去データから「効率の悪い時間/降ろし方」を可視化して営業スタイルを最適化</p>
 
   <section class="card" id="paceCard"></section>
@@ -66,7 +67,7 @@ if ('serviceWorker' in navigator) {
 
   <section class="card" id="recommendCard">
     <div class="section-h">
-      <strong>次の営業先 推奨検索</strong>
+      <strong>次の営業先 推奨検索 <span style="font-size:10px;color:var(--muted);font-weight:normal;">(全員データ統合)</span></strong>
       <span class="desc">どこで降ろした×時刻 → 次に行くべきエリア</span>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
@@ -99,7 +100,7 @@ if ('serviceWorker' in navigator) {
 
   <section class="card" id="hourEffCard">
     <div class="section-h">
-      <strong>曜日 × 時間 効率</strong>
+      <strong>曜日 × 時間 効率 <span style="font-size:10px;color:var(--muted);font-weight:normal;">(自分のデータ)</span></strong>
       <span class="desc">7時スタート</span>
     </div>
     <div class="sort-tabs" id="hourMetricTabs">
@@ -113,7 +114,7 @@ if ('serviceWorker' in navigator) {
 
   <section class="card" id="highValueCard">
     <div class="section-h">
-      <strong>高期待値エリア × 時間帯</strong>
+      <strong>高期待値エリア × 時間帯 <span style="font-size:10px;color:var(--muted);font-weight:normal;">(全員データ統合)</span></strong>
       <span class="desc">単価が大きく出る場所と時間</span>
     </div>
     <div id="highValueBody"></div>
@@ -123,7 +124,7 @@ if ('serviceWorker' in navigator) {
 
   <section class="card" id="areaCard">
     <div class="section-h">
-      <strong>降車エリア別 効率(区+町名)</strong>
+      <strong>降車エリア別 効率(区+町名) <span style="font-size:10px;color:var(--muted);font-weight:normal;">(全員データ統合)</span></strong>
       <span class="desc">降ろした後どう動く</span>
     </div>
     <div class="sort-tabs" id="areaSortTabs">
@@ -139,7 +140,7 @@ if ('serviceWorker' in navigator) {
 <div id="navHost"></div>
 <script type="module">
 import { renderBottomNav, formatYen, formatDateY, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, toLocalIso } from './js/app.js';
-import { getDrivesForMonth } from './js/storage.js';
+import { getDrivesForMonth, getAllUsersDrivesForMonth, listActiveUserIds } from './js/storage.js';
 import { hourlyDowEfficiency, dropoffAreaAnalysis, nextBoardBreakdown, dropoffHistoryAtArea, boardHistoryAtArea, buildNeighborMap, highValueAreas, calcPaceAtElapsed, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin, dowOf } from './js/chart-helpers.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('support');
@@ -147,7 +148,9 @@ document.getElementById('navHost').innerHTML = renderBottomNav('support');
 const todayIso = () => toLocalIso(new Date());
 
 let monthsRange = 6;
-let allDrives = [];
+let myDrives = [];      // 自分のみ(ペース・ヒートマップ用)
+let allDrives = [];     // 全員統合(推奨・エリア分析・近隣マップ用)
+let activeUserIds = []; // 集計対象数表示用
 let areaSort = 'dropoffs';
 let neighborMap = {};
 let hourMetric = 'A';
@@ -292,6 +295,13 @@ document.querySelectorAll('#hourMetricTabs button').forEach(b => {
   };
 });
 
+function updateDataSourceInfo() {
+  const el = document.getElementById('dataSourceInfo');
+  if (!el) return;
+  const nUsers = activeUserIds.length;
+  el.textContent = `全員モード: ${nUsers}ユーザー / 合計${allDrives.length}乗務(自分: ${myDrives.length}乗務)`;
+}
+
 async function load() {
   if (!localStorage.getItem('github_token') || !localStorage.getItem('github_data_repo')) {
     document.querySelector('main').innerHTML = '<div class="loading">設定からGitHubトークンを設定してください</div>';
@@ -301,10 +311,18 @@ async function load() {
   const current = currentBillingPeriod();
   const periods = [];
   for (let i = monthsRange - 1; i >= 0; i--) periods.push(shiftBillingPeriod(current, -i));
-  const results = await Promise.all(periods.map(ym => getDrivesForMonth(ym)));
-  allDrives = results.flat();
-  document.getElementById('rangeInfo').textContent = `${formatBillingPeriod(periods[0])} 〜 ${formatBillingPeriod(periods[periods.length-1])} (${allDrives.length}乗務)`;
+  // 自分のみと全員統合を並列取得
+  const [myParts, allParts, userIds] = await Promise.all([
+    Promise.all(periods.map(ym => getDrivesForMonth(ym))),
+    Promise.all(periods.map(ym => getAllUsersDrivesForMonth(ym))),
+    listActiveUserIds()
+  ]);
+  myDrives = myParts.flat();
+  allDrives = allParts.flat();
+  activeUserIds = userIds;
+  document.getElementById('rangeInfo').textContent = `${formatBillingPeriod(periods[0])} 〜 ${formatBillingPeriod(periods[periods.length-1])} (自分: ${myDrives.length}乗務 / 全員: ${allDrives.length}乗務)`;
   neighborMap = buildNeighborMap(allDrives);
+  updateDataSourceInfo();
   populateRecommendArea();
   updateNeighborInfo();
   renderHourEff();
@@ -690,7 +708,7 @@ function renderBoardHistoryHTML(area, period) {
 }
 
 function renderHourEff() {
-  const matrix = hourlyDowEfficiency(allDrives);
+  const matrix = hourlyDowEfficiency(myDrives);   // 自分のデータのみ
   const valueOf = (c) => hourMetric === 'A' ? c.hourlyA : c.hourlyB;
   let max = 0;
   for (let dow = 0; dow < 7; dow++) for (const h of HOUR_ORDER) {
