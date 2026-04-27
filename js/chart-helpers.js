@@ -562,11 +562,15 @@ function hourInWindow(hour, center, window) {
 // 特定の降車エリアで降ろした後、次にどのエリアで乗車した時の効率が良かったか
 // 降車時刻が hourCenter ± hourWindow 内 かつ 待ち30分以内 かつ 次運賃 > 0 のみ集計
 // hourCenter=null なら全時間帯
+// dropoffArea: 文字列(単一エリア) or 配列(複数エリア) を受け付ける
 // 各row.samples: 根拠データ最大10件 (新しい順)
 export function nextBoardBreakdown(drives, dropoffArea, hourCenter = null, hourWindow = 1, neighbors = null) {
-  const targetAreas = new Set([dropoffArea]);
-  if (neighbors && neighbors[dropoffArea]) {
-    for (const n of neighbors[dropoffArea]) targetAreas.add(n);
+  const baseAreas = Array.isArray(dropoffArea) ? dropoffArea : [dropoffArea];
+  const targetAreas = new Set(baseAreas);
+  if (neighbors) {
+    for (const a of baseAreas) {
+      if (neighbors[a]) for (const n of neighbors[a]) targetAreas.add(n);
+    }
   }
   const groups = {};
   let totalDropoffs = 0;

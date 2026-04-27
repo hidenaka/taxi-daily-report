@@ -148,6 +148,7 @@ let allDrives = [];
 let areaSort = 'dropoffs';
 let neighborMap = {};
 let hourMetric = 'A';
+let gpsWideAreas = null; // GPS推定でフォールバックした時の同区広域エリア配列。検索時に直接target areasとして使う
 const HOUR_ORDER = [7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,0,1,2,3,4,5,6];
 
 // === 出庫ペース参考カード (元 index.html から移植) ===
@@ -333,7 +334,7 @@ function updateNeighborInfo() {
   const list = Array.from(ns).slice(0, 5).join(', ');
   info.textContent = `近隣${ns.size}: ${list}${ns.size > 5 ? '…' : ''}`;
 }
-document.getElementById('recArea').addEventListener('change', updateNeighborInfo);
+document.getElementById('recArea').addEventListener('change', () => { gpsWideAreas = null; updateNeighborInfo(); });
 document.getElementById('recExpand').addEventListener('change', updateNeighborInfo);
 
 function amountHeatStyle(amt, max) {
@@ -421,31 +422,24 @@ document.getElementById('recGps').onclick = async () => {
     const sel = document.getElementById('recArea');
     const options = Array.from(sel.options).map(o => o.value);
     let matched = options.find(v => v === detected);
-    let fallback = false;
-    if (!matched && detected) {
-      // 同区で始まる候補から、共通プレフィックス長(=地理的近さ)が長いもの順に
-      const wardMatch = detected.match(/^([^区市]+(?:区|市[^区]+?区|市))/);
-      const ward = wardMatch ? wardMatch[1] : '';
-      let candidates = ward ? options.filter(v => v.startsWith(ward)) : [];
-      if (candidates.length === 0) candidates = options; // 区一致もなければ全候補
-      candidates.sort((a, b) => {
-        const ca = commonPrefixLen(a, detected);
-        const cb = commonPrefixLen(b, detected);
-        if (ca !== cb) return cb - ca;
-        return options.indexOf(a) - options.indexOf(b); // 件数多い順 (オプション順)
-      });
-      matched = candidates[0];
-      if (matched) {
-        fallback = true;
-        info.innerHTML += `<br>過去データに完全一致なし → 最も近い <strong>${matched}</strong> を選択(近隣ON)`;
-      }
-    }
+    gpsWideAreas = null;
     if (matched) {
       sel.value = matched;
-      // フォールバック時は近隣ONを強制
-      if (fallback) document.getElementById('recExpand').checked = true;
       updateNeighborInfo();
       document.getElementById('recSearch').click();
+    } else if (detected) {
+      // 完全一致なし → 同区広域検索モード(同区の全エリアをtargetに)
+      const wardMatch = detected.match(/^([^区市]+(?:区|市[^区]+?区|市))/);
+      const ward = wardMatch ? wardMatch[1] : '';
+      const wardAreas = ward ? options.filter(v => v.startsWith(ward)) : [];
+      if (wardAreas.length > 0) {
+        gpsWideAreas = wardAreas;
+        document.getElementById('recExpand').checked = true;
+        info.innerHTML += `<br>過去データに完全一致なし → <strong>${ward}</strong> 広域検索モード(${wardAreas.length}エリア+近隣を一括検索)`;
+        document.getElementById('recSearch').click();
+      } else {
+        info.innerHTML += '<br>該当する区エリアもなし';
+      }
     } else {
       info.innerHTML += '<br>該当エリアなし';
     }
@@ -514,15 +508,18 @@ document.getElementById('recSearch').onclick = () => {
   const expand = document.getElementById('recExpand').checked;
   if (!area || !time) return;
   const hour = parseInt(time.split(':')[0]);
-  const result = nextBoardBreakdown(allDrives, area, hour, 1, expand ? neighborMap : null);
+  // GPS広域モードなら配列で渡す。それ以外は通常通り単一エリア
+  const dropoffArg = gpsWideAreas ? gpsWideAreas : area;
+  const result = nextBoardBreakdown(allDrives, dropoffArg, hour, 1, expand ? neighborMap : null);
   // 30分以内取得率の高い順
   const evaluated = result.rows
     .filter(r => r.count >= 3)
     .sort((a, b) => b.ratio30 - a.ratio30);
   const body = document.getElementById('recBody');
   const winLabel = `${String((hour-1+24)%24).padStart(2,'0')}:00-${String((hour+1)%24).padStart(2,'0')}:59`;
+  const wideLabel = gpsWideAreas ? '広域' : '';
   const includedLabel = result.includedAreas.length > 1
-    ? `(近隣含む${result.includedAreas.length}エリア・降車${result.totalDropoffs}件中30分以内取得${result.totalNextWithin30}件)`
+    ? `(${wideLabel}近隣含む${result.includedAreas.length}エリア・降車${result.totalDropoffs}件中30分以内取得${result.totalNextWithin30}件)`
     : `(降車${result.totalDropoffs}件中30分以内取得${result.totalNextWithin30}件)`;
   if (evaluated.length === 0) {
     body.innerHTML = `<p class="muted" style="font-size:11px;margin-bottom:6px;">3件以上の該当データなし${includedLabel}。下に過去の動き履歴を表示します</p>`
