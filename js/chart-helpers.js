@@ -446,7 +446,7 @@ export function buildNeighborMap(drives, { minPairs = 2, maxWaitMin = 25 } = {})
   const pairs = {};
   for (const d of drives) {
     if (isSummaryOnly(d)) continue;
-    const trips = (d.trips || []).filter(t => !t.isCancel);
+    const trips = withOfficeStart(d);
     for (let i = 0; i < trips.length - 1; i++) {
       const t = trips[i];
       const next = trips[i + 1];
@@ -470,6 +470,23 @@ export function buildNeighborMap(drives, { minPairs = 2, maxWaitMin = 25 } = {})
     neighbors[b].add(a);
   }
   return neighbors;
+}
+
+// 営業所エリア (出庫直後のtripを「営業所降車後の次乗車」として扱うための仮想エリア)
+export const OFFICE_AREA = '大田区北馬込';
+
+// 出庫直後を仮想「営業所降車」trip として trips の先頭に追加した配列を返す
+function withOfficeStart(drive) {
+  const trips = (drive.trips || []).filter(t => !t.isCancel);
+  if (!drive.departureTime) return trips;
+  return [{
+    alightTime: drive.departureTime,
+    alightPlace: OFFICE_AREA,
+    boardTime: drive.departureTime,
+    boardPlace: OFFICE_AREA,
+    amount: 0,
+    _virtual: true,
+  }, ...trips];
 }
 
 // 配列の中央値
@@ -556,7 +573,7 @@ export function nextBoardBreakdown(drives, dropoffArea, hourCenter = null, hourW
   let totalNextWithin30 = 0;
   for (const d of drives) {
     if (isSummaryOnly(d)) continue;
-    const trips = (d.trips || []).filter(t => !t.isCancel);
+    const trips = withOfficeStart(d);
     for (let i = 0; i < trips.length - 1; i++) {
       const t = trips[i];
       if (!targetAreas.has(extractArea(t.alightPlace))) continue;
@@ -586,7 +603,7 @@ export function nextBoardBreakdown(drives, dropoffArea, hourCenter = null, hourW
         date: d.date,
         dow: d.date ? dowOf(d.date) : null,
         alightTime: t.alightTime,
-        dropoffPlace: t.alightPlace,
+        dropoffPlace: t._virtual ? OFFICE_AREA + '(出庫)' : t.alightPlace,
         nextBoardTime: next.boardTime,
         nextBoardPlace: next.boardPlace,
         nextAlightTime: next.alightTime,
@@ -666,7 +683,7 @@ export function dropoffHistoryAtArea(drives, area, hourCenter = null, hourWindow
   const entries = [];
   for (const d of drives) {
     if (isSummaryOnly(d)) continue;
-    const trips = (d.trips || []).filter(t => !t.isCancel);
+    const trips = withOfficeStart(d);
     for (let i = 0; i < trips.length; i++) {
       const t = trips[i];
       if (!targetAreas.has(extractArea(t.alightPlace))) continue;
@@ -692,7 +709,7 @@ export function dropoffHistoryAtArea(drives, area, hourCenter = null, hourWindow
         date: d.date,
         dow: d.date ? dowOf(d.date) : null,
         alightTime: t.alightTime,
-        dropoffPlace: t.alightPlace,
+        dropoffPlace: t._virtual ? OFFICE_AREA + '(出庫)' : t.alightPlace,
         nextBoardTime, nextBoardPlace, nextAlightTime, nextAlightPlace,
         wait, dur, amount,
       });
@@ -820,7 +837,7 @@ export function dropoffAreaAnalysis(drives) {
   const areas = {};
   for (const d of drives) {
     if (isSummaryOnly(d)) continue;
-    const trips = (d.trips || []).filter(t => !t.isCancel);
+    const trips = withOfficeStart(d);
     for (let i = 0; i < trips.length; i++) {
       const t = trips[i];
       const area = extractArea(t.alightPlace);
