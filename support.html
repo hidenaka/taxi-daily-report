@@ -91,7 +91,7 @@ if ('serviceWorker' in navigator) {
     </div>
     <div id="recGpsInfo" class="muted" style="font-size:10px;margin-bottom:6px;"></div>
     <div id="recBody" style="margin-top:10px;"></div>
-    <p class="muted" style="font-size:10px;margin-top:6px;">過去同条件で実際に取れた次のtripを集計、30分内取得率順に表示。<strong>営業所(大田区北馬込)</strong>を選ぶと出庫直後の最初のtripも含めて検索。「近隣」=過去データから自動学習(降車/出庫後25分以内に乗車したペアが2回以上)。GPSは国土地理院APIで町名取得、ズレた場合は近隣エリアも候補に</p>
+    <p class="muted" style="font-size:10px;margin-top:6px;">過去同条件で実際に取れた次のtripを集計、30分内取得率順に表示。<strong>営業所(大田区北馬込)</strong>を選ぶと出庫直後の最初のtripも含めて検索。GPS推定が過去データになければ、同区内で近い起点+その実移動可能範囲(=過去25分以内移動実績ペア)に絞って検索</p>
   </section>
 
   <section class="card" id="hourEffCard">
@@ -428,18 +428,31 @@ document.getElementById('recGps').onclick = async () => {
       updateNeighborInfo();
       document.getElementById('recSearch').click();
     } else if (detected) {
-      // 完全一致なし → 同区広域検索モード(同区の全エリアをtargetに)
+      // 完全一致なし → 同区内の「文字列が近いエリア」を起点に、neighborMapで実移動可能範囲に絞る
       const wardMatch = detected.match(/^([^区市]+(?:区|市[^区]+?区|市))/);
       const ward = wardMatch ? wardMatch[1] : '';
       const wardAreas = ward ? options.filter(v => v.startsWith(ward)) : [];
-      if (wardAreas.length > 0) {
-        gpsWideAreas = wardAreas;
-        document.getElementById('recExpand').checked = true;
-        info.innerHTML += `<br>過去データに完全一致なし → <strong>${ward}</strong> 広域検索モード(${wardAreas.length}エリア+近隣を一括検索)`;
-        document.getElementById('recSearch').click();
-      } else {
-        info.innerHTML += '<br>該当する区エリアもなし';
+      if (wardAreas.length === 0) {
+        info.innerHTML += '<br>該当する区エリアなし';
+        return;
       }
+      // 起点候補: 共通プレフィックス長が「区名+1文字以上」 → 同町名相当
+      const minMatch = ward.length + 1;
+      let seeds = wardAreas.filter(v => commonPrefixLen(v, detected) >= minMatch);
+      if (seeds.length === 0) {
+        // ない場合は共通プレフィックス長最大のもの上位3
+        const sorted = wardAreas.slice().sort((a, b) => commonPrefixLen(b, detected) - commonPrefixLen(a, detected));
+        seeds = sorted.slice(0, 3);
+      }
+      // 起点 + neighborMapで1ホップ到達可能なエリアに絞る(=過去25分以内移動実績がある関係)
+      const reachable = new Set(seeds);
+      for (const s of seeds) {
+        if (neighborMap[s]) for (const n of neighborMap[s]) reachable.add(n);
+      }
+      gpsWideAreas = Array.from(reachable);
+      document.getElementById('recExpand').checked = false; // 既に近隣含めて拡張済み
+      info.innerHTML += `<br>完全一致なし → 起点 <strong>${seeds.join(', ')}</strong> から実移動実績ある ${gpsWideAreas.length} エリアに絞り検索`;
+      document.getElementById('recSearch').click();
     } else {
       info.innerHTML += '<br>該当エリアなし';
     }
@@ -517,9 +530,9 @@ document.getElementById('recSearch').onclick = () => {
     .sort((a, b) => b.ratio30 - a.ratio30);
   const body = document.getElementById('recBody');
   const winLabel = `${String((hour-1+24)%24).padStart(2,'0')}:00-${String((hour+1)%24).padStart(2,'0')}:59`;
-  const wideLabel = gpsWideAreas ? '広域' : '';
+  const wideLabel = gpsWideAreas ? 'GPS実移動可能範囲' : '近隣';
   const includedLabel = result.includedAreas.length > 1
-    ? `(${wideLabel}近隣含む${result.includedAreas.length}エリア・降車${result.totalDropoffs}件中30分以内取得${result.totalNextWithin30}件)`
+    ? `(${wideLabel}${result.includedAreas.length}エリア・降車${result.totalDropoffs}件中30分以内取得${result.totalNextWithin30}件)`
     : `(降車${result.totalDropoffs}件中30分以内取得${result.totalNextWithin30}件)`;
   if (evaluated.length === 0) {
     body.innerHTML = `<p class="muted" style="font-size:11px;margin-bottom:6px;">3件以上の該当データなし${includedLabel}。下に過去の動き履歴を表示します</p>`
