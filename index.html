@@ -397,7 +397,7 @@ function predictMonthly(drives, config, periodStart, periodEnd) {
   const premiumRemaining = Math.round(remaining * (premiumCount / drives.length));
   const simulated = [...drives];
   for (let i = 0; i < remaining; i++) {
-    const vt = i < premiumRemaining ? 'premium' : 'regular';
+    const vt = i < premiumRemaining ? 'premium' : 'japantaxi';
     simulated.push({ trips: [{ amount: avgDailyInclTax, isCancel: false }], vehicleType: vt, date: '_p_' + i });
   }
   return calcTotalPay(simulated, config, periodStart, periodEnd);

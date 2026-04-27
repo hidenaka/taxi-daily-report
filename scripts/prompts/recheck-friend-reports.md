@@ -34,7 +34,7 @@
 ### 5. 出力フォーマット(前回と同じ)
 ```
 日付: YYYY-MM-DD
-車種: premium または regular
+車種: premium または japantaxi
 出庫: HH:MM
 帰庫: HH:MM
 ---

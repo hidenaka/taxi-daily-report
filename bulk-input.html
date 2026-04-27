@@ -60,7 +60,7 @@ if ('serviceWorker' in navigator) {
 
 【1枚あたりの出力フォーマット】
 日付: YYYY-MM-DD
-車種: premium または regular(写真から読み取れなければ空欄でOK、推測しない)
+車種: premium または japantaxi(写真から読み取れなければ空欄でOK、推測しない)
 出庫: HH:MM
 帰庫: HH:MM
 ---
@@ -96,7 +96,7 @@ No,乗車,降車,時間,迎,乗車地,降車地,営Km,男,女,合計
 3,12:15,12:48,0:33,迎,渋谷区神宮前4,世田谷区玉川3,9.2,1,1,"5,400"
 
 日付: 2024-11-09
-車種: regular
+車種: japantaxi
 出庫: 07:00
 帰庫: 22:30
 ---
@@ -198,11 +198,11 @@ function splitReports(text) {
 // ---- 車種自動判定 ---------------------------------------------------------
 
 function inferVehicleType(trips) {
-  if (!trips || trips.length === 0) return 'regular';
-  // 「ア」(アプリ配車) が1件でもあれば必ず regular
-  if (trips.some(t => t.pickupKind === 'ア')) return 'regular';
+  if (!trips || trips.length === 0) return 'japantaxi';
+  // 「ア」(アプリ配車) が1件でもあれば必ず japantaxi
+  if (trips.some(t => t.pickupKind === 'ア')) return 'japantaxi';
   const pickupCount = trips.filter(t => t.isPickup).length;
-  return (pickupCount / trips.length) >= 0.7 ? 'premium' : 'regular';
+  return (pickupCount / trips.length) >= 0.7 ? 'premium' : 'japantaxi';
 }
 
 // ---- 状態 ----------------------------------------------------------------

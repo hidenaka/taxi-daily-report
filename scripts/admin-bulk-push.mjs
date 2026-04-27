@@ -73,11 +73,11 @@ function normalizeSection(s) {
 }
 
 function inferVehicleType(trips) {
-  if (!trips || trips.length === 0) return 'regular';
-  // 「ア」(アプリ配車) が1件でもあれば必ず regular
-  if (trips.some(t => t.pickupKind === 'ア')) return 'regular';
+  if (!trips || trips.length === 0) return 'japantaxi';
+  // 「ア」(アプリ配車) が1件でもあれば必ず japantaxi
+  if (trips.some(t => t.pickupKind === 'ア')) return 'japantaxi';
   const pickupCount = trips.filter(t => t.isPickup).length;
-  return (pickupCount / trips.length) >= 0.7 ? 'premium' : 'regular';
+  return (pickupCount / trips.length) >= 0.7 ? 'premium' : 'japantaxi';
 }
 
 const DATA_REPO = process.env.DATA_REPO;
@@ -164,7 +164,7 @@ async function main(argv) {
     console.error(`★ 相違ある重複: ${conflicts.join(', ')} → push中止`);
     process.exit(1);
   }
-  console.log(`[2/4] ${finalDrives.length} 日に集約 (premium=${finalDrives.filter(d => d.vehicleType === 'premium').length}, regular=${finalDrives.filter(d => d.vehicleType === 'regular').length})`);
+  console.log(`[2/4] ${finalDrives.length} 日に集約 (premium=${finalDrives.filter(d => d.vehicleType === 'premium').length}, japantaxi=${finalDrives.filter(d => d.vehicleType === 'japantaxi').length})`);
 
   if (opts.dryRun) console.log('[dry-run] users.json チェックスキップ予定');
   else await ensureUser(opts.userId, opts.displayName);

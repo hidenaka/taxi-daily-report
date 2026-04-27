@@ -9,7 +9,7 @@
  * 使い方:
  *   node scripts/import-friend-report.mjs --user <userId> --photo <path> [options]
  *   node scripts/import-friend-report.mjs --user <userId> --text <path> [--text <path>...] [options]
- * オプション: --date <YYYY-MM-DD> (--photo のみ)  --vehicle <premium|regular>  --dry-run
+ * オプション: --date <YYYY-MM-DD> (--photo のみ)  --vehicle <premium|japantaxi>  --dry-run
  * 必須環境変数: GITHUB_TOKEN, DATA_REPO (dry-run 以外), GEMINI_API_KEY (--photo のみ)
  */
 
@@ -40,7 +40,7 @@ function usage() {
     '  node scripts/import-friend-report.mjs --user <userId> --photo <path> [options]',
     '  node scripts/import-friend-report.mjs --user <userId> --text <path> [--text <path>...] [options]',
     '必須: --user, および --photo または --text (どちらか一方)',
-    'オプション: --date <YYYY-MM-DD> (--photo のみ)  --vehicle <premium|regular>  --dry-run',
+    'オプション: --date <YYYY-MM-DD> (--photo のみ)  --vehicle <premium|japantaxi>  --dry-run',
     '環境変数: GITHUB_TOKEN, DATA_REPO (dry-run 以外で必須), GEMINI_API_KEY (--photo で必須)',
   ].join('\n'));
 }
@@ -83,8 +83,8 @@ function validate(opts) {
   }
   if (opts.date && !/^\d{4}-\d{2}-\d{2}$/.test(opts.date))
     errors.push(`--date "${opts.date}" は YYYY-MM-DD 形式で指定してください`);
-  if (opts.vehicle && !['premium', 'regular'].includes(opts.vehicle))
-    errors.push(`--vehicle "${opts.vehicle}" は無効です。premium または regular を指定してください`);
+  if (opts.vehicle && !['premium', 'japantaxi'].includes(opts.vehicle))
+    errors.push(`--vehicle "${opts.vehicle}" は無効です。premium または japantaxi を指定してください`);
   if (!opts.dryRun) {
     if (!process.env.GITHUB_TOKEN) errors.push('環境変数 GITHUB_TOKEN が未設定です');
     if (!process.env.DATA_REPO)    errors.push('環境変数 DATA_REPO が未設定です');

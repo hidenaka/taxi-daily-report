@@ -49,7 +49,7 @@ node scripts/validate-pasted-bulk.mjs
 - パース失敗 0
 - 重複日付がある場合は完全一致 or 相違の判定
 - キャンセル統計(¥400無条件・¥500/¥1000+0km・「キ」明示)
-- 車種推論結果(premium / regular の日数)
+- 車種推論結果(premium / japantaxi の日数)
 
 問題あれば paste-here.txt を編集してリトライ。
 
@@ -62,7 +62,7 @@ GITHUB_TOKEN=$(gh auth token) DATA_REPO=hidenaka/taxi-daily-report-data \
 
 **車種を上書きしたい日があれば:**
 ```bash
-... --override 2026-01-20:premium,2025-10-08:regular
+... --override 2026-01-20:premium,2025-10-08:japantaxi
 ```
 
 **dry-run で予定確認:**

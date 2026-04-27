@@ -36,9 +36,9 @@ function normalizeSection(s) {
 }
 
 function inferVehicleType(trips) {
-  if (!trips || trips.length === 0) return 'regular';
+  if (!trips || trips.length === 0) return 'japantaxi';
   const pickupCount = trips.filter(t => t.isPickup).length;
-  return (pickupCount / trips.length) >= 0.7 ? 'premium' : 'regular';
+  return (pickupCount / trips.length) >= 0.7 ? 'premium' : 'japantaxi';
 }
 
 const sections = splitReports(text);
@@ -106,7 +106,7 @@ for (let i = 0; i < sections.length; i++) {
 
 const dups = Object.entries(dateCount).filter(([_, c]) => c > 1).map(([d]) => d);
 const premiumDays = summaries.filter(s => s.vehicleType === 'premium').length;
-const regularDays = summaries.filter(s => s.vehicleType === 'regular').length;
+const regularDays = summaries.filter(s => s.vehicleType === 'japantaxi').length;
 
 console.log('=== 検証結果 ===');
 console.log(`総セクション: ${sections.length}`);
@@ -122,7 +122,7 @@ console.log(`  ¥500 + 0km:          ${totalCancel500}`);
 console.log(`  ¥1000 + 0km:         ${totalCancel1000}`);
 console.log(`  合計:                ${totalCancelMarker + totalCancel400 + totalCancel500 + totalCancel1000}`);
 console.log('');
-console.log(`車種推論: premium ${premiumDays} / regular ${regularDays}`);
+console.log(`車種推論: premium ${premiumDays} / japantaxi ${regularDays}`);
 console.log('');
 console.log('=== 各日サマリ ===');
 console.log('# 日付       occ vehicle(src) pickup% trips canc 売上     出-帰');

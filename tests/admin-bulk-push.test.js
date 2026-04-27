@@ -24,15 +24,15 @@ test('parseArgs: --user に invalid な ID はエラー', () => {
 });
 
 test('parseArgs: --override をJSON-likeに分解', () => {
-  const r = parseArgs(['--user', 'user_a', '--display', 'A', '--override', '2026-01-20:premium,2025-10-08:regular']);
-  assert.deepEqual(r.overrides, { '2026-01-20': 'premium', '2025-10-08': 'regular' });
+  const r = parseArgs(['--user', 'user_a', '--display', 'A', '--override', '2026-01-20:premium,2025-10-08:japantaxi']);
+  assert.deepEqual(r.overrides, { '2026-01-20': 'premium', '2025-10-08': 'japantaxi' });
 });
 
 test('parseOverrides: 単独関数として動作', () => {
   assert.deepEqual(parseOverrides(''), {});
   assert.deepEqual(parseOverrides('2026-01-20:premium'), { '2026-01-20': 'premium' });
-  assert.deepEqual(parseOverrides('2026-01-20:premium,2025-10-08:regular'),
-    { '2026-01-20': 'premium', '2025-10-08': 'regular' });
+  assert.deepEqual(parseOverrides('2026-01-20:premium,2025-10-08:japantaxi'),
+    { '2026-01-20': 'premium', '2025-10-08': 'japantaxi' });
 });
 
 test('mergeUsers: {users:[...]} 形式に新規 user を append', () => {

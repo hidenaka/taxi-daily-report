@@ -804,7 +804,7 @@ export function boardHistoryAtArea(drives, area, period = null, maxEntries = 30)
 
 // 高期待値エリア × 時間帯
 // 各trip(乗車)を boardPlace × 時間帯(4区切り) で集計、中央単価が高い順
-// 中央値ベースで並べることでイレギュラー案件の影響を排除
+// 中央値ベースで並べることでイジャパンタクシー案件の影響を排除
 // 戻り値: [{ area, period, count, avgSales, medianSales, avgDur }]
 export function highValueAreas(drives, { minSamples = 5 } = {}) {
   const groups = {};

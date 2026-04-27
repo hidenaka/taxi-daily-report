@@ -56,7 +56,7 @@
    GITHUB_TOKEN=$(gh auth token) DATA_REPO=hidenaka/taxi-daily-report-data \
      node scripts/admin-bulk-push.mjs --user user_X --display "Xさん"
    ```
-   - 車種を上書きしたい日があれば: `--override 2026-01-20:premium,2025-10-08:regular`
+   - 車種を上書きしたい日があれば: `--override 2026-01-20:premium,2025-10-08:japantaxi`
    - 最初は `--dry-run` で予定確認推奨
 7. このスクリプトが users.json への追加も自動で行う
 
@@ -158,14 +158,14 @@ GITHUB_TOKEN=$(gh auth token) DATA_REPO=hidenaka/taxi-daily-report-data \
 
 走行距離0kmで乗降同所だが金額が上記以外(待機料金等)は **キャンセル扱いにしない**(ユーザー要望)。
 
-### 5.2 車種(premium/regular)自動判定(管理者一括取込み時のみ)
+### 5.2 車種(premium/japantaxi)自動判定(管理者一括取込み時のみ)
 
 `scripts/admin-bulk-push.mjs` と `bulk-input.html` の `inferVehicleType`:
 
 1. ヘッダー `車種:` に値があれば優先
 2. なければ自動推論:
-   - 1件でも `迎` 列に **「ア」(アプリ配車)** があれば → **regular** 確定
-   - そうでなければ 迎車比率 ≥ 70% → **premium**、それ未満 → **regular**
+   - 1件でも `迎` 列に **「ア」(アプリ配車)** があれば → **japantaxi** 確定
+   - そうでなければ 迎車比率 ≥ 70% → **premium**、それ未満 → **japantaxi**
 
 入力画面(`input.html`)では auto-infer は走らず、ユーザーがドロップダウンで選択。
 
