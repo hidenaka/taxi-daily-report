@@ -120,13 +120,12 @@ if ('serviceWorker' in navigator) {
     </div>
     <div class="sort-tabs" id="areaSortTabs">
       <button data-s="dropoffs" class="active">件数順</button>
-      <button data-s="efficiency">実時給順</button>
       <button data-s="avgNextSales">単価順</button>
       <button data-s="avgWait">待ち短い順</button>
     </div>
     <div id="areaBody"></div>
     <div class="detail-tip" id="areaTip"></div>
-    <p class="muted" style="font-size:10px;margin-top:6px;">「単価」=降ろした次のtripの平均運賃。「実時給」=そのエリアで乗車したtripの「待ち+実車」累積時間で売上を割った値(全時間平均、空車含む実労働時間ベース、4時間超の休憩は除外)。両方高いエリアが理想。最低5件以上のみ</p>
+    <p class="muted" style="font-size:10px;margin-top:6px;">「単価」=降ろした次のtripの平均運賃。「待ち」=次乗車までの平均時間。タップでそのエリアの過去履歴を表示。最低5件以上のみ</p>
   </section>
 </main>
 <div id="navHost"></div>
@@ -353,24 +352,29 @@ function amountHeatStyle(amt, max) {
   }
   return `background:rgb(${r},${g},${b});color:#fff;`;
 }
-function timeDistance(timeStr, centerMin) {
-  const [h, m] = (timeStr || '0:0').split(':').map(Number);
-  const tm = h * 60 + m;
-  const d = Math.abs(tm - centerMin);
-  return Math.min(d, 24 * 60 - d);
-}
 function dowGroupKey(entryDow, todayDow) {
   if (entryDow === todayDow) return 0; // 同曜日
   const isWeekend = (d) => d === 0 || d === 6;
-  if (isWeekend(entryDow) === isWeekend(todayDow)) return 1; // 同カテゴリ
-  return 2; // 別カテゴリ
+  if (isWeekend(entryDow) === isWeekend(todayDow)) return 1; // 同カテゴリ他曜日
+  return 2; // 別カテゴリ(グレー)
 }
+// anchorMin = ウィンドウ開始時刻(=入力hour-1の0分)からの経過分(0-1439)
+function elapsedFromAnchor(timeStr, anchorMin) {
+  const [h, m] = (timeStr || '0:0').split(':').map(Number);
+  const tm = h * 60 + m;
+  let diff = tm - anchorMin;
+  if (diff < 0) diff += 24 * 60;
+  return diff;
+}
+// グレー以外(同カテゴリ)は時刻が若い(=ウィンドウ起点から早い)順
+// グレー(別カテゴリ)は最下段、内部は時刻が若い順
 function sortByDowAndTime(entries, todayDow, centerMin) {
+  const anchorMin = ((centerMin / 60 - 1 + 24) % 24) * 60;
   return entries.slice().sort((a, b) => {
-    const ga = dowGroupKey(a.dow, todayDow);
-    const gb = dowGroupKey(b.dow, todayDow);
+    const ga = dowGroupKey(a.dow, todayDow) === 2 ? 1 : 0;
+    const gb = dowGroupKey(b.dow, todayDow) === 2 ? 1 : 0;
     if (ga !== gb) return ga - gb;
-    return timeDistance(a.alightTime, centerMin) - timeDistance(b.alightTime, centerMin);
+    return elapsedFromAnchor(a.alightTime, anchorMin) - elapsedFromAnchor(b.alightTime, anchorMin);
   });
 }
 
@@ -378,10 +382,11 @@ function renderHistoryFallback(area, hour, expand) {
   const result = dropoffHistoryAtArea(allDrives, area, hour, 1, expand ? neighborMap : null, 30);
   const s = result.stats;
   if (s.totalDropoffs === 0) {
-    return '<p class="muted" style="font-size:11px;">該当時間帯のこのエリア降車履歴なし</p>';
+    return '<p class="muted" style="font-size:11px;">このエリアの降車履歴なし</p>';
   }
   const todayDow = dowOf(todayIso());
-  const centerMin = hour * 60;
+  // hour=null(全時間帯)時は0時起点で時刻早い順
+  const centerMin = hour != null ? hour * 60 : 60;
   const sortedEntries = sortByDowAndTime(result.entries, todayDow, centerMin);
   const maxAmount = Math.max(...sortedEntries.filter(e => e.amount > 0).map(e => e.amount), 1);
   // 待ち分布バー
@@ -597,33 +602,25 @@ function renderHourEff() {
 
 function renderArea() {
   const all = dropoffAreaAnalysis(allDrives);
-  // 5件未満除外 + 各エリアの実労働時間効率を引く(全時間平均)
-  let rows = all.filter(a => a.dropoffs >= 5).map(a => ({
-    ...a,
-    efficiency: getAreaHourlyAll(areaHourlyMap, a.area),
-  }));
+  let rows = all.filter(a => a.dropoffs >= 5);
   rows.sort((a, b) => {
     if (areaSort === 'dropoffs') return b.dropoffs - a.dropoffs;
-    if (areaSort === 'efficiency') return (b.efficiency || 0) - (a.efficiency || 0);
     if (areaSort === 'avgWait') return (a.avgWait ?? 9999) - (b.avgWait ?? 9999);
     if (areaSort === 'avgNextSales') return (b.avgNextSales || 0) - (a.avgNextSales || 0);
     return 0;
   });
   const top = rows.slice(0, 30);
-  const maxEff = Math.max(...top.map(r => r.efficiency || 0), 1);
   const maxSales = Math.max(...top.map(r => r.avgNextSales || 0), 1);
   let html = '<div style="overflow-x:auto;"><table class="area-table"><thead><tr>'
-    + '<th class="l">降車エリア</th><th>件数</th><th>次まで待ち</th><th>単価</th><th>実時給¥/h</th>'
+    + '<th class="l">降車エリア</th><th>件数</th><th>次まで待ち</th><th>単価</th>'
     + '</tr></thead><tbody>';
   for (const r of top) {
-    const effPct = r.efficiency ? (r.efficiency / maxEff * 100) : 0;
     const salesPct = r.avgNextSales ? (r.avgNextSales / maxSales * 100) : 0;
     html += `<tr data-area="${r.area}" style="cursor:pointer;">
       <td class="l">${r.area}</td>
       <td>${r.dropoffs}</td>
       <td>${r.avgWait != null ? formatMin(r.avgWait) : '—'}</td>
       <td><div class="bar"><div class="fill" style="width:${salesPct}%;background:#1976d2;"></div><div class="v">${r.avgNextSales != null ? formatYen(r.avgNextSales) : '—'}</div></div></td>
-      <td><div class="bar"><div class="fill" style="width:${effPct}%;"></div><div class="v">${r.efficiency != null ? formatYen(r.efficiency) : '—'}</div></div></td>
     </tr>`;
   }
   html += '</tbody></table></div>';
@@ -632,25 +629,9 @@ function renderArea() {
   document.querySelectorAll('#areaBody tr[data-area]').forEach(tr => {
     tr.onclick = () => {
       const area = tr.dataset.area;
-      const r = rows.find(x => x.area === area);
-      if (!r) return;
       const tip = document.getElementById('areaTip');
       tip.classList.add('show');
-      const effRatio = targetHourly > 0 ? r.efficiency / targetHourly : 0;
-      const salesRatio = avgSalesBaseline > 0 && r.avgNextSales ? r.avgNextSales / avgSalesBaseline : 0;
-      const salesGood = salesRatio >= 0.95;
-      const effGood = effRatio >= 0.95;
-      let judgement;
-      if (salesGood && effGood) judgement = '◎ 単価・実時給とも目標以上 → 留まる価値あり';
-      else if (effGood && !salesGood) judgement = '◯ 実時給は目標以上だが単価は低め(短距離が多い)';
-      else if (salesGood && !effGood) judgement = '△ 単価高いが実時給は目標未満 → 待ちが長すぎる';
-      else judgement = '✕ 単価・実時給とも目標未満 → 別エリアへ移動推奨';
-      tip.innerHTML = `
-        <strong>${area}</strong> で降ろした後 (${r.dropoffs}件)<br>
-        単価 <strong>${r.avgNextSales != null ? formatYen(r.avgNextSales) : '—'}</strong>(平均比${Math.round(salesRatio*100)}%) ・ 実時給 <strong>${formatYen(r.efficiency)}/h</strong>(目標比${Math.round(effRatio*100)}%)<br>
-        <span style="font-size:11px;color:var(--muted);">次まで待ち ${r.avgWait != null ? formatMin(r.avgWait) : '—'} ・ 次実車 ${r.avgNextDur != null ? formatMin(r.avgNextDur) : '—'}</span><br>
-        <span style="color:#f57f17;">${judgement}</span>
-      `;
+      tip.innerHTML = `<strong>${area}</strong> で降ろした後の過去履歴(全時間帯)<br>` + renderHistoryFallback(area, null, false);
     };
   });
 }
