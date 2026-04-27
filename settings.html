@@ -94,6 +94,8 @@ import { calcTotalPay } from './js/payroll.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('settings');
 
+let currentConfig = null;
+
 // GitHub設定 復元
 document.getElementById('repoInput').value = localStorage.getItem('github_data_repo') || '';
 document.getElementById('tokenInput').value = localStorage.getItem('github_token') || '';
@@ -133,14 +135,16 @@ document.getElementById('testBtn').onclick = async () => {
     if (!r.ok) { log(`✗ /repos/${repo} ${r.status}`); return; }
     log(`✓ リポジトリ存在確認OK`);
   } catch (e) { log(`✗ リポジトリ確認失敗: ${e.message}`); return; }
-  // Test 3: config.json
+  // Test 3: config/{userId}.json
   try {
-    const r = await fetch(`https://api.github.com/repos/${repo}/contents/data/config.json`, { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json' } });
-    if (r.status === 404) { log('✗ data/config.json が見つからない'); return; }
-    if (!r.ok) { log(`✗ config.json取得失敗 ${r.status}`); return; }
-    log('✓ config.json取得OK');
+    const userId = getMyUserId();
+    const configPath = `data/config/${userId}.json`;
+    const r = await fetch(`https://api.github.com/repos/${repo}/contents/${configPath}`, { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json' } });
+    if (r.status === 404) { log(`✗ ${configPath} が見つからない`); return; }
+    if (!r.ok) { log(`✗ ${configPath} 取得失敗 ${r.status}`); return; }
+    log(`✓ ${configPath} 取得OK`);
     log('→ すべて正常。「保存」を押して設定を反映してください。');
-  } catch (e) { log(`✗ config.json取得失敗: ${e.message}`); }
+  } catch (e) { log(`✗ config取得失敗: ${e.message}`); }
 };
 
 document.getElementById('saveUserBtn').onclick = async () => {
@@ -172,8 +176,6 @@ document.getElementById('saveUserBtn').onclick = async () => {
     status.textContent += '\n⚠ config がロードされていないため表示名は未保存(GitHub接続して再試行)';
   }
 };
-
-let currentConfig = null;
 
 async function loadConfig() {
   try {
