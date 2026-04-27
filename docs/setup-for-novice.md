@@ -19,7 +19,7 @@
 
 ## Step 1. アプリをホーム画面に追加する
 
-![ホーム画面への追加](images/onboarding-step01-01.png)
+![Step 1: アプリをホーム画面に追加](images/manual-step.001.png)
 
 1. **管理者から受け取った URL を開く**(LINEのメッセージのリンクをタップ)
 2. iPhone(Safari)の場合: 画面下中央の **共有ボタン（□に↑のアイコン）** をタップ
@@ -34,7 +34,7 @@
 
 ## Step 2. 設定画面でキーとIDを入れる
 
-![設定画面](images/onboarding-step02-01.png)
+![Step 2: 設定画面でキーとIDを入れる](images/manual-step.002.png)
 
 1. ホーム画面のアイコンから **アプリを開く**
 2. 下のメニューから **「⚙ 設定」** を開く
@@ -51,7 +51,7 @@
 
 ## Step 3. 日報の写真を Gemini で変換する
 
-![Gemini で変換](images/onboarding-step03-01.png)
+![Step 3: Gemini Webで写真をテキスト化](images/manual-step.003.png)
 
 毎日の運用フローです:
 
@@ -70,7 +70,7 @@
 
 ## Step 4. アプリにペーストして保存
 
-![アプリで保存](images/onboarding-step04-01.png)
+![Step 4: アプリにペーストして保存](images/manual-step.004.png)
 
 1. タクシー日報アプリを開く
 2. **「📝 入力」** メニューを開く
