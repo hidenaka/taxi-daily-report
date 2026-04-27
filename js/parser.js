@@ -111,12 +111,15 @@ export function parseReport(text) {
 export function parseFormattedReport(text) {
   const lines = text.split('\n');
   const header = { 日付: '', 車種: '', 出庫: '', 帰庫: '' };
-  let dataStart = 0;
+  let dataStart = -1;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (line === '---') { dataStart = i + 1; break; }
     const m = line.match(/^(日付|車種|出庫|帰庫):\s*(.*)$/);
     if (m) header[m[1]] = m[2].trim();
+  }
+  if (dataStart === -1) {
+    throw new Error('parseFormattedReport: --- separator not found');
   }
   const dataText = lines.slice(dataStart).join('\n');
   const inner = parseReport(dataText);
@@ -127,6 +130,7 @@ export function parseFormattedReport(text) {
     returnTime: header.帰庫 || inner.returnTime,
     trips: inner.trips,
     rests: inner.rests,
-    format: inner.format
+    format: inner.format,
+    rawText: text
   };
 }

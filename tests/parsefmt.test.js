@@ -40,3 +40,14 @@ test('parseFormattedReport: 不完全ヘッダーでも data 部分は処理', (
   assert.equal(r.vehicleType, '');
   assert.equal(r.trips.length, 1);
 });
+
+test('parseFormattedReport: --- 区切りなしならthrow', () => {
+  const text = '日付: 2026-04-26\n車種: premium\n出庫: 07:00\n帰庫: 23:00';
+  assert.throws(() => parseFormattedReport(text), /--- separator not found/);
+});
+
+test('parseFormattedReport: rawText に元テキストをそのまま含む', () => {
+  const text = readFileSync('tests/fixtures/sample-formatted.txt', 'utf-8');
+  const r = parseFormattedReport(text);
+  assert.equal(r.rawText, text);
+});
