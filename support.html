@@ -110,7 +110,7 @@ if ('serviceWorker' in navigator) {
       <span class="desc">単価が大きく出る場所と時間</span>
     </div>
     <div id="highValueBody"></div>
-    <p class="muted" style="font-size:10px;margin-top:6px;">乗車地エリア × 時間帯(4区切り)で平均単価が高い順TOP15。羽田空港のように「待ちは長いが期待値大」のエリアを発見する用途。「実時給」=その時間帯の実労働時間ベース(待ち+実車)。最低5件以上</p>
+    <p class="muted" style="font-size:10px;margin-top:6px;">乗車地エリア × 時間帯(4区切り)で平均単価が高い順TOP15。羽田空港のように「待ちは長いが期待値大」のエリアを発見する用途。最低5件以上</p>
   </section>
 
   <section class="card" id="areaCard">
@@ -131,8 +131,8 @@ if ('serviceWorker' in navigator) {
 <div id="navHost"></div>
 <script type="module">
 import { renderBottomNav, formatYen, formatDateY, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, toLocalIso } from './js/app.js';
-import { getDrivesForMonth, getConfig } from './js/storage.js';
-import { hourlyDowEfficiency, dropoffAreaAnalysis, nextBoardBreakdown, dropoffHistoryAtArea, buildNeighborMap, highValueAreas, calcPaceAtElapsed, evaluateRecommendRow, calcTargetHourly, avgTripSales, areaTimeHourly, getAreaHourly, getAreaHourlyAll, getAreaPeriodHourly, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin, dowOf } from './js/chart-helpers.js';
+import { getDrivesForMonth } from './js/storage.js';
+import { hourlyDowEfficiency, dropoffAreaAnalysis, nextBoardBreakdown, dropoffHistoryAtArea, buildNeighborMap, highValueAreas, calcPaceAtElapsed, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin, dowOf } from './js/chart-helpers.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('support');
 
@@ -143,10 +143,6 @@ let allDrives = [];
 let areaSort = 'dropoffs';
 let neighborMap = {};
 let hourMetric = 'A';
-let config = null;
-let targetHourly = 0;
-let avgSalesBaseline = 0;
-let areaHourlyMap = {};
 const HOUR_ORDER = [7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,0,1,2,3,4,5,6];
 
 // === 出庫ペース参考カード (元 index.html から移植) ===
@@ -298,11 +294,7 @@ async function load() {
   for (let i = monthsRange - 1; i >= 0; i--) periods.push(shiftBillingPeriod(current, -i));
   const results = await Promise.all(periods.map(ym => getDrivesForMonth(ym)));
   allDrives = results.flat();
-  if (!config) config = await getConfig();
-  targetHourly = calcTargetHourly(allDrives, config);
-  avgSalesBaseline = avgTripSales(allDrives);
-  areaHourlyMap = areaTimeHourly(allDrives);
-  document.getElementById('rangeInfo').textContent = `${formatBillingPeriod(periods[0])} 〜 ${formatBillingPeriod(periods[periods.length-1])} (${allDrives.length}乗務) ・ 目標時給 ${formatYen(targetHourly)}/h ・ 平均単価 ${formatYen(avgSalesBaseline)}`;
+  document.getElementById('rangeInfo').textContent = `${formatBillingPeriod(periods[0])} 〜 ${formatBillingPeriod(periods[periods.length-1])} (${allDrives.length}乗務)`;
   neighborMap = buildNeighborMap(allDrives);
   populateRecommendArea();
   updateNeighborInfo();
@@ -437,16 +429,10 @@ document.getElementById('recSearch').onclick = () => {
   if (!area || !time) return;
   const hour = parseInt(time.split(':')[0]);
   const result = nextBoardBreakdown(allDrives, area, hour, 1, expand ? neighborMap : null);
-  // 各行: 効率 = そのエリア×時刻±1hの実時給、スコア化
+  // 30分以内取得率の高い順
   const evaluated = result.rows
     .filter(r => r.count >= 3)
-    .map(r => {
-      const efficiency = getAreaHourly(areaHourlyMap, r.area, hour, 1);
-      const enriched = { ...r, efficiency };
-      const ev = evaluateRecommendRow(enriched, targetHourly, avgSalesBaseline);
-      return { ...enriched, ...ev };
-    })
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => b.ratio30 - a.ratio30);
   const body = document.getElementById('recBody');
   const winLabel = `${String((hour-1+24)%24).padStart(2,'0')}:00-${String((hour+1)%24).padStart(2,'0')}:59`;
   const includedLabel = result.includedAreas.length > 1
@@ -458,32 +444,27 @@ document.getElementById('recSearch').onclick = () => {
     return;
   }
   const top = evaluated.slice(0, 10);
-  const maxEff = Math.max(...top.map(r => r.efficiency), 1);
-  const markColor = (m) => m === '◎' ? '#1b5e20' : m === '○' ? '#388e3c' : m === '△' ? '#f57c00' : '#c62828';
-  let html = `<div class="muted" style="font-size:11px;margin-bottom:6px;"><strong>${area}</strong>${expand && result.includedAreas.length > 1 ? '+近隣' : ''} で <strong>${winLabel}</strong>(±1h) に降ろした後の次乗車推奨TOP${top.length} ${includedLabel}<br>判定基準: 目標時給 ${formatYen(targetHourly)}/h ・ 平均運賃 ${formatYen(avgSalesBaseline)}</div>`;
+  const maxSales = Math.max(...top.map(r => r.avgSales || 0), 1);
+  let html = `<div class="muted" style="font-size:11px;margin-bottom:6px;"><strong>${area}</strong>${expand && result.includedAreas.length > 1 ? '+近隣' : ''} で <strong>${winLabel}</strong>(±1h) に降ろした後の次乗車TOP${top.length} ${includedLabel}</div>`;
   html += '<div style="overflow-x:auto;"><table class="area-table"><thead><tr>'
-    + '<th>判定</th><th class="l">次乗車エリア</th><th>件数</th><th>15分内</th><th>30分内</th><th>次運賃 平均/中央</th><th>実時給¥/h</th>'
+    + '<th class="l">次乗車エリア</th><th>件数</th><th>15分内</th><th>30分内</th><th>次運賃(平均/中央)</th>'
     + '</tr></thead><tbody>';
   for (let idx = 0; idx < top.length; idx++) {
     const r = top[idx];
-    const effPct = r.efficiency > 0 ? (r.efficiency / maxEff * 100) : 0;
+    const salesPct = r.avgSales ? (r.avgSales / maxSales * 100) : 0;
     const r15 = Math.round(r.ratio15 * 100);
     const r30 = Math.round(r.ratio30 * 100);
-    const effRatioPct = Math.round(r.effRatio * 100);
-    const salesRatioPct = Math.round(r.salesRatio * 100);
-    html += `<tr data-idx="${idx}" style="cursor:pointer;" title="実時給${effRatioPct}%目標比 ・ 運賃${salesRatioPct}%平均比 ・ スコア${r.score.toFixed(2)} ・ タップで根拠データ">
-      <td style="text-align:center;font-weight:700;color:${markColor(r.mark)};font-size:14px;">${r.mark}</td>
+    html += `<tr data-idx="${idx}" style="cursor:pointer;" title="タップで根拠データ">
       <td class="l">${r.area}</td>
       <td>${r.count}</td>
       <td>${r15}%</td>
       <td>${r30}%</td>
-      <td>${formatYen(r.avgSales)}<br><span style="font-size:10px;color:var(--muted);">中${formatYen(r.medianSales)}</span></td>
-      <td><div class="bar"><div class="fill" style="width:${effPct}%;"></div><div class="v">${r.efficiency > 0 ? formatYen(r.efficiency) : '—'}</div></div></td>
+      <td><div class="bar"><div class="fill" style="width:${salesPct}%;"></div><div class="v">${formatYen(r.avgSales)}<span style="color:rgba(255,255,255,0.85);font-size:9px;margin-left:4px;">中${formatYen(r.medianSales)}</span></div></div></td>
     </tr>
-    <tr id="recDetail-${idx}" style="display:none;background:#fafafa;"><td colspan="7" style="padding:8px;"></td></tr>`;
+    <tr id="recDetail-${idx}" style="display:none;background:#fafafa;"><td colspan="5" style="padding:8px;"></td></tr>`;
   }
   html += '</tbody></table></div>';
-  html += '<p class="muted" style="font-size:10px;margin-top:4px;">判定: ◎優秀 / ○平均 / △どちらか低い / ✕両方低い(=移動・休憩推奨)。「次運賃」=次tripの平均/中央値(¥0除外)。「実時給」=そのエリア×時刻±1hの過去サイクル時間ベース。タップで根拠データ表示</p>';
+  html += '<p class="muted" style="font-size:10px;margin-top:4px;">「15分内」=反応速い「30分内」=仕事ありエリア。「次運賃」=次tripの平均/中央値(¥0除外)。30分内取得率の高い順。タップで根拠データ表示</p>';
   // 全履歴フォールバック (折りたたみ)
   html += `<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:11px;color:var(--primary);">▶ このエリアでの全履歴を見る(待ちの目安)</summary><div style="margin-top:8px;">${renderHistoryFallback(area, hour, expand)}</div></details>`;
   body.innerHTML = html;
@@ -518,25 +499,21 @@ document.getElementById('recSearch').onclick = () => {
 };
 
 function renderHighValue() {
-  const rows = highValueAreas(allDrives, { minSamples: 5 })
-    .map(r => ({ ...r, hourly: getAreaPeriodHourly(areaHourlyMap, r.area, r.period) }))
-    .slice(0, 15);
+  const rows = highValueAreas(allDrives, { minSamples: 5 }).slice(0, 15);
   const body = document.getElementById('highValueBody');
   if (rows.length === 0) { body.innerHTML = '<p class="muted" style="font-size:11px;">該当データなし</p>'; return; }
   const maxSales = Math.max(...rows.map(r => r.avgSales), 1);
-  const maxH = Math.max(...rows.map(r => r.hourly || 0), 1);
   let html = '<div style="overflow-x:auto;"><table class="area-table"><thead><tr>'
-    + '<th class="l">エリア</th><th>時間帯</th><th>件数</th><th>平均単価</th><th>実時給¥/h</th>'
+    + '<th class="l">エリア</th><th>時間帯</th><th>件数</th><th>平均実車</th><th>平均単価</th>'
     + '</tr></thead><tbody>';
   for (const r of rows) {
     const pct = r.avgSales / maxSales * 100;
-    const hPct = r.hourly ? (r.hourly / maxH * 100) : 0;
     html += `<tr>
       <td class="l">${r.area}</td>
       <td>${PERIOD_LABELS[r.period]}</td>
       <td>${r.count}</td>
-      <td><div class="bar"><div class="fill" style="width:${pct}%;background:#1976d2;"></div><div class="v">${formatYen(r.avgSales)}</div></div></td>
-      <td><div class="bar"><div class="fill" style="width:${hPct}%;"></div><div class="v">${r.hourly > 0 ? formatYen(r.hourly) : '—'}</div></div></td>
+      <td>${formatMin(r.avgDur)}</td>
+      <td><div class="bar"><div class="fill" style="width:${pct}%;"></div><div class="v">${formatYen(r.avgSales)}</div></div></td>
     </tr>`;
   }
   html += '</tbody></table></div>';
