@@ -131,9 +131,9 @@ if ('serviceWorker' in navigator) {
 </main>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, toLocalIso } from './js/app.js';
+import { renderBottomNav, formatYen, formatDateY, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, toLocalIso } from './js/app.js';
 import { getDrivesForMonth, getConfig } from './js/storage.js';
-import { hourlyDowEfficiency, dropoffAreaAnalysis, nextBoardBreakdown, buildNeighborMap, highValueAreas, calcPaceAtElapsed, evaluateRecommendRow, calcTargetHourly, avgTripSales, areaTimeHourly, getAreaHourly, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin, dowOf } from './js/chart-helpers.js';
+import { hourlyDowEfficiency, dropoffAreaAnalysis, nextBoardBreakdown, dropoffHistoryAtArea, buildNeighborMap, highValueAreas, calcPaceAtElapsed, evaluateRecommendRow, calcTargetHourly, avgTripSales, areaTimeHourly, getAreaHourly, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin, dowOf } from './js/chart-helpers.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('support');
 
@@ -340,6 +340,48 @@ function updateNeighborInfo() {
 document.getElementById('recArea').addEventListener('change', updateNeighborInfo);
 document.getElementById('recExpand').addEventListener('change', updateNeighborInfo);
 
+function renderHistoryFallback(area, hour, expand) {
+  const result = dropoffHistoryAtArea(allDrives, area, hour, 1, expand ? neighborMap : null, 30);
+  const s = result.stats;
+  if (s.totalDropoffs === 0) {
+    return '<p class="muted" style="font-size:11px;">該当時間帯のこのエリア降車履歴なし</p>';
+  }
+  // 待ち分布バー
+  const total = s.waitsKnown || 1;
+  const pct = (n) => Math.round(n / total * 100);
+  const distBar = `
+    <div style="display:flex;height:18px;border-radius:3px;overflow:hidden;font-size:9px;color:#fff;line-height:18px;text-align:center;margin:6px 0;">
+      <div style="background:#2e7d32;width:${pct(s.within15)}%;" title="15分以内 ${s.within15}件">${pct(s.within15) >= 8 ? pct(s.within15)+'%' : ''}</div>
+      <div style="background:#66bb6a;width:${pct(s.within30 - s.within15)}%;">${pct(s.within30 - s.within15) >= 8 ? pct(s.within30 - s.within15)+'%' : ''}</div>
+      <div style="background:#fb8c00;width:${pct(s.within60 - s.within30)}%;">${pct(s.within60 - s.within30) >= 8 ? pct(s.within60 - s.within30)+'%' : ''}</div>
+      <div style="background:#c62828;width:${pct(s.over60)}%;">${pct(s.over60) >= 8 ? pct(s.over60)+'%' : ''}</div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);">
+      <span style="color:#2e7d32;">15分内 ${s.within15}</span>
+      <span style="color:#66bb6a;">15-30分 ${s.within30 - s.within15}</span>
+      <span style="color:#fb8c00;">30-60分 ${s.within60 - s.within30}</span>
+      <span style="color:#c62828;">60分超 ${s.over60}</span>
+    </div>
+  `;
+  let html = `<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">過去 ${s.totalDropoffs} 件の降車 ・ 待ち平均 ${s.avgWait != null ? formatMin(s.avgWait) : '—'} ・ 中央 ${s.medianWait != null ? formatMin(s.medianWait) : '—'}</div>`;
+  html += distBar;
+  html += '<table style="width:100%;font-size:10px;border-collapse:collapse;margin-top:6px;">'
+    + '<thead><tr style="color:var(--muted);"><th style="text-align:left;padding:3px 4px;border-bottom:1px solid #eee;">日付</th><th style="text-align:left;padding:3px 4px;border-bottom:1px solid #eee;">降車地→次乗車地→次降車地</th><th style="padding:3px 4px;border-bottom:1px solid #eee;">時刻</th><th style="padding:3px 4px;border-bottom:1px solid #eee;">待ち</th><th style="padding:3px 4px;border-bottom:1px solid #eee;">実車</th><th style="text-align:right;padding:3px 4px;border-bottom:1px solid #eee;">運賃</th></tr></thead><tbody>';
+  for (const e of result.entries) {
+    const next = e.nextBoardTime ? `${e.nextBoardPlace || '—'} <span style="color:var(--muted);">→</span> ${e.nextAlightPlace || '—'}` : '<span style="color:var(--muted);">(次なし=帰庫または長時間休憩)</span>';
+    const times = e.nextBoardTime ? `${e.alightTime}/${e.nextBoardTime}/${e.nextAlightTime}` : `${e.alightTime}/—/—`;
+    const waitStr = e.wait != null ? (e.wait >= 60 ? formatMin(e.wait) : e.wait + '分') : '—';
+    const durStr = e.dur != null ? formatMin(e.dur) : '—';
+    const amountStr = e.amount != null ? formatYen(e.amount) : '—';
+    html += `<tr><td style="padding:3px 4px;border-bottom:1px solid #f5f5f5;white-space:nowrap;">${formatDateY(e.date)}</td><td style="padding:3px 4px;border-bottom:1px solid #f5f5f5;line-height:1.4;">${e.dropoffPlace} <span style="color:var(--muted);">→</span> ${next}</td><td style="padding:3px 4px;border-bottom:1px solid #f5f5f5;text-align:center;color:var(--muted);white-space:nowrap;">${times}</td><td style="padding:3px 4px;border-bottom:1px solid #f5f5f5;text-align:center;">${waitStr}</td><td style="padding:3px 4px;border-bottom:1px solid #f5f5f5;text-align:center;">${durStr}</td><td style="padding:3px 4px;border-bottom:1px solid #f5f5f5;text-align:right;font-weight:600;">${amountStr}</td></tr>`;
+  }
+  html += '</tbody></table>';
+  if (s.totalDropoffs > result.entries.length) {
+    html += `<p class="muted" style="font-size:10px;margin-top:4px;">直近${result.entries.length}件のみ表示(全${s.totalDropoffs}件)</p>`;
+  }
+  return html;
+}
+
 document.getElementById('recSearch').onclick = () => {
   const area = document.getElementById('recArea').value;
   const time = document.getElementById('recTime').value;
@@ -363,7 +405,8 @@ document.getElementById('recSearch').onclick = () => {
     ? `(近隣含む${result.includedAreas.length}エリア・降車${result.totalDropoffs}件中30分以内取得${result.totalNextWithin30}件)`
     : `(降車${result.totalDropoffs}件中30分以内取得${result.totalNextWithin30}件)`;
   if (evaluated.length === 0) {
-    body.innerHTML = `<p class="muted" style="font-size:11px;">3件以上の該当データなし${includedLabel}。近隣を含めるか期間を広げてください</p>`;
+    body.innerHTML = `<p class="muted" style="font-size:11px;margin-bottom:6px;">3件以上の該当データなし${includedLabel}。下に過去の動き履歴を表示します</p>`
+      + renderHistoryFallback(area, hour, expand);
     return;
   }
   const top = evaluated.slice(0, 10);
@@ -393,6 +436,8 @@ document.getElementById('recSearch').onclick = () => {
   }
   html += '</tbody></table></div>';
   html += '<p class="muted" style="font-size:10px;margin-top:4px;">判定: ◎優秀 / ○平均 / △どちらか低い / ✕両方低い(=移動・休憩推奨)。「次運賃」=次tripの平均/中央値(¥0除外)。「実時給」=そのエリア×時刻±1hの過去サイクル時間ベース。タップで根拠データ表示</p>';
+  // 全履歴フォールバック (折りたたみ)
+  html += `<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:11px;color:var(--primary);">▶ このエリアでの全履歴を見る(待ちの目安)</summary><div style="margin-top:8px;">${renderHistoryFallback(area, hour, expand)}</div></details>`;
   body.innerHTML = html;
   body.querySelectorAll('tr[data-idx]').forEach(tr => {
     tr.onclick = () => {
@@ -405,7 +450,7 @@ document.getElementById('recSearch').onclick = () => {
         dh += '<table style="width:100%;font-size:10px;border-collapse:collapse;">'
           + '<thead><tr style="color:var(--muted);"><th style="text-align:left;padding:3px 4px;border-bottom:1px solid #eee;">日付</th><th style="text-align:left;padding:3px 4px;border-bottom:1px solid #eee;">降車地→次乗車地→次降車地</th><th style="padding:3px 4px;border-bottom:1px solid #eee;">時刻</th><th style="padding:3px 4px;border-bottom:1px solid #eee;">待</th><th style="padding:3px 4px;border-bottom:1px solid #eee;">実車</th><th style="text-align:right;padding:3px 4px;border-bottom:1px solid #eee;">運賃</th></tr></thead><tbody>';
         for (const s of samples) {
-          dh += `<tr><td style="padding:3px 4px;border-bottom:1px solid #f5f5f5;">${(s.date || '').slice(5)}</td><td style="padding:3px 4px;border-bottom:1px solid #f5f5f5;line-height:1.4;">${s.dropoffPlace} <span style="color:var(--muted);">→</span> ${s.nextBoardPlace} <span style="color:var(--muted);">→</span> ${s.nextAlightPlace}</td><td style="padding:3px 4px;border-bottom:1px solid #f5f5f5;text-align:center;color:var(--muted);">${s.alightTime}/${s.nextBoardTime}/${s.nextAlightTime}</td><td style="padding:3px 4px;border-bottom:1px solid #f5f5f5;text-align:center;">${s.wait}分</td><td style="padding:3px 4px;border-bottom:1px solid #f5f5f5;text-align:center;">${formatMin(s.dur)}</td><td style="padding:3px 4px;border-bottom:1px solid #f5f5f5;text-align:right;font-weight:600;">${formatYen(s.amount)}</td></tr>`;
+          dh += `<tr><td style="padding:3px 4px;border-bottom:1px solid #f5f5f5;white-space:nowrap;">${formatDateY(s.date)}</td><td style="padding:3px 4px;border-bottom:1px solid #f5f5f5;line-height:1.4;">${s.dropoffPlace} <span style="color:var(--muted);">→</span> ${s.nextBoardPlace} <span style="color:var(--muted);">→</span> ${s.nextAlightPlace}</td><td style="padding:3px 4px;border-bottom:1px solid #f5f5f5;text-align:center;color:var(--muted);white-space:nowrap;">${s.alightTime}/${s.nextBoardTime}/${s.nextAlightTime}</td><td style="padding:3px 4px;border-bottom:1px solid #f5f5f5;text-align:center;">${s.wait}分</td><td style="padding:3px 4px;border-bottom:1px solid #f5f5f5;text-align:center;">${formatMin(s.dur)}</td><td style="padding:3px 4px;border-bottom:1px solid #f5f5f5;text-align:right;font-weight:600;">${formatYen(s.amount)}</td></tr>`;
         }
         dh += '</tbody></table>';
         detail.querySelector('td').innerHTML = dh;

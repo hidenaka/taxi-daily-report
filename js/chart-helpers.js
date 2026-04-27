@@ -643,6 +643,68 @@ export function evaluateRecommendRow({ efficiency, avgSales, ratio30 }, targetHo
   return { score, mark, effRatio, salesRatio };
 }
 
+// 検索ヒットなし時のフォールバック: そのエリア×時刻でどう動いていたかの履歴
+// 待ち時間制限なし、運賃¥0でも含める。新しい順 max 30件
+// 待ち時間分布の統計も同時に返す
+export function dropoffHistoryAtArea(drives, area, hourCenter = null, hourWindow = 1, neighbors = null, maxEntries = 30) {
+  const targetAreas = new Set([area]);
+  if (neighbors && neighbors[area]) {
+    for (const n of neighbors[area]) targetAreas.add(n);
+  }
+  const entries = [];
+  for (const d of drives) {
+    if (isSummaryOnly(d)) continue;
+    const trips = (d.trips || []).filter(t => !t.isCancel);
+    for (let i = 0; i < trips.length; i++) {
+      const t = trips[i];
+      if (!targetAreas.has(extractArea(t.alightPlace))) continue;
+      if (hourCenter !== null) {
+        const ah = parseInt(t.alightTime.split(':')[0]);
+        if (!hourInWindow(ah, hourCenter, hourWindow)) continue;
+      }
+      const next = trips[i + 1];
+      let wait = null, dur = null, amount = null;
+      let nextBoardTime = null, nextBoardPlace = null, nextAlightTime = null, nextAlightPlace = null;
+      if (next) {
+        wait = timeToMinutes(next.boardTime) - timeToMinutes(t.alightTime);
+        if (wait < 0) wait += 24 * 60;
+        dur = timeToMinutes(next.alightTime) - timeToMinutes(next.boardTime);
+        if (dur < 0) dur += 24 * 60;
+        amount = next.amount || 0;
+        nextBoardTime = next.boardTime;
+        nextBoardPlace = next.boardPlace;
+        nextAlightTime = next.alightTime;
+        nextAlightPlace = next.alightPlace;
+      }
+      entries.push({
+        date: d.date,
+        alightTime: t.alightTime,
+        dropoffPlace: t.alightPlace,
+        nextBoardTime, nextBoardPlace, nextAlightTime, nextAlightPlace,
+        wait, dur, amount,
+      });
+    }
+  }
+  entries.sort((a, b) => {
+    const dc = (b.date || '').localeCompare(a.date || '');
+    if (dc !== 0) return dc;
+    return (b.alightTime || '').localeCompare(a.alightTime || '');
+  });
+  // 待ち分布(4h以下のみ統計対象)
+  const waits = entries.filter(e => e.wait != null && e.wait < 4 * 60).map(e => e.wait);
+  const stats = {
+    totalDropoffs: entries.length,
+    waitsKnown: waits.length,
+    avgWait: waits.length > 0 ? waits.reduce((a,b)=>a+b,0) / waits.length : null,
+    medianWait: waits.length > 0 ? median(waits) : null,
+    within15: waits.filter(w => w <= 15).length,
+    within30: waits.filter(w => w <= 30).length,
+    within60: waits.filter(w => w <= 60).length,
+    over60: waits.filter(w => w > 60).length,
+  };
+  return { entries: entries.slice(0, maxEntries), stats, includedAreas: Array.from(targetAreas) };
+}
+
 // 高期待値エリア × 時間帯
 // 各trip(乗車)を boardPlace × 時間帯(4区切り) で集計、平均単価高い順
 // 「待ちは長いが期待値高い」エリア(羽田空港等)を発見するための指標
