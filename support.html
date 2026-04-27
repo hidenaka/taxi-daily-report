@@ -375,6 +375,21 @@ function sortByDowAndTime(entries, todayDow, centerMin) {
   });
 }
 
+// 漢数字をアラビア数字に
+const KANJI_NUM = { '〇':'0','一':'1','二':'2','三':'3','四':'4','五':'5','六':'6','七':'7','八':'8','九':'9','十':'10' };
+function normalizePlace(s) {
+  if (!s) return '';
+  let r = s.replace(/[〇一二三四五六七八九十]/g, ch => KANJI_NUM[ch] || ch);
+  r = r.replace(/丁目/g, '');
+  r = r.replace(/\d+$/, '');
+  return r.trim();
+}
+function commonPrefixLen(a, b) {
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  return i;
+}
+
 // GPS取得 → 国土地理院reverse geocoding → エリア推定 → recArea セット
 document.getElementById('recGps').onclick = async () => {
   const info = document.getElementById('recGpsInfo');
@@ -388,46 +403,51 @@ document.getElementById('recGps').onclick = async () => {
     );
     const { latitude: lat, longitude: lon } = pos.coords;
     info.textContent = `緯度${lat.toFixed(5)}, 経度${lon.toFixed(5)} → 町名取得中…`;
-    // 国土地理院 reverse geocoder
     const res = await fetch(`https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress?lat=${lat}&lon=${lon}`);
     const data = await res.json();
     if (!data.results) { info.textContent = '町名取得失敗'; return; }
     const muniCd = data.results.muniCd;
-    const lv01Nm = data.results.lv01Nm; // 町名 (例: "羽田空港3丁目")
-    // muniCd → 市区町村名 (国土地理院の muniCd は5桁、JIS市区町村コード)
+    const lv01Nm = data.results.lv01Nm;
     let muniName = '';
     try {
       const muniRes = await fetch(`https://maps.gsi.go.jp/js/muni.js`);
       const muniText = await muniRes.text();
-      // muni.js は GSI.MUNI_ARRAY = [...] 形式。安全に抽出
       const match = muniText.match(new RegExp(`'${muniCd}',[^']*'([^']+)'`));
-      if (match) {
-        const fullName = match[1]; // 例: "東京都,大田区"
-        muniName = fullName.split(',').pop();
-      }
-    } catch (e) { muniName = ''; }
-    const detected = (muniName + (lv01Nm || '')).replace(/\d+$/, '').replace(/丁目$/, '');
-    info.innerHTML = `📍 推定エリア: <strong>${detected || '(取得不能)'}</strong>`;
-    // recArea セレクトに該当 or 近隣を選ぶ
+      if (match) muniName = match[1].split(',').pop();
+    } catch (e) {}
+    const detectedRaw = (muniName + (lv01Nm || ''));
+    const detected = normalizePlace(detectedRaw);
+    info.innerHTML = `📍 推定: <strong>${detected || '(取得不能)'}</strong>(原文: ${detectedRaw})`;
     const sel = document.getElementById('recArea');
     const options = Array.from(sel.options).map(o => o.value);
     let matched = options.find(v => v === detected);
+    let fallback = false;
     if (!matched && detected) {
-      // 同じ区名で始まるものを探す
-      const wardMatch = detected.match(/^([^区]+区)/);
-      if (wardMatch) {
-        const ward = wardMatch[1];
-        matched = options.find(v => v.startsWith(ward));
-        if (matched) info.innerHTML += ` (一致なし → 同区の <strong>${matched}</strong> を選択)`;
+      // 同区で始まる候補から、共通プレフィックス長(=地理的近さ)が長いもの順に
+      const wardMatch = detected.match(/^([^区市]+(?:区|市[^区]+?区|市))/);
+      const ward = wardMatch ? wardMatch[1] : '';
+      let candidates = ward ? options.filter(v => v.startsWith(ward)) : [];
+      if (candidates.length === 0) candidates = options; // 区一致もなければ全候補
+      candidates.sort((a, b) => {
+        const ca = commonPrefixLen(a, detected);
+        const cb = commonPrefixLen(b, detected);
+        if (ca !== cb) return cb - ca;
+        return options.indexOf(a) - options.indexOf(b); // 件数多い順 (オプション順)
+      });
+      matched = candidates[0];
+      if (matched) {
+        fallback = true;
+        info.innerHTML += `<br>過去データに完全一致なし → 最も近い <strong>${matched}</strong> を選択(近隣ON)`;
       }
     }
     if (matched) {
       sel.value = matched;
+      // フォールバック時は近隣ONを強制
+      if (fallback) document.getElementById('recExpand').checked = true;
       updateNeighborInfo();
-      // 自動的に検索実行
       document.getElementById('recSearch').click();
     } else {
-      info.innerHTML += ' (過去データに該当・近隣エリアなし)';
+      info.innerHTML += '<br>該当エリアなし';
     }
   } catch (err) {
     info.textContent = '位置情報取得エラー: ' + (err.message || err.code);
