@@ -181,3 +181,41 @@ export async function flushPendingQueue() {
   setPendingQueue(remaining);
   return { sent: queue.length - remaining.length, remaining: remaining.length };
 }
+
+// data/users.json から active: true の userId 配列を取得
+export async function listActiveUserIds() {
+  const result = await getFile('data/users.json');
+  if (!result?.content?.users) {
+    // フォールバック: users.json が無い場合は自分のみ
+    return [getMyUserId()];
+  }
+  return result.content.users
+    .filter(u => u.active === true)
+    .map(u => u.userId);
+}
+
+// 全 active userId の月度データを並列取得して flatten
+export async function getAllUsersDrivesForMonth(yearMonth) {
+  const { start, end } = getBillingPeriodRange(yearMonth);
+  const userIds = await listActiveUserIds();
+  const perUser = await Promise.all(userIds.map(async userId => {
+    let files;
+    try {
+      files = await listFiles(`data/drives/${userId}`);
+    } catch (e) {
+      // フォルダ未作成のユーザーはスキップ
+      return [];
+    }
+    const periodFiles = files.filter(f => {
+      if (!f.name.endsWith('.json')) return false;
+      const date = f.name.replace('.json', '');
+      return date >= start && date <= end;
+    });
+    const drives = await Promise.all(
+      periodFiles.map(f => getFile(f.path).then(r => r?.content))
+    );
+    // 集計時にユーザー識別できるよう、_userId を非破壊的に付与
+    return drives.filter(d => d !== null).map(d => ({ ...d, _userId: userId }));
+  }));
+  return perUser.flat();
+}
