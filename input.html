@@ -29,7 +29,7 @@ if ('serviceWorker' in navigator) {
   </section>
 
   <section class="card">
-    <label class="muted">日報テキストを貼付（Claude/Gemini自動判別）</label>
+    <label class="muted">日報テキストを貼付（Claude/Gemini/フォーマット済み 自動判別）</label>
     <textarea id="rawTextInput" rows="6" style="width:100%;padding:8px;font-family:monospace;font-size:11px;"></textarea>
     <button class="btn" id="parseBtn" style="margin-top:6px;">パース</button>
   </section>
@@ -63,7 +63,7 @@ if ('serviceWorker' in navigator) {
 <div id="navHost"></div>
 <script type="module">
 import { renderBottomNav, todayIso } from './js/app.js';
-import { parseReport } from './js/parser.js';
+import { parseReport, parseFormattedReport } from './js/parser.js';
 import { getConfig, getDrive, saveDriveSafe } from './js/storage.js';
 import { fetchWeatherForDate } from './js/weather.js';
 
@@ -114,9 +114,19 @@ document.getElementById('parseBtn').onclick = () => {
   const text = document.getElementById('rawTextInput').value;
   if (!text.trim()) return;
   try {
-    parsed = parseReport(text);
+    // フォーマット済みテキスト(先頭4行ヘッダー)を自動判別
+    const isFormatted = /^(日付|車種|出庫|帰庫)\s*[::]/m.test(text.split('\n').slice(0, 6).join('\n'));
+    if (isFormatted) {
+      parsed = parseFormattedReport(text);
+      // ヘッダーから自動入力
+      if (parsed.date) document.getElementById('dateInput').value = parsed.date;
+      if (parsed.vehicleType) document.getElementById('vehicleTypeSel').value = parsed.vehicleType;
+      if (parsed.returnTime) document.getElementById('returnTimeInput').value = parsed.returnTime;
+    } else {
+      parsed = parseReport(text);
+      if (parsed.returnTime) document.getElementById('returnTimeInput').value = parsed.returnTime;
+    }
     renderPreview();
-    if (parsed.returnTime) document.getElementById('returnTimeInput').value = parsed.returnTime;
   } catch (e) {
     alert('パース失敗: ' + e.message);
   }
