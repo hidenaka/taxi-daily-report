@@ -76,7 +76,10 @@ if ('serviceWorker' in navigator) {
       </div>
       <div>
         <label style="font-size:10px;color:var(--muted);">降ろした時刻</label>
-        <input type="time" id="recTime" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:12px;">
+        <div style="display:flex;gap:4px;">
+          <input type="time" id="recTime" style="flex:1;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:12px;">
+          <button id="recTimeNow" style="background:#f0f0f0;color:#333;border:1px solid #ccc;border-radius:4px;font-size:11px;padding:0 8px;cursor:pointer;white-space:nowrap;">今</button>
+        </div>
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
@@ -335,6 +338,10 @@ function updateNeighborInfo() {
   info.textContent = `近隣${ns.size}: ${list}${ns.size > 5 ? '…' : ''}`;
 }
 document.getElementById('recArea').addEventListener('change', () => { gpsWideAreas = null; updateNeighborInfo(); });
+document.getElementById('recTimeNow').onclick = () => {
+  const now = new Date();
+  document.getElementById('recTime').value = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+};
 document.getElementById('recExpand').addEventListener('change', updateNeighborInfo);
 
 function amountHeatStyle(amt, max) {
