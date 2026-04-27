@@ -718,6 +718,46 @@ export function dropoffHistoryAtArea(drives, area, hourCenter = null, hourWindow
   return { entries: entries.slice(0, maxEntries), stats, includedAreas: Array.from(targetAreas) };
 }
 
+// 特定エリア × 時間帯で乗車した過去trip履歴
+// period: 'morning'/'noon'/'evening'/'night' (boardTime基準)、null=全時間帯
+// 各 entry: { date, dow, boardTime, boardPlace, alightTime, alightPlace, dur, amount, waitBefore }
+export function boardHistoryAtArea(drives, area, period = null, maxEntries = 30) {
+  const entries = [];
+  for (const d of drives) {
+    if (isSummaryOnly(d)) continue;
+    const trips = (d.trips || []).filter(t => !t.isCancel);
+    for (let i = 0; i < trips.length; i++) {
+      const t = trips[i];
+      if (extractArea(t.boardPlace) !== area) continue;
+      if (period && getPeriodKey(t.boardTime) !== period) continue;
+      let dur = timeToMinutes(t.alightTime) - timeToMinutes(t.boardTime);
+      if (dur < 0) dur += 24 * 60;
+      let waitBefore = null;
+      if (i > 0) {
+        const prev = trips[i - 1];
+        let w = timeToMinutes(t.boardTime) - timeToMinutes(prev.alightTime);
+        if (w < 0) w += 24 * 60;
+        waitBefore = w;
+      }
+      entries.push({
+        date: d.date,
+        dow: d.date ? dowOf(d.date) : null,
+        boardTime: t.boardTime,
+        boardPlace: t.boardPlace,
+        alightTime: t.alightTime,
+        alightPlace: t.alightPlace,
+        dur, amount: t.amount || 0, waitBefore,
+      });
+    }
+  }
+  entries.sort((a, b) => {
+    const dc = (b.date || '').localeCompare(a.date || '');
+    if (dc !== 0) return dc;
+    return (b.boardTime || '').localeCompare(a.boardTime || '');
+  });
+  return { entries: entries.slice(0, maxEntries), totalCount: entries.length };
+}
+
 // 高期待値エリア × 時間帯
 // 各trip(乗車)を boardPlace × 時間帯(4区切り) で集計、平均単価高い順
 // 「待ちは長いが期待値高い」エリア(羽田空港等)を発見するための指標
