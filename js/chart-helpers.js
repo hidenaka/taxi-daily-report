@@ -480,9 +480,8 @@ function median(arr) {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
-// エリア × 時間帯 別の実時給マップ
-// 各 trip(乗車)のサイクル時間(前trip降車→このtrip降車) で売上を割る
-// 戻り値: Map<"area|period", { sales, cycleMin, count, hourly }>
+// エリア × 時刻(0-23時) 別の実時給マップ
+// 戻り値: Map<"area|hour", { sales, cycleMin, count }>
 export function areaTimeHourly(drives) {
   const groups = {};
   for (const d of drives) {
@@ -493,7 +492,7 @@ export function areaTimeHourly(drives) {
       if (!t.amount || t.amount <= 0) continue;
       const area = extractArea(t.boardPlace);
       if (!area) continue;
-      const period = getPeriodKey(t.boardTime);
+      const hour = parseInt(t.boardTime.split(':')[0]);
       let dur = timeToMinutes(t.alightTime) - timeToMinutes(t.boardTime);
       if (dur < 0) dur += 24 * 60;
       let waitBefore = 0;
@@ -504,30 +503,39 @@ export function areaTimeHourly(drives) {
         if (w <= 30) waitBefore = w;
       }
       const cycleMin = waitBefore + dur;
-      const key = `${area}|${period}`;
+      const key = `${area}|${hour}`;
       if (!groups[key]) groups[key] = { sales: 0, cycleMin: 0, count: 0 };
       groups[key].sales += t.amount;
       groups[key].cycleMin += cycleMin;
       groups[key].count++;
     }
   }
-  const result = {};
-  for (const [key, g] of Object.entries(groups)) {
-    result[key] = { ...g, hourly: g.cycleMin > 0 ? g.sales / (g.cycleMin / 60) : 0 };
-  }
-  return result;
+  return groups;
 }
-export function getAreaHourly(map, area, period) {
-  const v = map[`${area}|${period}`];
-  return v ? v.hourly : 0;
+// hour ± window (例: hour=13, window=1 → 12, 13, 14時 を合算)
+export function getAreaHourly(map, area, hour, window = 1) {
+  let sales = 0, cycle = 0;
+  for (let off = -window; off <= window; off++) {
+    const h = (hour + off + 24) % 24;
+    const v = map[`${area}|${h}`];
+    if (v) { sales += v.sales; cycle += v.cycleMin; }
+  }
+  return cycle > 0 ? sales / (cycle / 60) : 0;
+}
+
+// 時刻範囲判定: hour が center ± window 内にあるか (24時間ループ対応)
+function hourInWindow(hour, center, window) {
+  for (let off = -window; off <= window; off++) {
+    if (((center + off + 24) % 24) === hour) return true;
+  }
+  return false;
 }
 
 // 特定の降車エリアで降ろした後、次にどのエリアで乗車した時の効率が良かったか
-// 待ち時間 30分以内 かつ 次運賃 > 0 のtripのみを集計
-// 戻り値: { rows, includedAreas, totalDropoffs, totalNextWithin30 }
-//   各row: { area, count, count15, avgWait, avgSales, medianSales, ratio15, ratio30 }
-//     efficiency は呼び出し側で areaTimeHourly から引いて結合する
-export function nextBoardBreakdown(drives, dropoffArea, periodFilter = null, neighbors = null) {
+// 降車時刻が hourCenter ± hourWindow 内 かつ 待ち30分以内 かつ 次運賃 > 0 のみ集計
+// hourCenter=null なら全時間帯
+// 各row.samples: 根拠データ最大10件 (新しい順)
+export function nextBoardBreakdown(drives, dropoffArea, hourCenter = null, hourWindow = 1, neighbors = null) {
   const targetAreas = new Set([dropoffArea]);
   if (neighbors && neighbors[dropoffArea]) {
     for (const n of neighbors[dropoffArea]) targetAreas.add(n);
@@ -541,23 +549,38 @@ export function nextBoardBreakdown(drives, dropoffArea, periodFilter = null, nei
     for (let i = 0; i < trips.length - 1; i++) {
       const t = trips[i];
       if (!targetAreas.has(extractArea(t.alightPlace))) continue;
-      if (periodFilter && getPeriodKey(t.alightTime) !== periodFilter) continue;
+      if (hourCenter !== null) {
+        const ah = parseInt(t.alightTime.split(':')[0]);
+        if (!hourInWindow(ah, hourCenter, hourWindow)) continue;
+      }
       totalDropoffs++;
       const next = trips[i + 1];
       const nextArea = extractArea(next.boardPlace);
       if (!nextArea) continue;
       const nextAmount = next.amount || 0;
-      if (nextAmount <= 0) continue; // ¥0データ(キャンセル相当の付帯trip等)は除外
+      if (nextAmount <= 0) continue;
       let wait = timeToMinutes(next.boardTime) - timeToMinutes(t.alightTime);
       if (wait < 0) wait += 24 * 60;
       if (wait > 30) continue;
+      let nd = timeToMinutes(next.alightTime) - timeToMinutes(next.boardTime);
+      if (nd < 0) nd += 24 * 60;
       totalNextWithin30++;
-      if (!groups[nextArea]) groups[nextArea] = { count: 0, count15: 0, totalWait: 0, totalSales: 0, salesList: [] };
+      if (!groups[nextArea]) groups[nextArea] = { count: 0, count15: 0, totalWait: 0, totalSales: 0, salesList: [], samples: [] };
       groups[nextArea].count++;
       if (wait <= 15) groups[nextArea].count15++;
       groups[nextArea].totalWait += wait;
       groups[nextArea].totalSales += nextAmount;
       groups[nextArea].salesList.push(nextAmount);
+      groups[nextArea].samples.push({
+        date: d.date,
+        alightTime: t.alightTime,
+        dropoffPlace: t.alightPlace,
+        nextBoardTime: next.boardTime,
+        nextBoardPlace: next.boardPlace,
+        nextAlightTime: next.alightTime,
+        nextAlightPlace: next.alightPlace,
+        wait, dur: nd, amount: nextAmount,
+      });
     }
   }
   const rows = Object.entries(groups).map(([area, g]) => {
@@ -566,7 +589,9 @@ export function nextBoardBreakdown(drives, dropoffArea, periodFilter = null, nei
     const medianSales = median(g.salesList);
     const ratio15 = totalDropoffs > 0 ? g.count15 / totalDropoffs : 0;
     const ratio30 = totalDropoffs > 0 ? g.count / totalDropoffs : 0;
-    return { area, count: g.count, count15: g.count15, avgWait, avgSales, medianSales, ratio15, ratio30 };
+    // 新しい順に最大10件
+    const samples = g.samples.sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 10);
+    return { area, count: g.count, count15: g.count15, avgWait, avgSales, medianSales, ratio15, ratio30, samples };
   });
   return { rows, includedAreas: Array.from(targetAreas), totalDropoffs, totalNextWithin30 };
 }

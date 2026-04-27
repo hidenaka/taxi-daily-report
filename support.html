@@ -345,19 +345,20 @@ document.getElementById('recSearch').onclick = () => {
   const time = document.getElementById('recTime').value;
   const expand = document.getElementById('recExpand').checked;
   if (!area || !time) return;
-  const period = getPeriodKey(time);
-  const result = nextBoardBreakdown(allDrives, area, period, expand ? neighborMap : null);
-  // 各行: 効率 = そのエリア×時間帯の実時給(エリア別hourlyAから引く)、スコア化
+  const hour = parseInt(time.split(':')[0]);
+  const result = nextBoardBreakdown(allDrives, area, hour, 1, expand ? neighborMap : null);
+  // 各行: 効率 = そのエリア×時刻±1hの実時給、スコア化
   const evaluated = result.rows
     .filter(r => r.count >= 3)
     .map(r => {
-      const efficiency = getAreaHourly(areaHourlyMap, r.area, period);
+      const efficiency = getAreaHourly(areaHourlyMap, r.area, hour, 1);
       const enriched = { ...r, efficiency };
       const ev = evaluateRecommendRow(enriched, targetHourly, avgSalesBaseline);
       return { ...enriched, ...ev };
     })
     .sort((a, b) => b.score - a.score);
   const body = document.getElementById('recBody');
+  const winLabel = `${String((hour-1+24)%24).padStart(2,'0')}:00-${String((hour+1)%24).padStart(2,'0')}:59`;
   const includedLabel = result.includedAreas.length > 1
     ? `(近隣含む${result.includedAreas.length}エリア・降車${result.totalDropoffs}件中30分以内取得${result.totalNextWithin30}件)`
     : `(降車${result.totalDropoffs}件中30分以内取得${result.totalNextWithin30}件)`;
@@ -368,17 +369,18 @@ document.getElementById('recSearch').onclick = () => {
   const top = evaluated.slice(0, 10);
   const maxEff = Math.max(...top.map(r => r.efficiency), 1);
   const markColor = (m) => m === '◎' ? '#1b5e20' : m === '○' ? '#388e3c' : m === '△' ? '#f57c00' : '#c62828';
-  let html = `<div class="muted" style="font-size:11px;margin-bottom:6px;"><strong>${area}</strong>${expand && result.includedAreas.length > 1 ? '+近隣' : ''} で <strong>${PERIOD_LABELS[period]}</strong> に降ろした後の次乗車推奨TOP${top.length} ${includedLabel}<br>判定基準: 目標時給 ${formatYen(targetHourly)}/h ・ 平均運賃 ${formatYen(avgSalesBaseline)}</div>`;
+  let html = `<div class="muted" style="font-size:11px;margin-bottom:6px;"><strong>${area}</strong>${expand && result.includedAreas.length > 1 ? '+近隣' : ''} で <strong>${winLabel}</strong>(±1h) に降ろした後の次乗車推奨TOP${top.length} ${includedLabel}<br>判定基準: 目標時給 ${formatYen(targetHourly)}/h ・ 平均運賃 ${formatYen(avgSalesBaseline)}</div>`;
   html += '<div style="overflow-x:auto;"><table class="area-table"><thead><tr>'
     + '<th>判定</th><th class="l">次乗車エリア</th><th>件数</th><th>15分内</th><th>30分内</th><th>次運賃 平均/中央</th><th>実時給¥/h</th>'
     + '</tr></thead><tbody>';
-  for (const r of top) {
+  for (let idx = 0; idx < top.length; idx++) {
+    const r = top[idx];
     const effPct = r.efficiency > 0 ? (r.efficiency / maxEff * 100) : 0;
     const r15 = Math.round(r.ratio15 * 100);
     const r30 = Math.round(r.ratio30 * 100);
     const effRatioPct = Math.round(r.effRatio * 100);
     const salesRatioPct = Math.round(r.salesRatio * 100);
-    html += `<tr title="実時給${effRatioPct}%目標比 ・ 運賃${salesRatioPct}%平均比 ・ スコア${r.score.toFixed(2)}">
+    html += `<tr data-idx="${idx}" style="cursor:pointer;" title="実時給${effRatioPct}%目標比 ・ 運賃${salesRatioPct}%平均比 ・ スコア${r.score.toFixed(2)} ・ タップで根拠データ">
       <td style="text-align:center;font-weight:700;color:${markColor(r.mark)};font-size:14px;">${r.mark}</td>
       <td class="l">${r.area}</td>
       <td>${r.count}</td>
@@ -386,11 +388,33 @@ document.getElementById('recSearch').onclick = () => {
       <td>${r30}%</td>
       <td>${formatYen(r.avgSales)}<br><span style="font-size:10px;color:var(--muted);">中${formatYen(r.medianSales)}</span></td>
       <td><div class="bar"><div class="fill" style="width:${effPct}%;"></div><div class="v">${r.efficiency > 0 ? formatYen(r.efficiency) : '—'}</div></div></td>
-    </tr>`;
+    </tr>
+    <tr id="recDetail-${idx}" style="display:none;background:#fafafa;"><td colspan="7" style="padding:8px;"></td></tr>`;
   }
   html += '</tbody></table></div>';
-  html += '<p class="muted" style="font-size:10px;margin-top:4px;">判定: ◎優秀 / ○平均 / △どちらか低い / ✕両方低い(=ここで仕事するより移動・休憩推奨)。「次運賃」=次のtripの実運賃の平均/中央値(¥0データは除外)。「実時給」=そのエリア×時間帯の過去実績ベースの時間あたり売上(待ち+実車サイクル時間で割算)</p>';
+  html += '<p class="muted" style="font-size:10px;margin-top:4px;">判定: ◎優秀 / ○平均 / △どちらか低い / ✕両方低い(=移動・休憩推奨)。「次運賃」=次tripの平均/中央値(¥0除外)。「実時給」=そのエリア×時刻±1hの過去サイクル時間ベース。タップで根拠データ表示</p>';
   body.innerHTML = html;
+  body.querySelectorAll('tr[data-idx]').forEach(tr => {
+    tr.onclick = () => {
+      const idx = parseInt(tr.dataset.idx);
+      const detail = document.getElementById(`recDetail-${idx}`);
+      if (detail.style.display === 'none') {
+        const r = top[idx];
+        const samples = r.samples || [];
+        let dh = `<div style="font-size:10px;color:var(--muted);margin-bottom:4px;">過去${r.count}件中 直近${samples.length}件:</div>`;
+        dh += '<table style="width:100%;font-size:10px;border-collapse:collapse;">'
+          + '<thead><tr style="color:var(--muted);"><th style="text-align:left;padding:3px 4px;border-bottom:1px solid #eee;">日付</th><th style="text-align:left;padding:3px 4px;border-bottom:1px solid #eee;">降車地→次乗車地→次降車地</th><th style="padding:3px 4px;border-bottom:1px solid #eee;">時刻</th><th style="padding:3px 4px;border-bottom:1px solid #eee;">待</th><th style="padding:3px 4px;border-bottom:1px solid #eee;">実車</th><th style="text-align:right;padding:3px 4px;border-bottom:1px solid #eee;">運賃</th></tr></thead><tbody>';
+        for (const s of samples) {
+          dh += `<tr><td style="padding:3px 4px;border-bottom:1px solid #f5f5f5;">${(s.date || '').slice(5)}</td><td style="padding:3px 4px;border-bottom:1px solid #f5f5f5;line-height:1.4;">${s.dropoffPlace} <span style="color:var(--muted);">→</span> ${s.nextBoardPlace} <span style="color:var(--muted);">→</span> ${s.nextAlightPlace}</td><td style="padding:3px 4px;border-bottom:1px solid #f5f5f5;text-align:center;color:var(--muted);">${s.alightTime}/${s.nextBoardTime}/${s.nextAlightTime}</td><td style="padding:3px 4px;border-bottom:1px solid #f5f5f5;text-align:center;">${s.wait}分</td><td style="padding:3px 4px;border-bottom:1px solid #f5f5f5;text-align:center;">${formatMin(s.dur)}</td><td style="padding:3px 4px;border-bottom:1px solid #f5f5f5;text-align:right;font-weight:600;">${formatYen(s.amount)}</td></tr>`;
+        }
+        dh += '</tbody></table>';
+        detail.querySelector('td').innerHTML = dh;
+        detail.style.display = '';
+      } else {
+        detail.style.display = 'none';
+      }
+    };
+  });
 };
 
 function renderHighValue() {
