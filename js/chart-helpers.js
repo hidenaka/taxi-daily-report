@@ -480,7 +480,9 @@ function median(arr) {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
-// エリア × 時刻(0-23時) 別の実時給マップ
+// エリア × 時刻(0-23時) 別の実労働時間効率マップ
+// cycleMin = (前trip降車から今trip乗車までの待ち) + 実車時間
+// 待ちは「乗務中の空車待ち」を含めるため上限を4時間に拡大(4時間超は休憩・帰庫扱いで除外)
 // 戻り値: Map<"area|hour", { sales, cycleMin, count }>
 export function areaTimeHourly(drives) {
   const groups = {};
@@ -500,7 +502,7 @@ export function areaTimeHourly(drives) {
         const prev = trips[i - 1];
         let w = timeToMinutes(t.boardTime) - timeToMinutes(prev.alightTime);
         if (w < 0) w += 24 * 60;
-        if (w <= 30) waitBefore = w;
+        if (w <= 4 * 60) waitBefore = w; // 4時間以内の待ちは実労働時間に含める
       }
       const cycleMin = waitBefore + dur;
       const key = `${area}|${hour}`;
@@ -517,6 +519,15 @@ export function getAreaHourly(map, area, hour, window = 1) {
   let sales = 0, cycle = 0;
   for (let off = -window; off <= window; off++) {
     const h = (hour + off + 24) % 24;
+    const v = map[`${area}|${h}`];
+    if (v) { sales += v.sales; cycle += v.cycleMin; }
+  }
+  return cycle > 0 ? sales / (cycle / 60) : 0;
+}
+// エリア全時間平均 (時間帯フィルタなし)
+export function getAreaHourlyAll(map, area) {
+  let sales = 0, cycle = 0;
+  for (let h = 0; h < 24; h++) {
     const v = map[`${area}|${h}`];
     if (v) { sales += v.sales; cycle += v.cycleMin; }
   }
@@ -710,13 +721,15 @@ export function dropoffHistoryAtArea(drives, area, hourCenter = null, hourWindow
 // 高期待値エリア × 時間帯
 // 各trip(乗車)を boardPlace × 時間帯(4区切り) で集計、平均単価高い順
 // 「待ちは長いが期待値高い」エリア(羽田空港等)を発見するための指標
-// 戻り値: [{ area, period, count, avgSales, avgDur, hourlyDuringTrip }]
+// 戻り値: [{ area, period, count, avgSales, avgDur }]
+// 実労働時間効率は呼び出し側で areaTimeHourly map から引く
 export function highValueAreas(drives, { minSamples = 5 } = {}) {
-  const groups = {}; // "area|period" → {count, sumSales, sumDur}
+  const groups = {};
   for (const d of drives) {
     if (isSummaryOnly(d)) continue;
     for (const t of (d.trips || [])) {
       if (t.isCancel) continue;
+      if (!t.amount || t.amount <= 0) continue;
       const area = extractArea(t.boardPlace);
       if (!area) continue;
       const period = getPeriodKey(t.boardTime);
@@ -725,7 +738,7 @@ export function highValueAreas(drives, { minSamples = 5 } = {}) {
       const key = `${area}|${period}`;
       if (!groups[key]) groups[key] = { count: 0, sumSales: 0, sumDur: 0 };
       groups[key].count++;
-      groups[key].sumSales += (t.amount || 0);
+      groups[key].sumSales += t.amount;
       groups[key].sumDur += dur;
     }
   }
@@ -735,11 +748,28 @@ export function highValueAreas(drives, { minSamples = 5 } = {}) {
     const [area, period] = key.split('|');
     const avgSales = g.sumSales / g.count;
     const avgDur = g.sumDur / g.count;
-    const hourlyDuringTrip = avgDur > 0 ? avgSales / (avgDur / 60) : 0;
-    rows.push({ area, period, count: g.count, avgSales, avgDur, hourlyDuringTrip });
+    rows.push({ area, period, count: g.count, avgSales, avgDur });
   }
   rows.sort((a, b) => b.avgSales - a.avgSales);
   return rows;
+}
+
+// 高期待値エリアの「期間内 実労働時間効率」を引く
+// period: morning/noon/evening/night → 該当する時間帯を合算
+const PERIOD_HOURS = {
+  morning: [7, 8, 9, 10, 11, 12],
+  noon: [13, 14, 15, 16, 17],
+  evening: [18, 19, 20, 21, 22],
+  night: [23, 0, 1, 2, 3, 4, 5, 6],
+};
+export function getAreaPeriodHourly(map, area, period) {
+  const hours = PERIOD_HOURS[period] || [];
+  let sales = 0, cycle = 0;
+  for (const h of hours) {
+    const v = map[`${area}|${h}`];
+    if (v) { sales += v.sales; cycle += v.cycleMin; }
+  }
+  return cycle > 0 ? sales / (cycle / 60) : 0;
 }
 
 // 降車エリア別 効率分析
@@ -786,16 +816,12 @@ export function dropoffAreaAnalysis(drives) {
     const avgWait = v.waitCount > 0 ? v.totalWaitMin / v.waitCount : null;
     const avgNextSales = v.nextCount > 0 ? v.totalNextSales / v.nextCount : null;
     const avgNextDur = v.nextCount > 0 ? v.totalNextDur / v.nextCount : null;
-    let efficiency = null;
-    if (avgWait != null && avgNextSales != null && avgNextDur != null) {
-      const denom = avgWait + avgNextDur;
-      if (denom > 0) efficiency = avgNextSales / denom * 60;
-    }
     const topNextBoards = Object.entries(v.nextBoards)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 3)
       .map(([area, count]) => ({ area, count, pct: count / v.nextCount }));
-    result.push({ area, dropoffs: v.dropoffs, avgWait, avgNextSales, avgNextDur, efficiency, nextCount: v.nextCount, topNextBoards });
+    // efficiency は呼び出し側で areaTimeHourly map から引いて結合する
+    result.push({ area, dropoffs: v.dropoffs, avgWait, avgNextSales, avgNextDur, nextCount: v.nextCount, topNextBoards });
   }
   return result;
 }

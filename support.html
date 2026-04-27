@@ -110,7 +110,7 @@ if ('serviceWorker' in navigator) {
       <span class="desc">単価が大きく出る場所と時間</span>
     </div>
     <div id="highValueBody"></div>
-    <p class="muted" style="font-size:10px;margin-top:6px;">乗車地エリア × 時間帯(4区切り)で平均単価が高い順TOP15。羽田空港のように「待ちは長いが期待値大」のエリアを発見する用途。最低5件以上</p>
+    <p class="muted" style="font-size:10px;margin-top:6px;">乗車地エリア × 時間帯(4区切り)で平均単価が高い順TOP15。羽田空港のように「待ちは長いが期待値大」のエリアを発見する用途。「実時給」=その時間帯の実労働時間ベース(待ち+実車)。最低5件以上</p>
   </section>
 
   <section class="card" id="areaCard">
@@ -120,20 +120,20 @@ if ('serviceWorker' in navigator) {
     </div>
     <div class="sort-tabs" id="areaSortTabs">
       <button data-s="dropoffs" class="active">件数順</button>
-      <button data-s="efficiency">時間効率順</button>
+      <button data-s="efficiency">実時給順</button>
       <button data-s="avgNextSales">単価順</button>
       <button data-s="avgWait">待ち短い順</button>
     </div>
     <div id="areaBody"></div>
     <div class="detail-tip" id="areaTip"></div>
-    <p class="muted" style="font-size:10px;margin-top:6px;">「単価」=降ろした次のtripの平均売上(=1件いくら稼げたか)。「時間効率」=次売上÷(待ち+次実車時間) ¥/h(=単位時間で稼げたか)。両方高いエリアが理想。最低5件以上のみ</p>
+    <p class="muted" style="font-size:10px;margin-top:6px;">「単価」=降ろした次のtripの平均運賃。「実時給」=そのエリアで乗車したtripの「待ち+実車」累積時間で売上を割った値(全時間平均、空車含む実労働時間ベース、4時間超の休憩は除外)。両方高いエリアが理想。最低5件以上のみ</p>
   </section>
 </main>
 <div id="navHost"></div>
 <script type="module">
 import { renderBottomNav, formatYen, formatDateY, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, toLocalIso } from './js/app.js';
 import { getDrivesForMonth, getConfig } from './js/storage.js';
-import { hourlyDowEfficiency, dropoffAreaAnalysis, nextBoardBreakdown, dropoffHistoryAtArea, buildNeighborMap, highValueAreas, calcPaceAtElapsed, evaluateRecommendRow, calcTargetHourly, avgTripSales, areaTimeHourly, getAreaHourly, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin, dowOf } from './js/chart-helpers.js';
+import { hourlyDowEfficiency, dropoffAreaAnalysis, nextBoardBreakdown, dropoffHistoryAtArea, buildNeighborMap, highValueAreas, calcPaceAtElapsed, evaluateRecommendRow, calcTargetHourly, avgTripSales, areaTimeHourly, getAreaHourly, getAreaHourlyAll, getAreaPeriodHourly, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin, dowOf } from './js/chart-helpers.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('support');
 
@@ -513,21 +513,25 @@ document.getElementById('recSearch').onclick = () => {
 };
 
 function renderHighValue() {
-  const rows = highValueAreas(allDrives, { minSamples: 5 }).slice(0, 15);
+  const rows = highValueAreas(allDrives, { minSamples: 5 })
+    .map(r => ({ ...r, hourly: getAreaPeriodHourly(areaHourlyMap, r.area, r.period) }))
+    .slice(0, 15);
   const body = document.getElementById('highValueBody');
   if (rows.length === 0) { body.innerHTML = '<p class="muted" style="font-size:11px;">該当データなし</p>'; return; }
   const maxSales = Math.max(...rows.map(r => r.avgSales), 1);
+  const maxH = Math.max(...rows.map(r => r.hourly || 0), 1);
   let html = '<div style="overflow-x:auto;"><table class="area-table"><thead><tr>'
-    + '<th class="l">エリア</th><th>時間帯</th><th>件数</th><th>平均実車</th><th>平均単価</th>'
+    + '<th class="l">エリア</th><th>時間帯</th><th>件数</th><th>平均単価</th><th>実時給¥/h</th>'
     + '</tr></thead><tbody>';
   for (const r of rows) {
     const pct = r.avgSales / maxSales * 100;
+    const hPct = r.hourly ? (r.hourly / maxH * 100) : 0;
     html += `<tr>
       <td class="l">${r.area}</td>
       <td>${PERIOD_LABELS[r.period]}</td>
       <td>${r.count}</td>
-      <td>${formatMin(r.avgDur)}</td>
       <td><div class="bar"><div class="fill" style="width:${pct}%;background:#1976d2;"></div><div class="v">${formatYen(r.avgSales)}</div></div></td>
+      <td><div class="bar"><div class="fill" style="width:${hPct}%;"></div><div class="v">${r.hourly > 0 ? formatYen(r.hourly) : '—'}</div></div></td>
     </tr>`;
   }
   html += '</tbody></table></div>';
@@ -593,9 +597,11 @@ function renderHourEff() {
 
 function renderArea() {
   const all = dropoffAreaAnalysis(allDrives);
-  // 5件未満は除外
-  let rows = all.filter(a => a.dropoffs >= 5);
-  // ソート
+  // 5件未満除外 + 各エリアの実労働時間効率を引く(全時間平均)
+  let rows = all.filter(a => a.dropoffs >= 5).map(a => ({
+    ...a,
+    efficiency: getAreaHourlyAll(areaHourlyMap, a.area),
+  }));
   rows.sort((a, b) => {
     if (areaSort === 'dropoffs') return b.dropoffs - a.dropoffs;
     if (areaSort === 'efficiency') return (b.efficiency || 0) - (a.efficiency || 0);
@@ -607,7 +613,7 @@ function renderArea() {
   const maxEff = Math.max(...top.map(r => r.efficiency || 0), 1);
   const maxSales = Math.max(...top.map(r => r.avgNextSales || 0), 1);
   let html = '<div style="overflow-x:auto;"><table class="area-table"><thead><tr>'
-    + '<th class="l">降車エリア</th><th>件数</th><th>待ち</th><th>単価</th><th>時間効率¥/h</th>'
+    + '<th class="l">降車エリア</th><th>件数</th><th>次まで待ち</th><th>単価</th><th>実時給¥/h</th>'
     + '</tr></thead><tbody>';
   for (const r of top) {
     const effPct = r.efficiency ? (r.efficiency / maxEff * 100) : 0;
@@ -626,25 +632,23 @@ function renderArea() {
   document.querySelectorAll('#areaBody tr[data-area]').forEach(tr => {
     tr.onclick = () => {
       const area = tr.dataset.area;
-      const r = all.find(x => x.area === area);
+      const r = rows.find(x => x.area === area);
       if (!r) return;
       const tip = document.getElementById('areaTip');
       tip.classList.add('show');
-      const idleRate = (r.avgWait != null && r.avgNextDur != null && (r.avgWait + r.avgNextDur) > 0)
-        ? r.avgWait / (r.avgWait + r.avgNextDur) * 100
-        : null;
-      // 単価良し悪し / 時間効率良し悪し の組み合わせで判断
-      const salesGood = r.avgNextSales != null && r.avgNextSales >= 2500;
-      const effGood = r.efficiency != null && r.efficiency >= 4500;
+      const effRatio = targetHourly > 0 ? r.efficiency / targetHourly : 0;
+      const salesRatio = avgSalesBaseline > 0 && r.avgNextSales ? r.avgNextSales / avgSalesBaseline : 0;
+      const salesGood = salesRatio >= 0.95;
+      const effGood = effRatio >= 0.95;
       let judgement;
-      if (salesGood && effGood) judgement = '◎ 単価・時間効率とも良 → 留まる価値あり';
-      else if (effGood && !salesGood) judgement = '◯ 時間効率は良いが単価は低め(短距離が多い)';
-      else if (salesGood && !effGood) judgement = '△ 単価高いが時間効率悪 → 待ちが長すぎる';
-      else judgement = '✕ 単価・効率とも悪 → 別エリアへ移動推奨';
+      if (salesGood && effGood) judgement = '◎ 単価・実時給とも目標以上 → 留まる価値あり';
+      else if (effGood && !salesGood) judgement = '◯ 実時給は目標以上だが単価は低め(短距離が多い)';
+      else if (salesGood && !effGood) judgement = '△ 単価高いが実時給は目標未満 → 待ちが長すぎる';
+      else judgement = '✕ 単価・実時給とも目標未満 → 別エリアへ移動推奨';
       tip.innerHTML = `
         <strong>${area}</strong> で降ろした後 (${r.dropoffs}件)<br>
-        単価 <strong>${r.avgNextSales != null ? formatYen(r.avgNextSales) : '—'}</strong> ・ 時間効率 <strong>${r.efficiency != null ? formatYen(r.efficiency) + '/h' : '—'}</strong><br>
-        <span style="font-size:11px;color:var(--muted);">待ち ${r.avgWait != null ? formatMin(r.avgWait) : '—'} + 実車 ${r.avgNextDur != null ? formatMin(r.avgNextDur) : '—'} (空車比率${idleRate != null ? idleRate.toFixed(0) + '%' : '—'})</span><br>
+        単価 <strong>${r.avgNextSales != null ? formatYen(r.avgNextSales) : '—'}</strong>(平均比${Math.round(salesRatio*100)}%) ・ 実時給 <strong>${formatYen(r.efficiency)}/h</strong>(目標比${Math.round(effRatio*100)}%)<br>
+        <span style="font-size:11px;color:var(--muted);">次まで待ち ${r.avgWait != null ? formatMin(r.avgWait) : '—'} ・ 次実車 ${r.avgNextDur != null ? formatMin(r.avgNextDur) : '—'}</span><br>
         <span style="color:#f57f17;">${judgement}</span>
       `;
     };
