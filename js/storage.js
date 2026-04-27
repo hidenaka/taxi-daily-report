@@ -1,4 +1,24 @@
+import { DEFAULT_USER_ID, isValidUserId, normalizeUserId } from './userid.js';
+
 const API_BASE = 'https://api.github.com';
+
+const USER_ID_KEY = 'taxi_user_id';
+
+export function getMyUserId() {
+  const raw = localStorage.getItem(USER_ID_KEY);
+  if (!raw) return DEFAULT_USER_ID;
+  const norm = normalizeUserId(raw);
+  return isValidUserId(norm) ? norm : DEFAULT_USER_ID;
+}
+
+export function setMyUserId(id) {
+  const norm = normalizeUserId(id);
+  if (!isValidUserId(norm)) {
+    throw new Error('userId は英小文字始まりで英小文字・数字・アンダースコアのみ使用可');
+  }
+  localStorage.setItem(USER_ID_KEY, norm);
+  return norm;
+}
 
 function getToken() {
   return localStorage.getItem('github_token');
