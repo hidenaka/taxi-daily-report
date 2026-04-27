@@ -376,6 +376,23 @@ function sortByDowAndTime(entries, todayDow, centerMin) {
   });
 }
 
+// 主要市区町村コード → 名称 (muni.js fetch失敗時のフォールバック、東京23区+神奈川/千葉/埼玉の主要)
+const MUNI_FALLBACK = {
+  '13101':'千代田区','13102':'中央区','13103':'港区','13104':'新宿区','13105':'文京区',
+  '13106':'台東区','13107':'墨田区','13108':'江東区','13109':'品川区','13110':'目黒区',
+  '13111':'大田区','13112':'世田谷区','13113':'渋谷区','13114':'中野区','13115':'杉並区',
+  '13116':'豊島区','13117':'北区','13118':'荒川区','13119':'板橋区','13120':'練馬区',
+  '13121':'足立区','13122':'葛飾区','13123':'江戸川区',
+  '13201':'八王子市','13202':'立川市','13203':'武蔵野市','13204':'三鷹市','13208':'青梅市',
+  '13209':'府中市','13211':'調布市','13212':'町田市','13219':'狛江市',
+  '14130':'横浜市鶴見区','14131':'横浜市神奈川区','14132':'横浜市西区','14133':'横浜市中区',
+  '14134':'横浜市南区','14135':'横浜市保土ケ谷区','14136':'横浜市磯子区','14137':'横浜市金沢区',
+  '14138':'横浜市港北区','14139':'横浜市戸塚区','14140':'横浜市港南区','14141':'横浜市旭区',
+  '14142':'横浜市緑区','14143':'横浜市瀬谷区','14144':'横浜市栄区','14145':'横浜市泉区',
+  '14146':'横浜市青葉区','14147':'横浜市都筑区',
+  '14150':'川崎市川崎区','14151':'川崎市幸区','14152':'川崎市中原区','14153':'川崎市高津区',
+  '14154':'川崎市多摩区','14155':'川崎市宮前区','14156':'川崎市麻生区',
+};
 // 漢数字をアラビア数字に
 const KANJI_NUM = { '〇':'0','一':'1','二':'2','三':'3','四':'4','五':'5','六':'6','七':'7','八':'8','九':'9','十':'10' };
 function normalizePlace(s) {
@@ -409,19 +426,22 @@ document.getElementById('recGps').onclick = async () => {
     if (!data.results) { info.textContent = '町名取得失敗'; return; }
     const muniCd = data.results.muniCd;
     const lv01Nm = data.results.lv01Nm;
-    let muniName = '';
-    try {
-      const muniRes = await fetch(`https://maps.gsi.go.jp/js/muni.js`);
-      const muniText = await muniRes.text();
-      const match = muniText.match(new RegExp(`'${muniCd}',[^']*'([^']+)'`));
-      if (match) muniName = match[1].split(',').pop();
-    } catch (e) {}
+    let muniName = MUNI_FALLBACK[muniCd] || '';
+    if (!muniName) {
+      try {
+        const muniRes = await fetch(`https://maps.gsi.go.jp/js/muni.js`);
+        const muniText = await muniRes.text();
+        const match = muniText.match(new RegExp(`'${muniCd}',[^']*'([^']+)'`));
+        if (match) muniName = match[1].split(',').pop();
+      } catch (e) {}
+    }
     const detectedRaw = (muniName + (lv01Nm || ''));
     const detected = normalizePlace(detectedRaw);
-    info.innerHTML = `📍 推定: <strong>${detected || '(取得不能)'}</strong>(原文: ${detectedRaw})`;
+    info.innerHTML = `📍 推定: <strong>${detected || '(取得不能)'}</strong>(原文: ${detectedRaw}, muniCd=${muniCd})`;
     const sel = document.getElementById('recArea');
     const options = Array.from(sel.options).map(o => o.value);
-    let matched = options.find(v => v === detected);
+    // 完全一致 or 「区+detected」一致 (例: detected="上池台" → "大田区上池台" を探す)
+    let matched = options.find(v => v === detected) || options.find(v => v.endsWith(detected));
     gpsWideAreas = null;
     if (matched) {
       sel.value = matched;
@@ -429,8 +449,17 @@ document.getElementById('recGps').onclick = async () => {
       document.getElementById('recSearch').click();
     } else if (detected) {
       // 完全一致なし → 同区内の「文字列が近いエリア」を起点に、neighborMapで実移動可能範囲に絞る
-      const wardMatch = detected.match(/^([^区市]+(?:区|市[^区]+?区|市))/);
-      const ward = wardMatch ? wardMatch[1] : '';
+      let wardMatch = detected.match(/^([^区市]+(?:区|市[^区]+?区|市))/);
+      let ward = wardMatch ? wardMatch[1] : '';
+      // detectedが町名だけ(区が取れなかった)の場合、過去データから町名一致するエリアを探して区を推定
+      if (!ward) {
+        const townHit = options.find(v => v.endsWith(detected) || v.includes(detected));
+        if (townHit) {
+          const wm = townHit.match(/^([^区市]+(?:区|市[^区]+?区|市))/);
+          if (wm) ward = wm[1];
+          info.innerHTML += `<br>区不明 → 町名「${detected}」から区を推定: <strong>${ward || '(推定不可)'}</strong>`;
+        }
+      }
       const wardAreas = ward ? options.filter(v => v.startsWith(ward)) : [];
       if (wardAreas.length === 0) {
         info.innerHTML += '<br>該当する区エリアなし';
