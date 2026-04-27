@@ -106,3 +106,27 @@ export function parseReport(text) {
 
   return { trips, rests, returnTime, format };
 }
+
+// 4行ヘッダー + --- + CSV/タブ表 のフォーマットをパース
+export function parseFormattedReport(text) {
+  const lines = text.split('\n');
+  const header = { 日付: '', 車種: '', 出庫: '', 帰庫: '' };
+  let dataStart = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (line === '---') { dataStart = i + 1; break; }
+    const m = line.match(/^(日付|車種|出庫|帰庫):\s*(.*)$/);
+    if (m) header[m[1]] = m[2].trim();
+  }
+  const dataText = lines.slice(dataStart).join('\n');
+  const inner = parseReport(dataText);
+  return {
+    date: header.日付,
+    vehicleType: header.車種,
+    departureTime: header.出庫,
+    returnTime: header.帰庫 || inner.returnTime,
+    trips: inner.trips,
+    rests: inner.rests,
+    format: inner.format
+  };
+}
