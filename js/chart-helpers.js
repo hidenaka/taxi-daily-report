@@ -472,23 +472,67 @@ export function buildNeighborMap(drives, { minPairs = 2, maxWaitMin = 25 } = {})
   return neighbors;
 }
 
+// 配列の中央値
+function median(arr) {
+  if (arr.length === 0) return 0;
+  const sorted = [...arr].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+// エリア × 時間帯 別の実時給マップ
+// 各 trip(乗車)のサイクル時間(前trip降車→このtrip降車) で売上を割る
+// 戻り値: Map<"area|period", { sales, cycleMin, count, hourly }>
+export function areaTimeHourly(drives) {
+  const groups = {};
+  for (const d of drives) {
+    if (isSummaryOnly(d)) continue;
+    const trips = (d.trips || []).filter(t => !t.isCancel);
+    for (let i = 0; i < trips.length; i++) {
+      const t = trips[i];
+      if (!t.amount || t.amount <= 0) continue;
+      const area = extractArea(t.boardPlace);
+      if (!area) continue;
+      const period = getPeriodKey(t.boardTime);
+      let dur = timeToMinutes(t.alightTime) - timeToMinutes(t.boardTime);
+      if (dur < 0) dur += 24 * 60;
+      let waitBefore = 0;
+      if (i > 0) {
+        const prev = trips[i - 1];
+        let w = timeToMinutes(t.boardTime) - timeToMinutes(prev.alightTime);
+        if (w < 0) w += 24 * 60;
+        if (w <= 30) waitBefore = w;
+      }
+      const cycleMin = waitBefore + dur;
+      const key = `${area}|${period}`;
+      if (!groups[key]) groups[key] = { sales: 0, cycleMin: 0, count: 0 };
+      groups[key].sales += t.amount;
+      groups[key].cycleMin += cycleMin;
+      groups[key].count++;
+    }
+  }
+  const result = {};
+  for (const [key, g] of Object.entries(groups)) {
+    result[key] = { ...g, hourly: g.cycleMin > 0 ? g.sales / (g.cycleMin / 60) : 0 };
+  }
+  return result;
+}
+export function getAreaHourly(map, area, period) {
+  const v = map[`${area}|${period}`];
+  return v ? v.hourly : 0;
+}
+
 // 特定の降車エリアで降ろした後、次にどのエリアで乗車した時の効率が良かったか
-// 待ち時間 30分以内のtripのみを集計 (=降ろした近辺で取れた仕事)
-// periodFilter: null=全時間帯, 'morning'/'noon'/'evening'/'night' のいずれか (alightTime基準)
-// neighbors: buildNeighborMap の結果。指定すれば降車エリアの近隣も対象に含める
+// 待ち時間 30分以内 かつ 次運賃 > 0 のtripのみを集計
 // 戻り値: { rows, includedAreas, totalDropoffs, totalNextWithin30 }
-//   各row: { area, count, avgWait, avgSales, avgDur, efficiency, ratio15, ratio30, totalSeen }
-//     totalSeen: そのエリアで降ろした件数(母数)
-//     count: そのうち30分以内に次が取れた件数
-//     ratio15: 15分以内取得率(=count15/totalSeen)
-//     ratio30: 30分以内取得率(=count/totalSeen)
+//   各row: { area, count, count15, avgWait, avgSales, medianSales, ratio15, ratio30 }
+//     efficiency は呼び出し側で areaTimeHourly から引いて結合する
 export function nextBoardBreakdown(drives, dropoffArea, periodFilter = null, neighbors = null) {
   const targetAreas = new Set([dropoffArea]);
   if (neighbors && neighbors[dropoffArea]) {
     for (const n of neighbors[dropoffArea]) targetAreas.add(n);
   }
-  const groups = {};   // nextArea → { count, totalWait, totalSales, totalDur, count15 }
-  const seenByNextArea = {}; // nextArea ごとの母数(降車後の機会総数) は計算しないので、別途totalSeenだけ管理
+  const groups = {};
   let totalDropoffs = 0;
   let totalNextWithin30 = 0;
   for (const d of drives) {
@@ -502,31 +546,28 @@ export function nextBoardBreakdown(drives, dropoffArea, periodFilter = null, nei
       const next = trips[i + 1];
       const nextArea = extractArea(next.boardPlace);
       if (!nextArea) continue;
+      const nextAmount = next.amount || 0;
+      if (nextAmount <= 0) continue; // ¥0データ(キャンセル相当の付帯trip等)は除外
       let wait = timeToMinutes(next.boardTime) - timeToMinutes(t.alightTime);
       if (wait < 0) wait += 24 * 60;
-      // 30分超は集計対象外 (=移動先で取った扱い、近隣の判断材料にしない)
       if (wait > 30) continue;
       totalNextWithin30++;
-      let nd = timeToMinutes(next.alightTime) - timeToMinutes(next.boardTime);
-      if (nd < 0) nd += 24 * 60;
-      if (!groups[nextArea]) groups[nextArea] = { count: 0, count15: 0, totalWait: 0, totalSales: 0, totalDur: 0 };
+      if (!groups[nextArea]) groups[nextArea] = { count: 0, count15: 0, totalWait: 0, totalSales: 0, salesList: [] };
       groups[nextArea].count++;
       if (wait <= 15) groups[nextArea].count15++;
       groups[nextArea].totalWait += wait;
-      groups[nextArea].totalSales += (next.amount || 0);
-      groups[nextArea].totalDur += nd;
+      groups[nextArea].totalSales += nextAmount;
+      groups[nextArea].salesList.push(nextAmount);
     }
   }
   const rows = Object.entries(groups).map(([area, g]) => {
     const avgWait = g.totalWait / g.count;
     const avgSales = g.totalSales / g.count;
-    const avgDur = g.totalDur / g.count;
-    const efficiency = (avgWait + avgDur) > 0 ? avgSales / (avgWait + avgDur) * 60 : 0;
-    // 取得率は「降車機会(totalDropoffs)に対する」割合
+    const medianSales = median(g.salesList);
     const ratio15 = totalDropoffs > 0 ? g.count15 / totalDropoffs : 0;
     const ratio30 = totalDropoffs > 0 ? g.count / totalDropoffs : 0;
-    return { area, count: g.count, count15: g.count15, avgWait, avgSales, avgDur, efficiency, ratio15, ratio30 };
-  }).sort((a, b) => b.efficiency - a.efficiency);
+    return { area, count: g.count, count15: g.count15, avgWait, avgSales, medianSales, ratio15, ratio30 };
+  });
   return { rows, includedAreas: Array.from(targetAreas), totalDropoffs, totalNextWithin30 };
 }
 
