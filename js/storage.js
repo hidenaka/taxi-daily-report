@@ -1,4 +1,5 @@
 import { DEFAULT_USER_ID, isValidUserId, normalizeUserId } from './userid.js';
+import { getBillingPeriodRange } from './app.js';
 
 const API_BASE = 'https://api.github.com';
 
@@ -77,7 +78,6 @@ export async function getDrive(date) {
 }
 
 // 月度（YYYY-MM）の全drive並列取得 — 16-15 サイクル対応
-import { getBillingPeriodRange } from './app.js';
 export async function getDrivesForMonth(yearMonth) {
   const userId = getMyUserId();
   const { start, end } = getBillingPeriodRange(yearMonth);
