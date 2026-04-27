@@ -74,6 +74,8 @@ function normalizeSection(s) {
 
 function inferVehicleType(trips) {
   if (!trips || trips.length === 0) return 'regular';
+  // 「ア」(アプリ配車) が1件でもあれば必ず regular
+  if (trips.some(t => t.pickupKind === 'ア')) return 'regular';
   const pickupCount = trips.filter(t => t.isPickup).length;
   return (pickupCount / trips.length) >= 0.7 ? 'premium' : 'regular';
 }

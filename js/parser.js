@@ -30,6 +30,7 @@ function parseClaudeRow(cells) {
   return {
     type: 'trip',
     no: isCancelMarker ? null : parseInt(no, 10),
+    pickupKind: pickup || '',
     boardTime: board,
     alightTime: alight,
     boardPlace: bp,
@@ -72,6 +73,7 @@ function parseGeminiRow(cells) {
   return {
     type: 'trip',
     no: isCancelMarker ? null : parseInt(no, 10),
+    pickupKind: pickup || '',
     boardTime: board,
     alightTime: alight,
     boardPlace: bp,
