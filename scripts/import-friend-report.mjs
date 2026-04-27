@@ -235,12 +235,13 @@ async function putFile(repo, token, path, obj, message, sha) {
 // ─── インタラクティブ確認 ──────────────────────────────────────────
 
 function confirm(prompt) {
+  if (!process.stdin.isTTY) {
+    console.error('[エラー] 標準入力が TTY ではありません。--dry-run で確認してから手動実行してください。');
+    process.exit(1);
+  }
   return new Promise(resolve => {
     const rl = createInterface({ input: process.stdin, output: process.stdout });
-    rl.question(prompt, answer => {
-      rl.close();
-      resolve(answer.trim().toLowerCase());
-    });
+    rl.question(prompt, answer => { rl.close(); resolve(answer.trim().toLowerCase()); });
   });
 }
 
@@ -286,9 +287,18 @@ async function main() {
   }
 
   // ─── 3. drive オブジェクト構築
+  if (parsed.trips.length === 0) {
+    const rawTextPath = `/tmp/import-${Date.now()}.txt`;
+    console.error('[警告] 乗務データが0件です。OCR 出力を確認してください。');
+    console.error(`元テキストは ${rawTextPath} に保存しました。`);
+    // Save raw text for inspection
+    writeFileSync(rawTextPath, rawText, 'utf-8');
+    process.exit(1);
+  }
+
   const date = parsed.date || opts.date;
   if (!date) {
-    console.error('[エラー] 日付が取得できませんでした。--date オプションで指定してください。');
+    console.error('[エラー] OCR が日付を読み取れませんでした。--date YYYY-MM-DD で明示してください。');
     process.exit(1);
   }
 
