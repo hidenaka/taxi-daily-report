@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>日報一括取込 — タクシー日報</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+.bulk-table { width: 100%; font-size: 12px; border-collapse: collapse; overflow-x: auto; display: block; }
+.bulk-table th, .bulk-table td { padding: 5px 7px; border-bottom: 1px solid #eee; text-align: left; white-space: nowrap; }
+.bulk-table thead th { background: var(--bg); font-weight: 600; }
+.bulk-table tr.row-ok { background: #f0fff4; }
+.bulk-table tr.row-warn { background: #fffacd; }
+.bulk-table tr.row-error { background: #fff0f0; }
+.status-badge { font-weight: bold; }
+.status-badge.ok { color: var(--green); }
+.status-badge.warn { color: var(--orange); }
+.status-badge.error { color: #e53935; }
+#bulkPreviewSection { display: none; }
+#bulkStatus { white-space: pre-wrap; font-family: monospace; font-size: 12px; margin-top: 8px; color: var(--text); }
+.push-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.push-row .btn { flex: 1; min-width: 140px; }
+.btn-secondary { background: var(--gray); }
+.back-link { display: inline-block; margin-top: 4px; font-size: 13px; color: var(--primary); text-decoration: none; }
+.back-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
+}
+</script>
+<main style="padding:14px;">
+  <h1>日報一括取込</h1>
+
+  <section class="card">
+    <label class="muted">対象ユーザーID（知人のフォルダ名）</label>
+    <input class="input" id="targetUserIdInput"
+           placeholder="user_a"
+           pattern="^[a-z][a-z0-9_]*$"
+           autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
+           style="margin-top:4px;">
+    <p class="muted" style="margin-top:4px;">
+      自分のデータを入れる場合は <code>user_self</code> を指定。空欄不可。
+    </p>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary style="cursor:pointer;font-weight:600;">📋 Gemini に投げるプロンプト例(クリックで展開)</summary>
+      <p class="muted" style="margin-top:8px;">Gemini Web 版で複数の日報写真をアップロード + 以下のプロンプトをコピペして、出力テキストを下の貼付欄に貼り付けてください。</p>
+
+      <h4 style="margin-top:14px;margin-bottom:4px;">プロンプト本文</h4>
+      <button class="btn btn-secondary" id="copyPromptBtn" style="margin-bottom:6px;font-size:11px;padding:4px 10px;">📋 プロンプトをコピー</button>
+      <pre id="promptText" style="background:#f5f5f5;border:1px solid #ddd;padding:8px;white-space:pre-wrap;font-family:monospace;font-size:11px;line-height:1.5;border-radius:4px;">アップロードした複数のタクシー日報写真を、以下のテキスト形式で**1枚ずつ独立して**変換してください。コードブロック・前置き・後書きは一切不要、テキストのみを出力してください。
+
+【1枚あたりの出力フォーマット】
+日付: YYYY-MM-DD
+車種: premium または regular(写真から読み取れなければ空欄でOK、推測しない)
+出庫: HH:MM
+帰庫: HH:MM
+---
+No,乗車,降車,時間,迎,乗車地,降車地,営Km,男,女,合計
+1,07:17,07:38,0:21,迎,大田区上池台4,港区港南2,6.7,1,,"3,600"
+休,10:47,11:36,0:49,,江東区青海2,,,,,
+2,11:40,11:55,0:15,迎,江東区青海2,中央区銀座8,4.2,2,1,"2,100"
+
+【複数枚を出力する場合】
+1枚分の出力を完了したら、空行を1〜2行入れて次の写真の出力を続ける(区切り文字は不要、「日付:」行が来た時点で次の日として自動認識される)。
+
+【厳守ルール】
+- 1画像 = 1日として独立処理。同じ画像から得た内容を別日として複数回書かない
+- 日付は写真の日付欄を**目視で読む**(推測禁止、読めなければ空欄)
+- 金額は必ずダブルクォートで囲む(カンマ有無に関わらず)。例 "500" "3,600" "15,070"
+- 金額の桁数を必ず確認(¥1,500 と ¥15,000 は別物、0を落とさない)
+- 休憩行: No=休、乗車時刻=休憩開始、降車時刻=休憩終了、乗車地=休憩場所、それ以外は空欄
+- キャンセル行: No=キ、営Km=0
+- 迎車: 「迎」列に「迎」、流しは空欄
+- 不明な値は空欄("不明" や "NULL" と書かない)
+- ¥マーク不要、和暦不要、英字不要(地名は漢字+数字のみ)</pre>
+
+      <h4 style="margin-top:14px;margin-bottom:4px;">期待される出力例(2日分連結)</h4>
+      <pre style="background:#f5f5f5;border:1px solid #ddd;padding:8px;white-space:pre-wrap;font-family:monospace;font-size:11px;line-height:1.5;border-radius:4px;">日付: 2024-11-08
+車種: premium
+出庫: 06:15
+帰庫: 21:15
+---
+No,乗車,降車,時間,迎,乗車地,降車地,営Km,男,女,合計
+1,06:42,07:15,0:33,迎,品川区東五反田2,千代田区丸の内1,8.4,1,,"4,200"
+2,07:30,07:55,0:25,迎,中央区銀座8,港区赤坂2,3.6,1,,"2,300"
+休,11:00,12:00,1:00,,中央区銀座6,,,,,
+3,12:15,12:48,0:33,迎,渋谷区神宮前4,世田谷区玉川3,9.2,1,1,"5,400"
+
+日付: 2024-11-09
+車種: regular
+出庫: 07:00
+帰庫: 22:30
+---
+No,乗車,降車,時間,迎,乗車地,降車地,営Km,男,女,合計
+1,07:18,07:42,0:24,迎,大田区上池台4,港区港南2,6.7,1,,"3,600"
+2,08:00,08:30,0:30,迎,港区芝公園3,千代田区丸の内2,4.5,1,,"2,800"</pre>
+
+      <h4 style="margin-top:14px;margin-bottom:4px;">運用のコツ</h4>
+      <ul class="muted" style="margin:4px 0 0 16px;padding:0;font-size:12px;line-height:1.6;">
+        <li>一度に多く投げるとエラーになりやすい。<strong>20-30 枚ずつ</strong>に分けるのが安定</li>
+        <li>Gemini が日付をハルシネーションする傾向あり。出力後に <strong>日付列だけ目視で確認</strong> 推奨</li>
+        <li>写真の日付が読めない時は <code>日付:</code> を空欄で出すよう厳守させる(後で手動補完)</li>
+        <li>解析後のプレビューで「✗」が出ているファイルは Gemini に再変換させるか手で直す</li>
+      </ul>
+    </details>
+    <p class="muted" style="margin-top:10px;font-size:11px;">※ 上のプロンプトは <code>scripts/prompts/friend-report.md</code> をベースに簡素化したもの。詳細版が必要ならそちらを参照。</p>
+  </section>
+
+  <section class="card">
+    <label class="muted">複数日のレポートを連結したテキストを貼付</label>
+    <textarea id="bulkTextInput" rows="20"
+              style="width:100%;padding:8px;font-family:monospace;font-size:11px;margin-top:4px;"
+              placeholder="日付: 2024-11-08&#10;車種: premium&#10;出庫: 06:15&#10;帰庫: 21:15&#10;---&#10;No,乗車,降車,時間,迎,乗車地,降車地,営Km,男,女,合計&#10;1,...&#10;&#10;日付: 2024-11-09&#10;..."></textarea>
+    <p class="muted" style="margin-top:4px;">「日付:」行で自動分割。50日分まとめてOK。Geminiが冒頭にメタテキストを付けても自動スキップ。</p>
+    <button class="btn" id="parseBulkBtn" style="margin-top:8px;">解析</button>
+  </section>
+
+  <section class="card" id="bulkPreviewSection">
+    <div id="bulkPreviewSummary" style="margin-bottom:10px;font-size:14px;"></div>
+    <div style="overflow-x:auto;">
+      <table class="bulk-table" id="bulkPreviewTable"></table>
+    </div>
+    <div class="push-row" id="bulkActions" style="margin-top:12px;">
+      <button class="btn" id="pushAllBtn" disabled>全件 push</button>
+      <button class="btn btn-secondary" id="pushOkOnlyBtn" disabled>成功分のみ push</button>
+    </div>
+    <div id="bulkStatus"></div>
+  </section>
+
+  <section class="card">
+    <a class="back-link" href="index.html">← ホームに戻る</a>
+  </section>
+</main>
+<div id="navHost"></div>
+<script type="module">
+import { renderBottomNav } from './js/app.js';
+import { parseFormattedReport } from './js/parser.js';
+import { getFile, putFile } from './js/storage.js';
+import { isValidUserId } from './js/userid.js';
+
+document.getElementById('navHost').innerHTML = renderBottomNav('bulk-input');
+
+// ---- プロンプトコピーボタン ---------------------------------------------
+
+const copyBtn = document.getElementById('copyPromptBtn');
+if (copyBtn) {
+  copyBtn.onclick = async () => {
+    const text = document.getElementById('promptText').textContent;
+    try {
+      await navigator.clipboard.writeText(text);
+      copyBtn.textContent = '✓ コピーしました';
+      setTimeout(() => { copyBtn.textContent = '📋 プロンプトをコピー'; }, 2000);
+    } catch (e) {
+      // フォールバック: 古いブラウザ用
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      copyBtn.textContent = '✓ コピーしました';
+      setTimeout(() => { copyBtn.textContent = '📋 プロンプトをコピー'; }, 2000);
+    }
+  };
+}
+
+// ---- 分割 ---------------------------------------------------------------
+
+function splitReports(text) {
+  const lines = text.split('\n');
+  const sections = [];
+  let current = [];
+  for (const line of lines) {
+    if (/^日付:\s*\d{4}-\d{2}-\d{2}/.test(line.trim())) {
+      if (current.length > 0 && current.some(l => l.includes('---'))) {
+        sections.push(current.join('\n'));
+      }
+      current = [line];
+    } else {
+      current.push(line);
+    }
+  }
+  if (current.length > 0 && current.some(l => l.includes('---'))) {
+    sections.push(current.join('\n'));
+  }
+  return sections;
+}
+
+// ---- 車種自動判定 ---------------------------------------------------------
+
+function inferVehicleType(trips) {
+  if (!trips || trips.length === 0) return 'regular';
+  const pickupCount = trips.filter(t => t.isPickup).length;
+  return (pickupCount / trips.length) >= 0.7 ? 'premium' : 'regular';
+}
+
+// ---- 状態 ----------------------------------------------------------------
+
+let parsedReports = []; // [{ section, parsed, status, msg, existing }]
+
+// ---- 解析 ----------------------------------------------------------------
+
+document.getElementById('parseBulkBtn').onclick = async () => {
+  const targetId = document.getElementById('targetUserIdInput').value.trim();
+  if (!isValidUserId(targetId)) {
+    alert('ユーザーIDの形式が不正です（英小文字始まり・英小文字/数字/_のみ）');
+    return;
+  }
+  const raw = document.getElementById('bulkTextInput').value;
+  if (!raw.trim()) {
+    alert('テキストが空欄です');
+    return;
+  }
+
+  const sections = splitReports(raw);
+  if (sections.length === 0) {
+    alert('「日付:」行が見つかりませんでした。フォーマットを確認してください。');
+    return;
+  }
+
+  parsedReports = [];
+  for (const section of sections) {
+    let parsed, status, msg = '';
+    try {
+      parsed = parseFormattedReport(section);
+      if (!parsed.date) throw new Error('日付ヘッダー欠落');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(parsed.date)) throw new Error(`日付フォーマット不正: ${parsed.date}`);
+      if (!parsed.trips || parsed.trips.length === 0) throw new Error('乗務データが0件');
+      status = 'ok';
+    } catch (e) {
+      parsedReports.push({ section, parsed: null, status: 'error', msg: e.message, existing: false });
+      continue;
+    }
+    parsedReports.push({ section, parsed, status, msg, existing: false });
+  }
+
+  // 既存ファイルチェック (並列)
+  await Promise.all(
+    parsedReports
+      .filter(r => r.status === 'ok')
+      .map(async r => {
+        try {
+          const path = `data/drives/${targetId}/${r.parsed.date}.json`;
+          const existing = await getFile(path);
+          if (existing) {
+            r.existing = true;
+            r.status = 'warn';
+            r.msg = '既存ファイルあり（上書きされます）';
+          }
+        } catch (_e) {
+          // 404 は正常（新規）
+        }
+      })
+  );
+
+  renderPreview(targetId);
+};
+
+// ---- プレビュー描画 -------------------------------------------------------
+
+function renderPreview(targetId) {
+  const sec = document.getElementById('bulkPreviewSection');
+  sec.style.display = 'block';
+
+  const okCount   = parsedReports.filter(r => r.status === 'ok').length;
+  const warnCount = parsedReports.filter(r => r.status === 'warn').length;
+  const errCount  = parsedReports.filter(r => r.status === 'error').length;
+  const totalAmt  = parsedReports.reduce((s, r) => {
+    if (!r.parsed) return s;
+    return s + r.parsed.trips.reduce((ss, t) => ss + (t.amount || 0), 0);
+  }, 0);
+  const totalTrips = parsedReports.reduce((s, r) => s + (r.parsed?.trips?.length || 0), 0);
+
+  document.getElementById('bulkPreviewSummary').innerHTML =
+    `対象: <strong>${targetId}</strong> &nbsp;|&nbsp; ` +
+    `${parsedReports.length}日分 &nbsp;|&nbsp; ` +
+    `<span style="color:var(--green)">成功 ${okCount}</span> &nbsp; ` +
+    `<span style="color:var(--orange)">上書き ${warnCount}</span> &nbsp; ` +
+    `<span style="color:#e53935">エラー ${errCount}</span> &nbsp;|&nbsp; ` +
+    `合計 ¥${totalAmt.toLocaleString()} / ${totalTrips}件`;
+
+  const tbl = document.getElementById('bulkPreviewTable');
+  tbl.innerHTML =
+    '<thead><tr>' +
+    '<th>#</th><th>日付</th><th>車種</th><th>出庫-帰庫</th><th>件数</th><th>売上</th><th>状態</th><th>メッセージ</th>' +
+    '</tr></thead>';
+
+  const tbody = document.createElement('tbody');
+  parsedReports.forEach((r, i) => {
+    const tr = document.createElement('tr');
+    tr.className = `row-${r.status}`;
+
+    if (r.parsed) {
+      const rawVt = r.parsed.vehicleType;
+      const vt = rawVt || inferVehicleType(r.parsed.trips);
+      const vtLabel = rawVt ? vt : `${vt} <span class="muted">(自動)</span>`;
+      const rowAmt = r.parsed.trips.reduce((s, t) => s + (t.amount || 0), 0);
+      const icon = r.status === 'ok'
+        ? '<span class="status-badge ok">✓</span>'
+        : '<span class="status-badge warn">⚠</span>';
+      const dep = r.parsed.departureTime || '—';
+      const ret = r.parsed.returnTime || '—';
+      tr.innerHTML =
+        `<td>${i + 1}</td>` +
+        `<td>${r.parsed.date}</td>` +
+        `<td>${vtLabel}</td>` +
+        `<td>${dep} - ${ret}</td>` +
+        `<td>${r.parsed.trips.length}</td>` +
+        `<td>¥${rowAmt.toLocaleString()}</td>` +
+        `<td>${icon}</td>` +
+        `<td class="muted">${r.msg}</td>`;
+    } else {
+      tr.innerHTML =
+        `<td>${i + 1}</td>` +
+        `<td colspan="5" class="muted">パース失敗</td>` +
+        `<td><span class="status-badge error">✗</span></td>` +
+        `<td class="muted">${r.msg}</td>`;
+    }
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);
+
+  const pushAllBtn    = document.getElementById('pushAllBtn');
+  const pushOkOnlyBtn = document.getElementById('pushOkOnlyBtn');
+  // 全件push: エラーが1件でもあれば無効
+  pushAllBtn.disabled    = errCount > 0;
+  // 成功分のみ: ok/warn が1件もなければ無効
+  pushOkOnlyBtn.disabled = (okCount + warnCount) === 0;
+
+  pushAllBtn.textContent    = `全件 push (${okCount + warnCount}件)`;
+  pushOkOnlyBtn.textContent = errCount > 0
+    ? `成功分のみ push (エラー ${errCount} 件をスキップ)`
+    : `成功分のみ push (${okCount + warnCount}件)`;
+
+  document.getElementById('bulkStatus').textContent = '';
+
+  sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ---- Push ----------------------------------------------------------------
+
+async function pushReports(targetId, items) {
+  const statusEl = document.getElementById('bulkStatus');
+  let success = 0, fail = 0;
+  const failures = [];
+
+  for (let i = 0; i < items.length; i++) {
+    const r = items[i];
+    statusEl.textContent = `[${i + 1}/${items.length}] ${r.parsed.date} 送信中...`;
+    try {
+      const path = `data/drives/${targetId}/${r.parsed.date}.json`;
+
+      const vt = r.parsed.vehicleType || inferVehicleType(r.parsed.trips);
+      const drive = {
+        date:          r.parsed.date,
+        vehicleType:   vt,
+        departureTime: r.parsed.departureTime || null,
+        returnTime:    r.parsed.returnTime    || null,
+        trips:         r.parsed.trips,
+        rests:         r.parsed.rests,
+        rawText:       r.parsed.rawText,
+        importedAt:    new Date().toISOString()
+      };
+
+      // 既存 sha を取得（上書き時に必要）
+      let sha = null;
+      if (r.existing) {
+        try {
+          const existingFile = await getFile(path);
+          sha = existingFile?.sha || null;
+        } catch (_e) {
+          // sha 取得失敗はそのまま新規扱い
+        }
+      }
+
+      const message = sha
+        ? `update drive ${targetId}/${r.parsed.date} (bulk)`
+        : `add drive ${targetId}/${r.parsed.date} (bulk)`;
+
+      await putFile(path, drive, message, sha);
+      success++;
+    } catch (e) {
+      fail++;
+      failures.push({ date: r.parsed.date, msg: e.message });
+    }
+  }
+
+  let result = `完了: 成功 ${success} / 失敗 ${fail}`;
+  if (failures.length > 0) {
+    result += '\n失敗一覧:\n' + failures.map(f => `  ${f.date}: ${f.msg}`).join('\n');
+  }
+  statusEl.textContent = result;
+  return { success, fail };
+}
+
+document.getElementById('pushAllBtn').onclick = async () => {
+  const targetId = document.getElementById('targetUserIdInput').value.trim();
+  const items = parsedReports.filter(r => r.status !== 'error');
+  if (!confirm(`${items.length}件を「${targetId}」に push します。よろしいですか？`)) return;
+
+  document.getElementById('pushAllBtn').disabled    = true;
+  document.getElementById('pushOkOnlyBtn').disabled = true;
+  await pushReports(targetId, items);
+};
+
+document.getElementById('pushOkOnlyBtn').onclick = async () => {
+  const targetId = document.getElementById('targetUserIdInput').value.trim();
+  const items = parsedReports.filter(r => r.status === 'ok' || r.status === 'warn');
+  const errCount = parsedReports.filter(r => r.status === 'error').length;
+  if (!confirm(`${items.length}件を「${targetId}」に push します（エラー ${errCount} 件をスキップ）。よろしいですか？`)) return;
+
+  document.getElementById('pushAllBtn').disabled    = true;
+  document.getElementById('pushOkOnlyBtn').disabled = true;
+  await pushReports(targetId, items);
+};
+</script>
+</body>
+</html>

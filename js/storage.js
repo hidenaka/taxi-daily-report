@@ -1,4 +1,25 @@
+import { DEFAULT_USER_ID, isValidUserId, normalizeUserId } from './userid.js';
+import { getBillingPeriodRange } from './app.js';
+
 const API_BASE = 'https://api.github.com';
+
+const USER_ID_KEY = 'taxi_user_id';
+
+export function getMyUserId() {
+  const raw = localStorage.getItem(USER_ID_KEY);
+  if (!raw) return DEFAULT_USER_ID;
+  const norm = normalizeUserId(raw);
+  return isValidUserId(norm) ? norm : DEFAULT_USER_ID;
+}
+
+export function setMyUserId(id) {
+  const norm = normalizeUserId(id);
+  if (!isValidUserId(norm)) {
+    throw new Error('userId は英小文字始まりで英小文字・数字・アンダースコアのみ使用可');
+  }
+  localStorage.setItem(USER_ID_KEY, norm);
+  return norm;
+}
 
 function getToken() {
   return localStorage.getItem('github_token');
@@ -45,20 +66,22 @@ export async function listFiles(dir) {
 }
 
 export async function getConfig() {
-  const result = await getFile('data/config.json');
+  const userId = getMyUserId();
+  const result = await getFile(`data/config/${userId}.json`);
   return result?.content || null;
 }
 
 export async function getDrive(date) {
-  const result = await getFile(`data/drives/${date}.json`);
+  const userId = getMyUserId();
+  const result = await getFile(`data/drives/${userId}/${date}.json`);
   return result?.content || null;
 }
 
 // 月度（YYYY-MM）の全drive並列取得 — 16-15 サイクル対応
-import { getBillingPeriodRange } from './app.js';
 export async function getDrivesForMonth(yearMonth) {
+  const userId = getMyUserId();
   const { start, end } = getBillingPeriodRange(yearMonth);
-  const files = await listFiles('data/drives');
+  const files = await listFiles(`data/drives/${userId}`);
   const periodFiles = files.filter(f => {
     if (!f.name.endsWith('.json')) return false;
     const date = f.name.replace('.json', '');
@@ -101,18 +124,23 @@ export async function putFile(path, jsonObject, message, sha = null) {
 }
 
 export async function saveDrive(drive) {
-  const path = `data/drives/${drive.date}.json`;
+  const userId = getMyUserId();
+  const path = `data/drives/${userId}/${drive.date}.json`;
   // 既存shaを取得（更新の場合）
   const existing = await getFile(path);
   const sha = existing?.sha || null;
-  const message = sha ? `update drive ${drive.date}` : `add drive ${drive.date}`;
+  const message = sha
+    ? `update drive ${userId}/${drive.date}`
+    : `add drive ${userId}/${drive.date}`;
   return putFile(path, drive, message, sha);
 }
 
 export async function saveConfig(config) {
-  const existing = await getFile('data/config.json');
+  const userId = getMyUserId();
+  const path = `data/config/${userId}.json`;
+  const existing = await getFile(path);
   const sha = existing?.sha || null;
-  return putFile('data/config.json', config, 'update config', sha);
+  return putFile(path, config, `update config ${userId}`, sha);
 }
 
 const PENDING_QUEUE_KEY = 'pending_saves';
@@ -152,4 +180,55 @@ export async function flushPendingQueue() {
   }
   setPendingQueue(remaining);
   return { sent: queue.length - remaining.length, remaining: remaining.length };
+}
+
+// data/users.json から active: true の userId 配列を取得
+export async function listActiveUserIds() {
+  const result = await getFile('data/users.json');
+  if (!result?.content?.users) {
+    // フォールバック: users.json が無い場合は自分のみ
+    return [getMyUserId()];
+  }
+  return result.content.users
+    .filter(u => u.active === true && isValidUserId(u.userId))
+    .map(u => u.userId);
+}
+
+// data/users.json から active: true の {userId: displayName} マップを取得
+export async function getUserDisplayMap() {
+  const result = await getFile('data/users.json');
+  const map = {};
+  if (!result?.content?.users) return map;
+  for (const u of result.content.users) {
+    if (u.active === true && isValidUserId(u.userId)) {
+      map[u.userId] = u.displayName || u.userId;
+    }
+  }
+  return map;
+}
+
+// 全 active userId の月度データを並列取得して flatten
+export async function getAllUsersDrivesForMonth(yearMonth) {
+  const { start, end } = getBillingPeriodRange(yearMonth);
+  const userIds = await listActiveUserIds();
+  const perUser = await Promise.all(userIds.map(async userId => {
+    let files;
+    try {
+      files = await listFiles(`data/drives/${userId}`);
+    } catch (e) {
+      // GitHub API エラー(401/500等)時はそのユーザーをスキップ
+      return [];
+    }
+    const periodFiles = files.filter(f => {
+      if (!f.name.endsWith('.json')) return false;
+      const date = f.name.replace('.json', '');
+      return date >= start && date <= end;
+    });
+    const drives = await Promise.all(
+      periodFiles.map(f => getFile(f.path).then(r => r?.content))
+    );
+    // 集計時にユーザー識別できるよう、_userId を非破壊的に付与
+    return drives.filter(d => d !== null).map(d => ({ ...d, _userId: userId }));
+  }));
+  return perUser.flat();
 }

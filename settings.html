@@ -32,6 +32,18 @@ if ('serviceWorker' in navigator) {
   </section>
 
   <section class="card">
+    <h3>ユーザー</h3>
+    <label class="muted">あなたのユーザーID(共有時のフォルダ名)</label>
+    <input class="input" id="userIdInput" placeholder="user_self" pattern="^[a-z][a-z0-9_]*$" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <p class="muted" style="font-size:10px;margin-top:2px;">英小文字始まり・英小文字/数字/アンダースコアのみ。本名は推奨しない(例: user_self, user_a)。</p>
+    <label class="muted" style="margin-top:8px;display:block;">表示名(任意)</label>
+    <input class="input" id="displayNameInput" placeholder="自分">
+    <p class="muted" style="font-size:10px;margin-top:2px;">集計画面の表示用。</p>
+    <button class="btn" id="saveUserBtn" style="margin-top:8px;">保存</button>
+    <div id="userStatus" class="muted" style="margin-top:6px;font-size:11px;"></div>
+  </section>
+
+  <section class="card">
     <h3>デフォルト</h3>
     <label class="muted">乗務種別</label>
     <select class="select" id="vehicleTypeSel">
@@ -77,14 +89,19 @@ if ('serviceWorker' in navigator) {
 <div id="navHost"></div>
 <script type="module">
 import { renderBottomNav } from './js/app.js';
-import { getConfig, saveConfig, getDrivesForMonth } from './js/storage.js';
+import { getConfig, saveConfig, getDrivesForMonth, getMyUserId, setMyUserId } from './js/storage.js';
 import { calcTotalPay } from './js/payroll.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('settings');
 
+let currentConfig = null;
+
 // GitHub設定 復元
 document.getElementById('repoInput').value = localStorage.getItem('github_data_repo') || '';
 document.getElementById('tokenInput').value = localStorage.getItem('github_token') || '';
+
+// userId 初期表示
+document.getElementById('userIdInput').value = getMyUserId();
 
 document.getElementById('saveGhBtn').onclick = () => {
   localStorage.setItem('github_data_repo', document.getElementById('repoInput').value.trim());
@@ -118,17 +135,47 @@ document.getElementById('testBtn').onclick = async () => {
     if (!r.ok) { log(`✗ /repos/${repo} ${r.status}`); return; }
     log(`✓ リポジトリ存在確認OK`);
   } catch (e) { log(`✗ リポジトリ確認失敗: ${e.message}`); return; }
-  // Test 3: config.json
+  // Test 3: config/{userId}.json
   try {
-    const r = await fetch(`https://api.github.com/repos/${repo}/contents/data/config.json`, { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json' } });
-    if (r.status === 404) { log('✗ data/config.json が見つからない'); return; }
-    if (!r.ok) { log(`✗ config.json取得失敗 ${r.status}`); return; }
-    log('✓ config.json取得OK');
+    const userId = getMyUserId();
+    const configPath = `data/config/${userId}.json`;
+    const r = await fetch(`https://api.github.com/repos/${repo}/contents/${configPath}`, { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json' } });
+    if (r.status === 404) { log(`✗ ${configPath} が見つからない`); return; }
+    if (!r.ok) { log(`✗ ${configPath} 取得失敗 ${r.status}`); return; }
+    log(`✓ ${configPath} 取得OK`);
     log('→ すべて正常。「保存」を押して設定を反映してください。');
-  } catch (e) { log(`✗ config.json取得失敗: ${e.message}`); }
+  } catch (e) { log(`✗ config取得失敗: ${e.message}`); }
 };
 
-let currentConfig = null;
+document.getElementById('saveUserBtn').onclick = async () => {
+  const status = document.getElementById('userStatus');
+  status.textContent = '';
+  const userIdRaw = document.getElementById('userIdInput').value;
+  // userId 保存(localStorage)
+  try {
+    setMyUserId(userIdRaw);
+  } catch (e) {
+    status.textContent = '✗ ' + e.message;
+    status.style.color = 'red';
+    return;
+  }
+  status.style.color = '';
+  status.textContent = '✓ userId を localStorage に保存しました';
+  // displayName を config に保存(GitHub への push が伴う)
+  if (currentConfig) {
+    currentConfig.displayName = document.getElementById('displayNameInput').value;
+    try {
+      await saveConfig(currentConfig);
+      status.textContent += '\n✓ 表示名を config に保存しました';
+    } catch (e) {
+      status.textContent += '\n✗ config 保存失敗: ' + e.message;
+      status.style.color = 'red';
+      return;
+    }
+  } else {
+    status.textContent += '\n⚠ config がロードされていないため表示名は未保存(GitHub接続して再試行)';
+  }
+};
 
 async function loadConfig() {
   try {
@@ -142,6 +189,7 @@ async function loadConfig() {
     document.getElementById('latInput').value = currentConfig.weatherLocation.lat;
     document.getElementById('lonInput').value = currentConfig.weatherLocation.lon;
     document.getElementById('locNameInput').value = currentConfig.weatherLocation.name;
+    document.getElementById('displayNameInput').value = currentConfig.displayName || '';
     renderRateTable(currentConfig.rateTable);
     document.getElementById('ghStatus').textContent = '読み込み成功';
   } catch (e) {

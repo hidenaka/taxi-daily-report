@@ -21,11 +21,15 @@ function parseClaudeRow(cells) {
   if (no === '休') {
     return { type: 'rest', startTime: board, endTime: alight, place: bp };
   }
-  // キャンセル判定: km=0 で (amount=500 or 乗車地==降車地)
-  const isCancel = parseKm(km) === 0 && (parseAmount(amt) === 500 || bp === ap);
+  // キャンセル判定: 行頭が「キ」、または amount=400 (無条件)、または km=0 で amount=500/1000
+  // 乗降同所+0kmは待機料金で売上が立つこともあるため、金額が400/500/1000以外なら通常乗車扱い
+  const amtNum = parseAmount(amt);
+  const kmNum = parseKm(km);
+  const isCancelMarker = no === 'キ';
+  const isCancel = isCancelMarker || amtNum === 400 || (kmNum === 0 && (amtNum === 500 || amtNum === 1000));
   return {
     type: 'trip',
-    no: parseInt(no, 10),
+    no: isCancelMarker ? null : parseInt(no, 10),
     boardTime: board,
     alightTime: alight,
     boardPlace: bp,
@@ -59,11 +63,15 @@ function parseGeminiRow(cells) {
   if (no === '休') {
     return { type: 'rest', startTime: board, endTime: alight, place: bp };
   }
-  // キャンセル判定: km=0 で (amount=500 or 乗車地==降車地)
-  const isCancel = parseKm(km) === 0 && (parseAmount(amt) === 500 || bp === ap);
+  // キャンセル判定: 行頭が「キ」、または amount=400 (無条件)、または km=0 で amount=500/1000
+  // 乗降同所+0kmは待機料金で売上が立つこともあるため、金額が400/500/1000以外なら通常乗車扱い
+  const amtNum = parseAmount(amt);
+  const kmNum = parseKm(km);
+  const isCancelMarker = no === 'キ';
+  const isCancel = isCancelMarker || amtNum === 400 || (kmNum === 0 && (amtNum === 500 || amtNum === 1000));
   return {
     type: 'trip',
-    no: parseInt(no, 10),
+    no: isCancelMarker ? null : parseInt(no, 10),
     boardTime: board,
     alightTime: alight,
     boardPlace: bp,
@@ -105,4 +113,32 @@ export function parseReport(text) {
   const returnTime = lastNo === '休' && rests.length > 0 ? rests[rests.length - 1].endTime : null;
 
   return { trips, rests, returnTime, format };
+}
+
+// 4行ヘッダー + --- + CSV/タブ表 のフォーマットをパース
+export function parseFormattedReport(text) {
+  const lines = text.split('\n');
+  const header = { 日付: '', 車種: '', 出庫: '', 帰庫: '' };
+  let dataStart = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (line === '---') { dataStart = i + 1; break; }
+    const m = line.match(/^(日付|車種|出庫|帰庫):\s*(.*)$/);
+    if (m) header[m[1]] = m[2].trim();
+  }
+  if (dataStart === -1) {
+    throw new Error('parseFormattedReport: --- separator not found');
+  }
+  const dataText = lines.slice(dataStart).join('\n');
+  const inner = parseReport(dataText);
+  return {
+    date: header.日付,
+    vehicleType: header.車種,
+    departureTime: header.出庫,
+    returnTime: header.帰庫 || inner.returnTime,
+    trips: inner.trips,
+    rests: inner.rests,
+    format: inner.format,
+    rawText: text
+  };
 }
