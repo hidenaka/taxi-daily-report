@@ -65,20 +65,23 @@ export async function listFiles(dir) {
 }
 
 export async function getConfig() {
-  const result = await getFile('data/config.json');
+  const userId = getMyUserId();
+  const result = await getFile(`data/config/${userId}.json`);
   return result?.content || null;
 }
 
 export async function getDrive(date) {
-  const result = await getFile(`data/drives/${date}.json`);
+  const userId = getMyUserId();
+  const result = await getFile(`data/drives/${userId}/${date}.json`);
   return result?.content || null;
 }
 
 // 月度（YYYY-MM）の全drive並列取得 — 16-15 サイクル対応
 import { getBillingPeriodRange } from './app.js';
 export async function getDrivesForMonth(yearMonth) {
+  const userId = getMyUserId();
   const { start, end } = getBillingPeriodRange(yearMonth);
-  const files = await listFiles('data/drives');
+  const files = await listFiles(`data/drives/${userId}`);
   const periodFiles = files.filter(f => {
     if (!f.name.endsWith('.json')) return false;
     const date = f.name.replace('.json', '');
@@ -121,18 +124,23 @@ export async function putFile(path, jsonObject, message, sha = null) {
 }
 
 export async function saveDrive(drive) {
-  const path = `data/drives/${drive.date}.json`;
+  const userId = getMyUserId();
+  const path = `data/drives/${userId}/${drive.date}.json`;
   // 既存shaを取得（更新の場合）
   const existing = await getFile(path);
   const sha = existing?.sha || null;
-  const message = sha ? `update drive ${drive.date}` : `add drive ${drive.date}`;
+  const message = sha
+    ? `update drive ${userId}/${drive.date}`
+    : `add drive ${userId}/${drive.date}`;
   return putFile(path, drive, message, sha);
 }
 
 export async function saveConfig(config) {
-  const existing = await getFile('data/config.json');
+  const userId = getMyUserId();
+  const path = `data/config/${userId}.json`;
+  const existing = await getFile(path);
   const sha = existing?.sha || null;
-  return putFile('data/config.json', config, 'update config', sha);
+  return putFile(path, config, `update config ${userId}`, sha);
 }
 
 const PENDING_QUEUE_KEY = 'pending_saves';
