@@ -29,14 +29,23 @@
 
 ### 手順
 
-#### Step 1. 共有 PAT を確認/発行
+#### Step 1. 知人用 PAT を発行
 
-知人に渡す GitHub Personal Access Token(データリポへの書込み権限)。以下どちらか:
-- 既存の共有 PAT を再利用
-- 新規発行: GitHub → Settings → Developer settings → Personal access tokens → Fine-grained
-  - Repository access: `taxi-daily-report-data` のみ
-  - Permissions: Contents = Read and write
-  - 期限: 1年
+知人は GitHub アカウントを作成せず、管理者が発行した PAT をアプリに貼り付ける方式で運用します。
+
+1. GitHub で自身のアカウントにログイン → 右上アイコン → **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → **Generate new token**
+2. 入力項目:
+   - **Token name**: `taxi-app-user-xxx` (知人の userId が分かる名称)
+   - **Expiration**: `1 year` (切れたら再発行)
+   - **Description**: 知人の名前等を記載 (管理用メモ)
+3. **Repository access** → `Only selected repositories` → `taxi-daily-report-data` を選択
+4. **Permissions** → Repository permissions → **Contents** を `Read and write`
+5. ページ最下部の **Generate token** をクリック
+6. 表示された **`ghp_xxxxxx...`** を **すぐコピー** (画面を閉じると二度と見られません)
+7. LINE 等で知人に送信
+
+> 管理者は各知人の PAT を発行・失効・再発行の責任を負います。発行した PAT は自分のメモに保管しておくか、GitHub のトークン一覧から参照します。
+> 知人が PAT を紛失したり有効期限が切れたりしたら、同じ手順で再発行して送り直します。
 
 #### Step 2. 過去日報の一括取込み(任意)
 
@@ -75,9 +84,9 @@ gh api repos/hidenaka/taxi-daily-report-data/contents/data/users.json --jq '.con
 
 `docs/setup-for-novice.md` を案内(LINE等で送る)。必要情報をセットで:
 - PWA URL: `https://hidenaka.github.io/taxi-daily-report/`
-- PAT: `ghp_xxxx...`(Step 1 で用意したもの)
-- userId: `user_X`(Step 2 or 3 で登録したもの)
 - データリポ名: `hidenaka/taxi-daily-report-data`
+- userId: `user_X`(Step 2 or 3 で登録したもの)
+- PAT: Step 1 で発行した `ghp_xxx...`
 
 知人本人がセットアップ後、テスト日報を1件入力 → 翌日反映確認すれば完了。
 
