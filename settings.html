@@ -21,7 +21,7 @@ if ('serviceWorker' in navigator) {
   <section class="card">
     <h3>GitHub（データリポジトリ）</h3>
     <label class="muted">データリポジトリ (username/repo-data)</label>
-    <input class="input" id="repoInput" placeholder="hidenaka/taxi-daily-report-data" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <input class="input" id="repoInput" placeholder="hidenaka/taxi-daily-report-data" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="font-size:13px;">
     <label class="muted" style="margin-top:8px;display:block;">Personal Access Token (repo権限)</label>
     <input class="input" id="tokenInput" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
     <div style="display:flex;gap:6px;margin-top:8px;">
@@ -32,9 +32,10 @@ if ('serviceWorker' in navigator) {
   </section>
 
   <section class="card">
-    <h3>ユーザー</h3>
+    <h3>ユーザー <span class="muted" style="font-size:11px;font-weight:normal;background:var(--bg);padding:2px 6px;border-radius:4px;border:1px solid var(--border);">自動設定済み</span></h3>
+    <p class="muted" style="font-size:11px;margin-top:-4px;margin-bottom:6px;">管理者配布リンクから自動設定されています。データ保存先のフォルダ名として使用されます。</p>
     <label class="muted">あなたのユーザーID(共有時のフォルダ名)</label>
-    <input class="input" id="userIdInput" placeholder="user_self" pattern="^[a-z][a-z0-9_]*$" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <input class="input" id="userIdInput" placeholder="user_self" pattern="^[a-z][a-z0-9_]*$" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" readonly style="background:var(--bg);">
     <p class="muted" style="font-size:10px;margin-top:2px;">英小文字始まり・英小文字/数字/アンダースコアのみ。本名は推奨しない(例: user_self, user_a)。</p>
     <label class="muted" style="margin-top:8px;display:block;">表示名(任意)</label>
     <input class="input" id="displayNameInput" placeholder="自分">
@@ -180,7 +181,7 @@ document.getElementById('saveUserBtn').onclick = async () => {
 async function loadConfig() {
   try {
     currentConfig = await getConfig();
-    if (!currentConfig) { document.getElementById('ghStatus').textContent = 'config.json が見つかりません'; return; }
+    if (!currentConfig) { document.getElementById('ghStatus').textContent = 'まだ個人設定ファイルがありません。下の「設定全体を保存」を押すと作成されます。'; return; }
     document.getElementById('vehicleTypeSel').value = currentConfig.defaults.vehicleType;
     document.getElementById('departureInput').value = currentConfig.defaults.departureTime;
     document.getElementById('takeHomeRateInput').value = currentConfig.takeHomeRate ?? 0.75;
