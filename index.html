@@ -64,6 +64,25 @@ import { getConfig, getDrivesForMonth, flushPendingQueue } from './js/storage.js
 import { calcTotalPay, calcDailySales, calcMonthlySales } from './js/payroll.js';
 import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js';
 
+// URL パラメータによる自動設定（管理者配布リンク対応）
+const urlParams = new URLSearchParams(location.search);
+const paramPat = urlParams.get('pat');
+const paramUser = urlParams.get('user');
+const paramRepo = urlParams.get('repo');
+let autoConfigured = false;
+if (paramPat) { localStorage.setItem('github_token', paramPat); autoConfigured = true; }
+if (paramRepo) { localStorage.setItem('github_data_repo', paramRepo); autoConfigured = true; }
+if (paramUser) {
+  const norm = paramUser.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9_]+/, '');
+  if (/^[a-z][a-z0-9_]*$/.test(norm)) {
+    localStorage.setItem('taxi_user_id', norm);
+    autoConfigured = true;
+  }
+}
+if (autoConfigured) {
+  history.replaceState(null, '', location.pathname + location.hash);
+}
+
 document.getElementById('navHost').innerHTML = renderBottomNav('home');
 
 let viewPeriod = currentBillingPeriod();
