@@ -66,19 +66,13 @@ if ('serviceWorker' in navigator) {
 
   <section class="card">
     <h3>天候地点</h3>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-      <div>
-        <label class="muted">緯度</label>
-        <input class="input" id="latInput" type="number" step="0.0001" value="35.6938">
-      </div>
-      <div>
-        <label class="muted">経度</label>
-        <input class="input" id="lonInput" type="number" step="0.0001" value="139.7036">
-      </div>
+    <input type="hidden" id="latInput" value="35.6938">
+    <input type="hidden" id="lonInput" value="139.7036">
+    <div id="locNameDisplay" style="font-size:13px;padding:8px;background:#f5f5f5;border-radius:4px;margin-bottom:8px;">千代田区</div>
+    <div style="display:flex;gap:6px;">
+      <button class="btn" id="weatherGpsBtn" style="flex:1;background:#fff;color:var(--primary);border:1px solid var(--primary);">📍 現在地</button>
+      <button class="btn" id="weatherDefaultBtn" style="flex:1;background:var(--gray);color:#333;">デフォルトに戻す</button>
     </div>
-    <label class="muted" style="margin-top:8px;display:block;">表示名</label>
-    <input class="input" id="locNameInput" value="千代田区">
-    <button class="btn" id="weatherGpsBtn" style="margin-top:8px;width:100%;background:#fff;color:var(--primary);border:1px solid var(--primary);">📍 現在地から自動設定</button>
     <div id="weatherGpsInfo" class="muted" style="font-size:10px;margin-top:4px;"></div>
   </section>
 
@@ -206,7 +200,7 @@ async function loadConfig() {
     document.getElementById('paidLeaveAmountInput').value = currentConfig.paidLeaveAmount ?? 39340;
     document.getElementById('latInput').value = currentConfig.weatherLocation.lat;
     document.getElementById('lonInput').value = currentConfig.weatherLocation.lon;
-    document.getElementById('locNameInput').value = currentConfig.weatherLocation.name;
+    document.getElementById('locNameDisplay').textContent = currentConfig.weatherLocation.name || '千代田区';
     document.getElementById('displayNameInput').value = currentConfig.displayName || '';
     if (myRole === 'admin') {
       document.getElementById('rateTableSection').style.display = '';
@@ -252,7 +246,7 @@ document.getElementById('saveConfigBtn').onclick = async () => {
   currentConfig.weatherLocation = {
     lat: parseFloat(document.getElementById('latInput').value),
     lon: parseFloat(document.getElementById('lonInput').value),
-    name: document.getElementById('locNameInput').value
+    name: document.getElementById('locNameDisplay').textContent
   };
   if (myRole === 'admin') {
     document.querySelectorAll('#rateTableEditor input[data-shifts]').forEach(inp => {
@@ -299,13 +293,20 @@ document.getElementById('weatherGpsBtn').onclick = async () => {
     }
     document.getElementById('latInput').value = lat.toFixed(4);
     document.getElementById('lonInput').value = lon.toFixed(4);
-    document.getElementById('locNameInput').value = name || `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+    document.getElementById('locNameDisplay').textContent = name || `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
     info.textContent = `📍 設定しました: ${name || '現在地'}`;
   } catch (err) {
     info.textContent = '位置情報取得エラー: ' + (err.message || err.code);
   } finally {
-    btn.disabled = false; btn.textContent = '📍 現在地から自動設定';
+    btn.disabled = false; btn.textContent = '📍 現在地';
   }
+};
+
+document.getElementById('weatherDefaultBtn').onclick = () => {
+  document.getElementById('latInput').value = '35.6938';
+  document.getElementById('lonInput').value = '139.7036';
+  document.getElementById('locNameDisplay').textContent = '千代田区';
+  document.getElementById('weatherGpsInfo').textContent = 'デフォルト（千代田区）に戻しました';
 };
 
 if (localStorage.getItem('github_token') && localStorage.getItem('github_data_repo')) loadConfig();
