@@ -25,7 +25,7 @@ function getToken() {
   return localStorage.getItem('github_token');
 }
 
-function getRepo() {
+export function getRepo() {
   // データリポ（"username/taxi-daily-report-data"）。コードリポではない点注意。
   return localStorage.getItem('github_data_repo');
 }

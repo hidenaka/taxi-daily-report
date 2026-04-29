@@ -5,16 +5,9 @@
  */
 
 import { decrypt } from './crypto-utils.js';
+import { getRepo, setMyUserId } from './storage.js';
 
 const API_BASE = 'https://api.github.com';
-
-function getRepo() {
-  return localStorage.getItem('data_repo') || 'hidenaka/taxi-daily-report-data';
-}
-
-function setMyUserId(id) {
-  localStorage.setItem('user_id', id);
-}
 
 export function parseInviteParams() {
   const url = new URL(window.location.href);
@@ -32,7 +25,7 @@ export function parseInviteParams() {
 async function fetchInvite(repo, code) {
   const targetRepo = repo || getRepo();
   const url = `${API_BASE}/repos/${targetRepo}/contents/data/invites/${code}.json`;
-  const token = localStorage.getItem('github_pat');
+  const token = localStorage.getItem('github_token');
 
   const headers = { 'Accept': 'application/vnd.github+json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
