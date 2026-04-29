@@ -141,7 +141,7 @@ if ('serviceWorker' in navigator) {
 <script type="module">
 import { renderBottomNav, formatYen, formatDateY, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, toLocalIso } from './js/app.js';
 import { getDrivesForMonth, getAllUsersDrivesForMonth, listActiveUserIds, getMyUserId, getUserDisplayMap, getUserRoleMap } from './js/storage.js';
-import { hourlyDowEfficiency, dropoffAreaAnalysis, nextBoardBreakdown, dropoffHistoryAtArea, boardHistoryAtArea, buildNeighborMap, highValueAreas, calcPaceAtElapsed, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin, dowOf, ZONE_PRESETS, getZoneAt, getZoneForElapsed } from './js/chart-helpers.js';
+import { hourlyDowEfficiency, dropoffAreaAnalysis, nextBoardBreakdown, dropoffHistoryAtArea, boardHistoryAtArea, buildNeighborMap, highValueAreas, highValueAreasByZone, boardHistoryAtAreaByZone, calcPaceAtElapsed, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin, dowOf, ZONE_PRESETS, getZoneAt, getZoneForElapsed } from './js/chart-helpers.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('support');
 
@@ -690,7 +690,7 @@ document.getElementById('recSearch').onclick = () => {
 };
 
 function renderHighValue() {
-  const rows = highValueAreas(allDrives, { minSamples: 5 }).slice(0, 15);
+  const rows = highValueAreasByZone(allDrives, ZONE_PRESETS.human.zones, { minSamples: 5 }).slice(0, 15);
   const body = document.getElementById('highValueBody');
   if (rows.length === 0) { body.innerHTML = '<p class="muted" style="font-size:11px;">該当データなし</p>'; return; }
   const maxSales = Math.max(...rows.map(r => r.avgSales), 1);
@@ -699,10 +699,12 @@ function renderHighValue() {
     + '<th class="l">エリア</th><th>時間帯</th><th>件数</th><th>平均実車</th><th>単価(中央/平均)</th>'
     + '</tr></thead><tbody>';
   for (const r of rows) {
+    const zone = ZONE_PRESETS.human.zones.find(z => z.key === r.zoneKey);
+    const zoneLabel = zone ? zone.label : r.zoneKey;
     const pct = (r.medianSales || 0) / maxMedian * 100;
-    html += `<tr data-area="${r.area}" data-period="${r.period}" style="cursor:pointer;">
+    html += `<tr data-area="${r.area}" data-zone="${r.zoneKey}" style="cursor:pointer;">
       <td class="l">${r.area}</td>
-      <td>${PERIOD_LABELS[r.period]}</td>
+      <td>${zoneLabel}</td>
       <td>${r.count}</td>
       <td>${formatMin(r.avgDur)}</td>
       <td><div class="bar"><div class="fill" style="width:${pct}%;"></div><div class="v">${formatYen(r.medianSales)}<span style="color:rgba(255,255,255,0.85);font-size:9px;margin-left:4px;">平${formatYen(r.avgSales)}</span></div></div></td>
@@ -713,16 +715,18 @@ function renderHighValue() {
   document.querySelectorAll('#highValueBody tr[data-area]').forEach(tr => {
     tr.onclick = () => {
       const area = tr.dataset.area;
-      const period = tr.dataset.period;
+      const zoneKey = tr.dataset.zone;
+      const zone = ZONE_PRESETS.human.zones.find(z => z.key === zoneKey);
+      const zoneLabel = zone ? zone.label : zoneKey;
       const tip = document.getElementById('highValueTip');
       tip.classList.add('show');
-      tip.innerHTML = `<strong>${area}</strong> で <strong>${PERIOD_LABELS[period]}</strong> に乗車した過去履歴<br>` + renderBoardHistoryHTML(area, period);
+      tip.innerHTML = `<strong>${area}</strong> で <strong>${zoneLabel}</strong> に乗車した過去履歴<br>` + renderBoardHistoryHTML(area, zoneKey);
     };
   });
 }
 
-function renderBoardHistoryHTML(area, period) {
-  const result = boardHistoryAtArea(allDrives, area, period, 30);
+function renderBoardHistoryHTML(area, zoneKey) {
+  const result = boardHistoryAtAreaByZone(allDrives, area, zoneKey, ZONE_PRESETS.human.zones, 30);
   if (result.entries.length === 0) return '<p class="muted" style="font-size:11px;">履歴なし</p>';
   const todayDow = dowOf(todayIso());
   // ソート: 同カテゴリ → 別カテ(グレー)、内部は時刻早い順

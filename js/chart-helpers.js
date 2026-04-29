@@ -941,6 +941,79 @@ const PERIOD_HOURS = {
   evening: [18, 19, 20, 21, 22],
   night: [23, 0, 1, 2, 3, 4, 5, 6],
 };
+// 高期待値エリア × ゾーン（support.html 用）
+export function highValueAreasByZone(drives, zones, { minSamples = 5 } = {}) {
+  const groups = {};
+  for (const d of drives) {
+    if (isSummaryOnly(d)) continue;
+    for (const t of (d.trips || [])) {
+      if (t.isCancel) continue;
+      if (!t.amount || t.amount <= 0) continue;
+      const area = extractArea(t.boardPlace);
+      if (!area) continue;
+      const zoneKey = getZoneKey(t.boardTime, zones);
+      let dur = timeToMinutes(t.alightTime) - timeToMinutes(t.boardTime);
+      if (dur < 0) dur += 24 * 60;
+      const key = `${area}|${zoneKey}`;
+      if (!groups[key]) groups[key] = { count: 0, sumSales: 0, sumDur: 0, salesList: [] };
+      groups[key].count++;
+      groups[key].sumSales += t.amount;
+      groups[key].sumDur += dur;
+      groups[key].salesList.push(t.amount);
+    }
+  }
+  const rows = [];
+  for (const [key, g] of Object.entries(groups)) {
+    if (g.count < minSamples) continue;
+    const [area, zoneKey] = key.split('|');
+    const avgSales = g.sumSales / g.count;
+    const medianSales = median(g.salesList);
+    const avgDur = g.sumDur / g.count;
+    rows.push({ area, zoneKey, count: g.count, avgSales, medianSales, avgDur });
+  }
+  rows.sort((a, b) => b.medianSales - a.medianSales);
+  return rows;
+}
+
+// 特定エリア × ゾーンで乗車した過去trip履歴（support.html 用）
+export function boardHistoryAtAreaByZone(drives, area, zoneKey, zones, maxEntries = 30) {
+  const entries = [];
+  for (const d of drives) {
+    if (isSummaryOnly(d)) continue;
+    const trips = (d.trips || []).filter(t => !t.isCancel);
+    for (let i = 0; i < trips.length; i++) {
+      const t = trips[i];
+      if (extractArea(t.boardPlace) !== area) continue;
+      if (zoneKey && getZoneKey(t.boardTime, zones) !== zoneKey) continue;
+      let dur = timeToMinutes(t.alightTime) - timeToMinutes(t.boardTime);
+      if (dur < 0) dur += 24 * 60;
+      let waitBefore = null;
+      if (i > 0) {
+        const prev = trips[i - 1];
+        let w = timeToMinutes(t.boardTime) - timeToMinutes(prev.alightTime);
+        if (w < 0) w += 24 * 60;
+        waitBefore = w;
+      }
+      entries.push({
+        date: d.date,
+        dow: d.date ? dowOf(d.date) : null,
+        userId: d._userId || null,
+        boardTime: t.boardTime,
+        boardPlace: t.boardPlace,
+        alightTime: t.alightTime,
+        alightPlace: t.alightPlace,
+        dur, amount: t.amount || 0, waitBefore,
+      });
+    }
+  }
+  entries.sort((a, b) => {
+    const dc = (b.date || '').localeCompare(a.date || '');
+    if (dc !== 0) return dc;
+    return (b.boardTime || '').localeCompare(a.boardTime || '');
+  });
+  return { entries: entries.slice(0, maxEntries), totalCount: entries.length };
+}
+
 export function getAreaPeriodHourly(map, area, period) {
   const hours = PERIOD_HOURS[period] || [];
   let sales = 0, cycle = 0;
