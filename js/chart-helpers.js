@@ -114,6 +114,93 @@ export const PERIOD_LABELS = {
   night: '深夜(23時〜)'
 };
 
+// ====== ゾーン定義（support.html / review.html 共通） ======
+export const ZONE_PRESETS = {
+  human: {
+    label: '人の動き別',
+    zones: [
+      { key: 'night1', label: '深夜', start: 0, end: 5, color: '#37474f' },
+      { key: 'morning', label: '早朝〜午前', start: 5, end: 12, color: '#1565c0' },
+      { key: 'noon', label: '昼', start: 12, end: 18, color: '#2e7d32' },
+      { key: 'evening', label: '夕方〜夜', start: 18, end: 22, color: '#e65100' },
+      { key: 'night2', label: '深夜', start: 22, end: 24, color: '#37474f' },
+    ]
+  },
+  shift: {
+    label: 'シフト別',
+    zones: [
+      { key: 'morning', label: '早朝', start: 7, end: 12, color: '#1565c0' },
+      { key: 'noon', label: '昼', start: 12, end: 17, color: '#2e7d32' },
+      { key: 'evening', label: '夕方〜夜', start: 17, end: 22, color: '#e65100' },
+      { key: 'night', label: '深夜', start: 22, end: 3, color: '#37474f' },
+    ]
+  }
+};
+
+export function getZoneAt(hour, preset) {
+  const zones = ZONE_PRESETS[preset].zones;
+  for (const z of zones) {
+    if (z.start < z.end) {
+      if (hour >= z.start && hour < z.end) return z;
+    } else {
+      if (hour >= z.start || hour < z.end) return z;
+    }
+  }
+  return zones[zones.length - 1];
+}
+
+export function getZoneForElapsed(elapsedMin, depHour, preset) {
+  const totalMin = depHour * 60 + elapsedMin;
+  const h = Math.floor(totalMin / 60) % 24;
+  return getZoneAt(h, preset);
+}
+
+export function getZoneKey(timeStr, zones) {
+  const m = timeToMinutes(timeStr);
+  const h = Math.floor(m / 60) % 24;
+  for (const z of zones) {
+    if (z.start < z.end) {
+      if (h >= z.start && h < z.end) return z.key;
+    } else {
+      if (h >= z.start || h < z.end) return z.key;
+    }
+  }
+  return zones[zones.length - 1].key;
+}
+
+// 曜日 × ゾーン 平均売上マトリックス
+export function dowZoneMatrix(drives, zones) {
+  const keys = zones.map(z => z.key);
+  const sumMap = Array.from({length: 7}, () => {
+    const o = {};
+    for (const k of keys) o[k] = 0;
+    return o;
+  });
+  const countMap = Array.from({length: 7}, () => {
+    const o = {};
+    for (const k of keys) o[k] = 0;
+    return o;
+  });
+  for (const d of drives) {
+    if (isSummaryOnly(d)) continue;
+    const dow = dowOf(d.date);
+    for (const t of (d.trips || [])) {
+      if (t.isCancel) continue;
+      const k = getZoneKey(t.boardTime, zones);
+      sumMap[dow][k] += (t.amount || 0);
+      countMap[dow][k]++;
+    }
+  }
+  const matrix = sumMap.map((row, i) => {
+    const r = {};
+    for (const k of keys) {
+      r[k] = countMap[i][k] > 0 ? sumMap[i][k] / countMap[i][k] : 0;
+    }
+    return r;
+  });
+  return { matrix, count: countMap, zones };
+}
+
 // 1乗務の出庫〜帰庫を時間帯ごとに分割 (分単位)
 export function periodMinutesInDrive(drive) {
   const result = { morning: 0, noon: 0, evening: 0, night: 0 };

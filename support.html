@@ -141,7 +141,7 @@ if ('serviceWorker' in navigator) {
 <script type="module">
 import { renderBottomNav, formatYen, formatDateY, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, toLocalIso } from './js/app.js';
 import { getDrivesForMonth, getAllUsersDrivesForMonth, listActiveUserIds, getMyUserId, getUserDisplayMap, getUserRoleMap } from './js/storage.js';
-import { hourlyDowEfficiency, dropoffAreaAnalysis, nextBoardBreakdown, dropoffHistoryAtArea, boardHistoryAtArea, buildNeighborMap, highValueAreas, calcPaceAtElapsed, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin, dowOf } from './js/chart-helpers.js';
+import { hourlyDowEfficiency, dropoffAreaAnalysis, nextBoardBreakdown, dropoffHistoryAtArea, boardHistoryAtArea, buildNeighborMap, highValueAreas, calcPaceAtElapsed, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin, dowOf, ZONE_PRESETS, getZoneAt, getZoneForElapsed } from './js/chart-helpers.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('support');
 
@@ -158,49 +158,8 @@ let neighborMap = {};
 let hourScope = 'self'; // 'self' | 'all'
 let gpsWideAreas = null; // GPS推定でフォールバックした時の同区広域エリア配列。検索時に直接target areasとして使う
 let userRoleMap = {}; // userId -> role
-const HOUR_ORDER = [7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,0,1,2,3,4,5,6];
-
-const ZONE_PRESETS = {
-  human: {
-    label: '人の動き別',
-    zones: [
-      { label: '深夜', start: 0, end: 5, color: '#37474f' },
-      { label: '早朝〜午前', start: 5, end: 12, color: '#1565c0' },
-      { label: '昼', start: 12, end: 18, color: '#2e7d32' },
-      { label: '夕方〜夜', start: 18, end: 22, color: '#e65100' },
-      { label: '深夜', start: 22, end: 24, color: '#37474f' },
-    ]
-  },
-  shift: {
-    label: 'シフト別',
-    zones: [
-      { label: '早朝', start: 7, end: 12, color: '#1565c0' },
-      { label: '昼', start: 12, end: 17, color: '#2e7d32' },
-      { label: '夕方〜夜', start: 17, end: 22, color: '#e65100' },
-      { label: '深夜', start: 22, end: 3, color: '#37474f' },
-    ]
-  }
-};
 let paceZonePreset = 'human'; // 'human' | 'shift'
-
-function getZoneAt(hour, preset = paceZonePreset) {
-  const zones = ZONE_PRESETS[preset].zones;
-  for (const z of zones) {
-    if (z.start < z.end) {
-      if (hour >= z.start && hour < z.end) return z;
-    } else {
-      // 跨ぎ（例: 22-3）
-      if (hour >= z.start || hour < z.end) return z;
-    }
-  }
-  return zones[zones.length - 1];
-}
-
-function getZoneForElapsed(elapsedMin, depHour, preset = paceZonePreset) {
-  const totalMin = depHour * 60 + elapsedMin;
-  const h = Math.floor(totalMin / 60) % 24;
-  return getZoneAt(h, preset);
-}
+const HOUR_ORDER = [7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,0,1,2,3,4,5,6];
 
 // === 出庫ペース参考カード (元 index.html から移植) ===
 const PACE_DEP_HOURS = [7, 8, 9];
@@ -250,7 +209,7 @@ function renderPaceBody() {
   let lastZone = null;
   const elapsedTabs = elapsedItems.map(e => {
     const eh = e.m != null ? e.h : elapsedMin / 60;
-    const z = getZoneAt(Math.floor((todayDepHour + eh) % 24));
+    const z = getZoneAt(Math.floor((todayDepHour + eh) % 24), paceZonePreset);
     const zoneHint = (lastZone && lastZone.label !== z.label)
       ? `<span style="font-size:9px;color:${z.color};font-weight:600;margin-right:2px;">${z.label}</span>`
       : '';
@@ -300,7 +259,7 @@ function renderPaceBody() {
       <div class="kv" style="margin-top:6px;display:flex;justify-content:space-between;"><span>平均ペース</span><strong>${formatYen(pace)}/h</strong></div>
     `;
   }
-  const currentZone = getZoneForElapsed(elapsedMin, todayDepHour);
+  const currentZone = getZoneForElapsed(elapsedMin, todayDepHour, paceZonePreset);
   const presetTabs = Object.entries(ZONE_PRESETS).map(([key, p]) => {
     const active = key === paceZonePreset;
     const style = active ? 'background:var(--primary);color:#fff;font-weight:600;' : 'background:#f0f0f0;color:#333;';
