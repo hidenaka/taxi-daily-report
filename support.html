@@ -162,7 +162,7 @@ let neighborMap = {};
 let hourScope = 'self'; // 'self' | 'all'
 let gpsWideAreas = null; // GPS推定でフォールバックした時の同区広域エリア配列。検索時に直接target areasとして使う
 let userRoleMap = {}; // userId -> role
-let paceZonePreset = 'human'; // 'human' | 'shift'
+let paceZonePreset = 'shift'; // 常にシフト別
 const HOUR_ORDER = [7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,0,1,2,3,4,5,6];
 
 // === 出庫ペース参考カード (元 index.html から移植) ===
@@ -264,11 +264,6 @@ function renderPaceBody() {
     `;
   }
   const currentZone = getZoneForElapsed(elapsedMin, todayDepHour, paceZonePreset);
-  const presetTabs = Object.entries(ZONE_PRESETS).map(([key, p]) => {
-    const active = key === paceZonePreset;
-    const style = active ? 'background:var(--primary);color:#fff;font-weight:600;' : 'background:#f0f0f0;color:#333;';
-    return `<button data-preset="${key}" class="pace-preset" style="${style}border:none;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;">${p.label}</button>`;
-  }).join('');
   const zoneDisplay = `<div style="margin-top:6px;font-size:11px;font-weight:600;color:${currentZone.color};">⏱ ${targetTime} → ${currentZone.label} (${currentZone.start}〜${currentZone.end}${currentZone.end <= currentZone.start ? '(翌)' : ''}時)</div>`;
   card.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
@@ -278,12 +273,10 @@ function renderPaceBody() {
       <span class="muted" style="font-size:10px;">今日の出庫</span>${todayHourTabs}
     </div>
     <div style="display:flex;gap:3px;flex-wrap:wrap;">${dowTabs}</div>
-    <div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:6px;overflow-x:auto;">${presetTabs}</div>
     ${zoneDisplay}
     <div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:6px;overflow-x:auto;">${elapsedTabs}</div>
     ${body}
   `;
-  card.querySelectorAll('.pace-preset').forEach(b => { b.onclick = () => { paceZonePreset = b.dataset.preset; renderPaceBody(); }; });
   card.querySelectorAll('.pace-thtab').forEach(b => { b.onclick = () => { paceState.todayDepHour = parseInt(b.dataset.th); paceState.manualElapsedMin = null; renderPaceBody(); }; });
   card.querySelectorAll('.pace-dtab').forEach(b => { b.onclick = () => { paceState.dowFilter = b.dataset.d === '' ? null : parseInt(b.dataset.d); renderPaceBody(); }; });
   card.querySelectorAll('.pace-etab').forEach(b => { b.onclick = () => { paceState.manualElapsedMin = b.dataset.em === '' ? null : parseInt(b.dataset.em); renderPaceBody(); }; });
