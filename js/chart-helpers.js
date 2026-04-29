@@ -155,6 +155,13 @@ export function getZoneForElapsed(elapsedMin, depHour, preset) {
   return getZoneAt(h, preset);
 }
 
+export function formatZoneRange(z) {
+  if (z.start < z.end) {
+    return `${z.start}-${z.end}時`;
+  }
+  return `${z.start}-${z.end}時(翌)`;
+}
+
 export function getZoneKey(timeStr, zones) {
   const m = timeToMinutes(timeStr);
   const h = Math.floor(m / 60) % 24;

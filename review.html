@@ -153,7 +153,7 @@ if ('serviceWorker' in navigator) {
 import { renderBottomNav, formatYen, formatDate, formatDateY, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod } from './js/app.js';
 import { getDrivesForMonth } from './js/storage.js';
 import { calcDailySales, calcTotalPay, calcMonthlySales } from './js/payroll.js';
-import { calcTimeBreakdown, dowPeriodMatrix, dowZoneMatrix, dowAggregation, rankDrivesBySales, weatherSalesAggregation, WEATHER_LABELS, DOW_LABELS, isSummaryOnly, formatMin, ZONE_PRESETS } from './js/chart-helpers.js';
+import { calcTimeBreakdown, dowPeriodMatrix, dowZoneMatrix, dowAggregation, rankDrivesBySales, weatherSalesAggregation, WEATHER_LABELS, DOW_LABELS, isSummaryOnly, formatMin, ZONE_PRESETS, formatZoneRange } from './js/chart-helpers.js';
 import { getConfig } from './js/storage.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('review');
@@ -336,7 +336,7 @@ function renderHeatmap() {
   const max = Math.max(...flat, 1);
   const colCount = preset.zones.length;
   let cellsHtml = '<div class="h"></div>';
-  for (const z of preset.zones) cellsHtml += `<div class="h">${z.label}</div>`;
+  for (const z of preset.zones) cellsHtml += `<div class="h">${z.label}<br><span style="font-size:8px;color:var(--muted);font-weight:400;">${formatZoneRange(z)}</span></div>`;
   for (let dow = 0; dow < 7; dow++) {
     const dowColor = dow === 0 ? '#d32f2f' : dow === 6 ? '#1976d2' : '';
     cellsHtml += `<div class="lbl" style="${dowColor ? 'color:' + dowColor : ''}">${DOW_LABELS[dow]}</div>`;
