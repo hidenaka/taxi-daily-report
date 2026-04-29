@@ -61,6 +61,7 @@ if ('serviceWorker' in navigator) {
 <script type="module">
 import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js';
 import { getConfig, getDrivesForMonth, flushPendingQueue } from './js/storage.js';
+import { DEFAULT_CONFIG } from './js/default-config.js';
 import { calcTotalPay, calcDailySales, calcMonthlySales } from './js/payroll.js';
 import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js';
 
@@ -95,7 +96,9 @@ async function load() {
   }
   await flushPendingQueue();
   config = await getConfig();
-  if (!config) { document.getElementById('summaryCard').innerHTML = 'config未取得'; return; }
+  if (!config) {
+    config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  }
   await render();
 }
 
