@@ -119,11 +119,11 @@ export const ZONE_PRESETS = {
   human: {
     label: '人の動き別',
     zones: [
-      { key: 'night1', label: '深夜', start: 0, end: 5, color: '#37474f' },
       { key: 'morning', label: '早朝〜午前', start: 5, end: 12, color: '#1565c0' },
       { key: 'noon', label: '昼', start: 12, end: 18, color: '#2e7d32' },
       { key: 'evening', label: '夕方〜夜', start: 18, end: 22, color: '#e65100' },
-      { key: 'night2', label: '深夜', start: 22, end: 24, color: '#37474f' },
+      { key: 'lateNight', label: '夜更け', start: 22, end: 24, color: '#37474f' },
+      { key: 'dawn', label: '未明', start: 0, end: 5, color: '#455a64' },
     ]
   },
   shift: {
