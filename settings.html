@@ -91,6 +91,7 @@ if ('serviceWorker' in navigator) {
 <script type="module">
 import { renderBottomNav } from './js/app.js';
 import { getConfig, saveConfig, getDrivesForMonth, getMyUserId, setMyUserId } from './js/storage.js';
+import { DEFAULT_CONFIG } from './js/default-config.js';
 import { calcTotalPay } from './js/payroll.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('settings');
@@ -181,7 +182,12 @@ document.getElementById('saveUserBtn').onclick = async () => {
 async function loadConfig() {
   try {
     currentConfig = await getConfig();
-    if (!currentConfig) { document.getElementById('ghStatus').textContent = 'まだ個人設定ファイルがありません。下の「設定全体を保存」を押すと作成されます。'; return; }
+    if (!currentConfig) {
+      currentConfig = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+      document.getElementById('ghStatus').textContent = 'まだ個人設定ファイルがありません。下の「設定全体を保存」を押すと作成されます。';
+    } else {
+      document.getElementById('ghStatus').textContent = '読み込み成功';
+    }
     document.getElementById('vehicleTypeSel').value = currentConfig.defaults.vehicleType;
     document.getElementById('departureInput').value = currentConfig.defaults.departureTime;
     document.getElementById('takeHomeRateInput').value = currentConfig.takeHomeRate ?? 0.75;
@@ -192,7 +198,6 @@ async function loadConfig() {
     document.getElementById('locNameInput').value = currentConfig.weatherLocation.name;
     document.getElementById('displayNameInput').value = currentConfig.displayName || '';
     renderRateTable(currentConfig.rateTable);
-    document.getElementById('ghStatus').textContent = '読み込み成功';
   } catch (e) {
     document.getElementById('ghStatus').textContent = 'エラー: ' + e.message;
   }
@@ -222,7 +227,7 @@ function renderRateTable(rt) {
 }
 
 document.getElementById('saveConfigBtn').onclick = async () => {
-  if (!currentConfig) return;
+  // currentConfig は loadConfig() で必ず初期化される
   // フォームから currentConfig を更新
   currentConfig.defaults.vehicleType = document.getElementById('vehicleTypeSel').value;
   currentConfig.defaults.departureTime = document.getElementById('departureInput').value;
