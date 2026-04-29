@@ -66,7 +66,11 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 <main style="padding:14px;">
-  <h1 style="margin-top:0;">振り返り</h1>
+  <h1 style="margin-top:0;">分析</h1>
+  <div style="display:flex;gap:4px;margin-bottom:12px;">
+    <a href="review.html" style="flex:1;background:var(--primary);color:#fff;text-align:center;padding:8px;border-radius:4px;font-size:12px;font-weight:600;text-decoration:none;">振り返り</a>
+    <a href="support.html" style="flex:1;background:#f0f0f0;color:#333;text-align:center;padding:8px;border-radius:4px;font-size:12px;font-weight:600;text-decoration:none;">営業サポート</a>
+  </div>
 
   <section class="card">
     <div class="section-h">
@@ -156,7 +160,7 @@ import { calcDailySales, calcTotalPay, calcMonthlySales } from './js/payroll.js'
 import { calcTimeBreakdown, dowPeriodMatrix, dowZoneMatrix, dowAggregation, rankDrivesBySales, weatherSalesAggregation, WEATHER_LABELS, DOW_LABELS, isSummaryOnly, formatMin, ZONE_PRESETS, formatZoneRange } from './js/chart-helpers.js';
 import { getConfig } from './js/storage.js';
 
-document.getElementById('navHost').innerHTML = renderBottomNav('review');
+document.getElementById('navHost').innerHTML = renderBottomNav('analytics');
 
 let monthsRange = 6;
 let allDrives = [];

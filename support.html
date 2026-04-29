@@ -46,24 +46,13 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 <main style="padding:14px;">
-  <h1 style="margin-top:0;">営業サポート</h1>
+  <h1 style="margin-top:0;">分析</h1>
+  <div style="display:flex;gap:4px;margin-bottom:12px;">
+    <a href="review.html" style="flex:1;background:#f0f0f0;color:#333;text-align:center;padding:8px;border-radius:4px;font-size:12px;font-weight:600;text-decoration:none;">振り返り</a>
+    <a href="support.html" style="flex:1;background:var(--primary);color:#fff;text-align:center;padding:8px;border-radius:4px;font-size:12px;font-weight:600;text-decoration:none;">営業サポート</a>
+  </div>
   <div id="dataSourceInfo" style="font-size:11px;color:var(--muted);margin-bottom:12px;"></div>
   <p class="muted" style="font-size:11px;margin-top:-6px;">過去データから「効率の悪い時間/降ろし方」を可視化して営業スタイルを最適化</p>
-
-  <section class="card" id="paceCard"></section>
-
-  <section class="card">
-    <div class="section-h">
-      <strong>分析期間</strong>
-      <span class="desc">過去N月度のデータで分析</span>
-    </div>
-    <div class="range-tabs">
-      <button data-months="3">3ヶ月</button>
-      <button data-months="6" class="active">6ヶ月</button>
-      <button data-months="12">12ヶ月</button>
-    </div>
-    <div id="rangeInfo" class="muted" style="font-size:11px;"></div>
-  </section>
 
   <section class="card" id="recommendCard">
     <div class="section-h">
@@ -97,6 +86,21 @@ if ('serviceWorker' in navigator) {
     <div id="recBody" style="margin-top:10px;"></div>
     <p class="muted" style="font-size:10px;margin-top:6px;">過去同条件で実際に取れた次のtripを集計、30分内取得率順に表示。<strong>営業所(大田区北馬込)</strong>を選ぶと出庫直後の最初のtripも含めて検索。GPS推定が過去データになければ、同区内で近い起点+その実移動可能範囲(=過去25分以内移動実績ペア)に絞って検索。<br>履歴の<strong style="color:var(--primary);">青字日付</strong>=今日と同曜日 / 黒字=同カテゴリ(平日/土日が一致)別曜日 / <span style="color:#999;">グレー</span>=別カテゴリ。「<span style="display:inline-block;padding:1px 4px;background:#eceff1;color:#546e7a;border-radius:3px;font-size:9px;font-weight:700;vertical-align:middle;">他</span>」バッジ=自分以外のtrip。</p>
   </section>
+
+  <section class="card">
+    <div class="section-h">
+      <strong>分析期間</strong>
+      <span class="desc">過去N月度のデータで分析</span>
+    </div>
+    <div class="range-tabs">
+      <button data-months="3">3ヶ月</button>
+      <button data-months="6" class="active">6ヶ月</button>
+      <button data-months="12">12ヶ月</button>
+    </div>
+    <div id="rangeInfo" class="muted" style="font-size:11px;"></div>
+  </section>
+
+  <section class="card" id="paceCard"></section>
 
   <section class="card" id="hourEffCard">
     <div class="section-h">
@@ -143,7 +147,7 @@ import { renderBottomNav, formatYen, formatDateY, currentBillingPeriod, formatBi
 import { getDrivesForMonth, getAllUsersDrivesForMonth, listActiveUserIds, getMyUserId, getUserDisplayMap, getUserRoleMap } from './js/storage.js';
 import { hourlyDowEfficiency, dropoffAreaAnalysis, nextBoardBreakdown, dropoffHistoryAtArea, boardHistoryAtArea, buildNeighborMap, highValueAreas, highValueAreasByZone, boardHistoryAtAreaByZone, calcPaceAtElapsed, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin, dowOf, ZONE_PRESETS, getZoneAt, getZoneForElapsed } from './js/chart-helpers.js';
 
-document.getElementById('navHost').innerHTML = renderBottomNav('support');
+document.getElementById('navHost').innerHTML = renderBottomNav('analytics');
 
 const todayIso = () => toLocalIso(new Date());
 

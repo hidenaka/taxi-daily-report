@@ -3,13 +3,16 @@ export function renderBottomNav(activePage) {
     { id: 'home', label: 'ホーム', href: 'index.html' },
     { id: 'input', label: '入力', href: 'input.html' },
     { id: 'calendar', label: 'カレンダー', href: 'calendar.html' },
-    { id: 'review', label: '振り返り', href: 'review.html' },
-    { id: 'support', label: 'サポート', href: 'support.html' },
+    { id: 'analytics', label: '分析', href: 'review.html' },
     { id: 'settings', label: '設定', href: 'settings.html' }
   ];
+  const isActive = (it) => {
+    if (it.id === 'analytics') return activePage === 'analytics' || activePage === 'review' || activePage === 'support';
+    return it.id === activePage;
+  };
   return `
     <nav class="bottom">
-      ${items.map(it => `<a href="${it.href}" class="${it.id === activePage ? 'active' : ''}">${it.label}</a>`).join('')}
+      ${items.map(it => `<a href="${it.href}" class="${isActive(it) ? 'active' : ''}">${it.label}</a>`).join('')}
     </nav>`;
 }
 
