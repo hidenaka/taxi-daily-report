@@ -173,6 +173,7 @@ function shiftBillingPeriodLocal(ym, delta) { return shiftBillingPeriod(ym, delt
 async function renderPaceCard() {
   const months = monthsRange;
   const card = document.getElementById('paceCard');
+  if (!card) return; // main が差し替えられた等で消えていたら何もしない
   card.style.display = '';
   card.innerHTML = '<div class="muted" style="font-size:11px;">出庫ペース参考を集計中…</div>';
   let drives;
@@ -190,6 +191,7 @@ async function renderPaceCard() {
 }
 function renderPaceBody() {
   const card = document.getElementById('paceCard');
+  if (!card) return; // race対策: main 差し替えで paceCard が消えていたら抜ける
   const { allDrives: drives, dowFilter, manualElapsedMin, todayDepHour } = paceState;
   const months = monthsRange;
   const now = new Date();
@@ -741,8 +743,13 @@ function renderArea() {
   });
 }
 
-renderPaceCard();
-load();
+// 起動: token なしなら main を差し替えて両方とも起動しない（race 防止）
+if (!localStorage.getItem('github_token') || !localStorage.getItem('github_data_repo')) {
+  document.querySelector('main').innerHTML = '<div class="loading">設定からGitHubトークンを設定してください</div>';
+} else {
+  renderPaceCard();
+  load();
+}
 </script>
 </body>
 </html>
