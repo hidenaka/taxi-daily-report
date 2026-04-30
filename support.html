@@ -138,7 +138,7 @@ if ('serviceWorker' in navigator) {
     </div>
     <div id="areaBody"></div>
     <div class="detail-tip" id="areaTip"></div>
-    <p class="muted" style="font-size:10px;margin-top:6px;">「単価」=降ろした次のtripの中央値/平均、「待ち」=次乗車までの中央値/平均(中央値ベースでイジャパンタクシーの影響を抑制)。タップでそのエリアの過去履歴を表示。最低5件以上のみ</p>
+    <p class="muted" style="font-size:10px;margin-top:6px;">「単価」=降ろした次のtripの中央値/平均、「待ち」=次乗車までの中央値/平均(中央値ベースで高単価ジャパンタクシー等の外れ値の影響を抑制)。タップでそのエリアの過去履歴を表示。最低5件以上のみ</p>
   </section>
 </main>
 <div id="navHost"></div>
@@ -711,7 +711,7 @@ document.getElementById('recSearch').onclick = () => {
     <tr id="recDetail-${idx}" style="display:none;background:#fafafa;"><td colspan="5" style="padding:8px;"></td></tr>`;
   }
   html += '</tbody></table></div>';
-  html += '<p class="muted" style="font-size:10px;margin-top:4px;">「15分内」=反応速い「30分内」=仕事ありエリア。「次運賃」=次tripの平均/中央値(¥0除外)。30分内取得率の高い順。タップで根拠データ表示</p>';
+  html += '<p class="muted" style="font-size:10px;margin-top:4px;">「15分内」=次乗車が速いエリア、「30分内」=仕事の見込みがあるエリア。「次運賃」=次tripの平均/中央値(¥0除外)。30分内取得率の高い順。タップで根拠データ表示</p>';
   // 全履歴フォールバック (折りたたみ)
   html += `<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:11px;color:var(--primary);">▶ このエリアでの全履歴を見る(待ちの目安)</summary><div style="margin-top:8px;">${renderHistoryFallback(area, hour, expand)}</div></details>`;
   body.innerHTML = html;
