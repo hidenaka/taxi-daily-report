@@ -117,19 +117,31 @@ export function parseReport(text) {
   return { trips, rests, returnTime, format };
 }
 
-// 4行ヘッダー + --- + CSV/タブ表 のフォーマットをパース
+// 4行ヘッダー + 区切り線 + CSV/タブ表 のフォーマットをパース
+// 区切り線は --- だけでなく、iOS/macOS の Smart Dashes による
+// — (em-dash) / – (en-dash) や、katakana 長音 ー なども受け入れる
+const SEP_REGEX = /^[-—–―−ー－]+$/;
+const HEADER_KEYS = ['日付', '車種', '出庫', '帰庫'];
+
 export function parseFormattedReport(text) {
   const lines = text.split('\n');
   const header = { 日付: '', 車種: '', 出庫: '', 帰庫: '' };
   let dataStart = -1;
+  let lastHeaderIdx = -1;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
-    if (line === '---') { dataStart = i + 1; break; }
-    const m = line.match(/^(日付|車種|出庫|帰庫):\s*(.*)$/);
-    if (m) header[m[1]] = m[2].trim();
+    if (SEP_REGEX.test(line)) { dataStart = i + 1; break; }
+    // : または ： (全角) を許容
+    const m = line.match(/^(日付|車種|出庫|帰庫)\s*[:：]\s*(.*)$/);
+    if (m) { header[m[1]] = m[2].trim(); lastHeaderIdx = i; }
   }
+  // 区切り線が見つからなくても、ヘッダー4行が揃っていれば直後を data とみなす
   if (dataStart === -1) {
-    throw new Error('parseFormattedReport: --- separator not found');
+    if (HEADER_KEYS.every(k => header[k] !== undefined) && lastHeaderIdx >= 0) {
+      dataStart = lastHeaderIdx + 1;
+    } else {
+      throw new Error('parseFormattedReport: ヘッダー(日付/車種/出庫/帰庫)が見つかりません');
+    }
   }
   const dataText = lines.slice(dataStart).join('\n');
   const inner = parseReport(dataText);
