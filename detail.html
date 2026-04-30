@@ -323,8 +323,9 @@ function renderTripsTable(drive) {
     let dur = timeToMinutes(t.alightTime) - timeToMinutes(t.boardTime);
     if (dur < 0) dur += 24*60;
     const cls = t.isCancel ? 'cancel' : (t.isCharter ? 'charter' : '');
+    const noLabel = t.isCharter && t.no != null ? '貸' + t.no : (t.no == null ? (t.isCancel ? 'キ' : '') : t.no);
     return `<tr class="${cls}">
-      <td>${t.no}</td>
+      <td>${noLabel}</td>
       <td>${shiftTimeStr(t.boardTime)}</td>
       <td>${shiftTimeStr(t.alightTime)}</td>
       <td class="r">${dur}分</td>

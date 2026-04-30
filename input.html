@@ -250,8 +250,9 @@ function renderPreview() {
       `;
     } else {
       if (row.isCancel) tr.classList.add('cancel');
+      const noLabel = row.isCharter && row.no != null ? '貸' + row.no : (row.no == null ? (row.isCancel ? 'キ' : '') : row.no);
       tr.innerHTML = `
-        <td>${row.no}</td>
+        <td>${noLabel}</td>
         <td><input data-idx="${row._idx}" data-key="boardTime" value="${row.boardTime}"></td>
         <td>${row.boardPlace} → ${row.alightPlace}</td>
         <td><input data-idx="${row._idx}" data-key="km" type="number" step="0.1" value="${row.km}"></td>
