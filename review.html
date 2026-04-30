@@ -334,12 +334,25 @@ function formatLabelValue(v) {
 
 function getShiftZones(departureTime) {
   const dep = parseInt((departureTime || '07:00').split(':')[0]);
-  return [
-    { key: 'morning', label: `${dep}-12時`, start: dep, end: 12, color: '#1565c0' },
-    { key: 'noon', label: '12-17時', start: 12, end: 17, color: '#2e7d32' },
-    { key: 'evening', label: '17-22時', start: 17, end: 22, color: '#e65100' },
-    { key: 'night', label: `22-${dep}時`, start: 22, end: dep, color: '#37474f' },
-  ];
+  // 出庫時刻から5時間ずつ4ゾーンを生成
+  const raw = [];
+  let start = dep;
+  for (let i = 0; i < 4; i++) {
+    const end = (start + 5) % 24;
+    raw.push({ start, end, idx: i });
+    start = end;
+  }
+  // start > end（24時をまたぐ）のゾーンは配列の最後に配置（getZoneKeyのため）
+  const normal = raw.filter(z => z.start < z.end);
+  const wrap = raw.filter(z => z.start > z.end);
+  const colors = ['#1565c0', '#2e7d32', '#e65100', '#37474f'];
+  return [...normal, ...wrap].map(z => ({
+    key: `z${z.idx + 1}`,
+    label: `${z.start}-${z.end}時`,
+    start: z.start,
+    end: z.end,
+    color: colors[z.idx]
+  }));
 }
 
 function renderHeatmap() {
