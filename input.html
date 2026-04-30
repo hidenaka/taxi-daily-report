@@ -219,24 +219,48 @@ function renderPreview() {
   const cancelCount = parsed.trips.filter(t => t.isCancel).length;
   const validCount = parsed.trips.length - cancelCount;
   const totalSales = parsed.trips.filter(t => !t.isCancel).reduce((s, t) => s + t.amount, 0);
+  const restCount = (parsed.rests || []).length;
   document.getElementById('previewSummary').innerHTML =
-    `<strong>${validCount}件</strong> ・ キャンセル ${cancelCount}件 ・ 売上 ¥${totalSales.toLocaleString()}（税込）`;
+    `<strong>${validCount}件</strong> ・ キャンセル ${cancelCount}件 ・ 休憩 ${restCount}回 ・ 売上 ¥${totalSales.toLocaleString()}（税込）`;
 
   const tbl = document.getElementById('previewTable');
   tbl.innerHTML = '<tr><th>No</th><th>時間</th><th>区間</th><th>km</th><th>金額</th></tr>';
-  // 簡略化: trips のみ表示（rest は省略）
-  parsed.trips.forEach((t, i) => {
-    const tr = document.createElement('tr');
-    if (t.isCancel) tr.classList.add('cancel');
-    tr.innerHTML = `
-      <td>${t.no}</td>
-      <td><input data-idx="${i}" data-key="boardTime" value="${t.boardTime}"></td>
-      <td>${t.boardPlace} → ${t.alightPlace}</td>
-      <td><input data-idx="${i}" data-key="km" type="number" step="0.1" value="${t.km}"></td>
-      <td><input data-idx="${i}" data-key="amount" type="number" value="${t.amount}"></td>
-    `;
-    tbl.appendChild(tr);
+
+  // trips と rests を時刻順に混ぜて表示
+  const allRows = [
+    ...parsed.trips.map((t, i) => ({...t, _kind: 'trip', _idx: i})),
+    ...(parsed.rests || []).map((r, i) => ({...r, _kind: 'rest', _idx: i}))
+  ];
+  allRows.sort((a, b) => {
+    const ta = a.boardTime || a.startTime;
+    const tb = b.boardTime || b.startTime;
+    return ta.localeCompare(tb);
   });
+
+  for (const row of allRows) {
+    const tr = document.createElement('tr');
+    if (row._kind === 'rest') {
+      tr.classList.add('rest');
+      tr.innerHTML = `
+        <td>休</td>
+        <td>${row.startTime}-${row.endTime}</td>
+        <td>${row.place}</td>
+        <td>-</td>
+        <td>-</td>
+      `;
+    } else {
+      if (row.isCancel) tr.classList.add('cancel');
+      tr.innerHTML = `
+        <td>${row.no}</td>
+        <td><input data-idx="${row._idx}" data-key="boardTime" value="${row.boardTime}"></td>
+        <td>${row.boardPlace} → ${row.alightPlace}</td>
+        <td><input data-idx="${row._idx}" data-key="km" type="number" step="0.1" value="${row.km}"></td>
+        <td><input data-idx="${row._idx}" data-key="amount" type="number" value="${row.amount}"></td>
+      `;
+    }
+    tbl.appendChild(tr);
+  }
+
   // インライン編集の反映
   tbl.querySelectorAll('input[data-idx]').forEach(inp => {
     inp.onchange = () => {
