@@ -280,7 +280,7 @@ function renderHourChart(drive) {
         <div class="r">${[tripLabel, restLabel].filter(Boolean).join(' / ') || '—'}</div>
       </div>
     </div>`;
-  }).join('') || '<p class="muted" style="font-size:11px;">tripなし</p>';
+  }).join('') || '<p class="muted" style="font-size:11px;">乗車なし</p>';
   const peakAct = filtered.length > 0 ? filtered.reduce((a, b) => a.sales >= b.sales ? a : b) : null;
   document.getElementById('hourCard').innerHTML = `
     <div class="muted">時間別 売上(緑) と 休憩(グレー) ・7時スタート、深夜は25時〜</div>

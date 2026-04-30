@@ -99,7 +99,7 @@ if ('serviceWorker' in navigator) {
     </div>
     <div id="recGpsInfo" class="muted" style="font-size:10px;margin-bottom:6px;"></div>
     <div id="recBody" style="margin-top:10px;"></div>
-    <p class="muted" style="font-size:10px;margin-top:6px;">過去同条件で実際に取れた次のtripを集計、30分内取得率順に表示。<strong>営業所(大田区北馬込)</strong>を選ぶと出庫直後の最初のtripも含めて検索。GPS推定が過去データになければ、同区内で近い起点+その実移動可能範囲(=過去25分以内移動実績ペア)に絞って検索。<br>履歴の<strong style="color:var(--primary);">青字日付</strong>=今日と同曜日 / 黒字=同カテゴリ(平日/土日が一致)別曜日 / <span style="color:#999;">グレー</span>=別カテゴリ。「<span style="display:inline-block;padding:1px 4px;background:#eceff1;color:#546e7a;border-radius:3px;font-size:9px;font-weight:700;vertical-align:middle;">他</span>」バッジ=自分以外のtrip。</p>
+    <p class="muted" style="font-size:10px;margin-top:6px;">過去同条件で実際に取れた次の乗車を集計、30分内取得率順に表示。<strong>営業所(大田区北馬込)</strong>を選ぶと出庫直後の最初の乗車も含めて検索。GPS推定が過去データになければ、同区内で近い起点+その実移動可能範囲(=過去25分以内移動実績ペア)に絞って検索。<br>履歴の<strong style="color:var(--primary);">青字日付</strong>=今日と同曜日 / 黒字=同カテゴリ(平日/土日が一致)別曜日 / <span style="color:#999;">グレー</span>=別カテゴリ。「<span style="display:inline-block;padding:1px 4px;background:#eceff1;color:#546e7a;border-radius:3px;font-size:9px;font-weight:700;vertical-align:middle;">他</span>」バッジ=自分以外の乗車。</p>
   </section>
 
   <section class="card" id="hourEffCard">
@@ -138,7 +138,7 @@ if ('serviceWorker' in navigator) {
     </div>
     <div id="areaBody"></div>
     <div class="detail-tip" id="areaTip"></div>
-    <p class="muted" style="font-size:10px;margin-top:6px;">「単価」=降ろした次のtripの中央値/平均、「待ち」=次乗車までの中央値/平均(中央値ベースで高単価営業の外れ値の影響を抑制)。タップでそのエリアの過去履歴を表示。最低5件以上のみ</p>
+    <p class="muted" style="font-size:10px;margin-top:6px;">「単価」=降ろした次の乗車の中央値/平均、「待ち」=次乗車までの中央値/平均(中央値ベースで高単価営業の外れ値の影響を抑制)。タップでそのエリアの過去履歴を表示。最低5件以上のみ</p>
   </section>
 </main>
 <div id="navHost"></div>
@@ -711,7 +711,7 @@ document.getElementById('recSearch').onclick = () => {
     <tr id="recDetail-${idx}" style="display:none;background:#fafafa;"><td colspan="5" style="padding:8px;"></td></tr>`;
   }
   html += '</tbody></table></div>';
-  html += '<p class="muted" style="font-size:10px;margin-top:4px;">「15分内」=次乗車が速いエリア、「30分内」=仕事の見込みがあるエリア。「次運賃」=次tripの平均/中央値(¥0除外)。30分内取得率の高い順。タップで根拠データ表示</p>';
+  html += '<p class="muted" style="font-size:10px;margin-top:4px;">「15分内」=次乗車が速いエリア、「30分内」=仕事の見込みがあるエリア。「次運賃」=次の乗車の平均/中央値(¥0除外)。30分内取得率の高い順。タップで根拠データ表示</p>';
   // 全履歴フォールバック (折りたたみ)
   html += `<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:11px;color:var(--primary);">▶ このエリアでの全履歴を見る(待ちの目安)</summary><div style="margin-top:8px;">${renderHistoryFallback(area, hour, expand)}</div></details>`;
   body.innerHTML = html;
@@ -864,7 +864,7 @@ function renderHourEff() {
       tip.innerHTML = `
         <strong>${DOW_LABELS[dow]} ${h}時台</strong> (${scopeLabel}・乗務した日数 ${c.days}日)<br>
         ¥/h <strong>${formatYen(c.hourlyA)}</strong> (=売上÷実稼働時間)<br>
-        <span style="font-size:11px;color:var(--muted);">trip${c.count}件 ・ 売上計${formatYen(c.sales)} ・ 乗務計${formatMin(c.presentMin)} ・ 休憩計${formatMin(c.restMin)} ・ 実稼働${formatMin(c.workingMin)}</span>
+        <span style="font-size:11px;color:var(--muted);">${c.count}件 ・ 売上計${formatYen(c.sales)} ・ 乗務計${formatMin(c.presentMin)} ・ 休憩計${formatMin(c.restMin)} ・ 実稼働${formatMin(c.workingMin)}</span>
       `;
     };
   });
