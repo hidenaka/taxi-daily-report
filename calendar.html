@@ -127,12 +127,18 @@ function renderGrid() {
     const day = parseInt(iso.split('-')[2]);
     const cell = document.createElement('div');
     cell.className = 'cal-cell';
-    if (isActual(iso)) cell.classList.add('actual');
+    const hasActual = isActual(iso);
+    if (hasActual) cell.classList.add('actual');
     else if (isPaidLeave(iso)) cell.classList.add('paidleave');
     else if (isPlanned(iso)) cell.classList.add('planned');
     if (iso === todayIso()) cell.classList.add('today');
     cell.textContent = day;
-    cell.onclick = () => cycleStatus(iso);
+    if (hasActual) {
+      cell.style.cursor = 'pointer';
+      cell.onclick = () => location.href = `detail.html?date=${iso}`;
+    } else {
+      cell.onclick = () => cycleStatus(iso);
+    }
     grid.appendChild(cell);
   }
 }

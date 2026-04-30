@@ -25,7 +25,7 @@ function getToken() {
   return localStorage.getItem('github_token');
 }
 
-function getRepo() {
+export function getRepo() {
   // データリポ（"username/taxi-daily-report-data"）。コードリポではない点注意。
   return localStorage.getItem('github_data_repo');
 }
@@ -202,6 +202,19 @@ export async function getUserDisplayMap() {
   for (const u of result.content.users) {
     if (u.active === true && isValidUserId(u.userId)) {
       map[u.userId] = u.displayName || u.userId;
+    }
+  }
+  return map;
+}
+
+// data/users.json から active: true の {userId: role} マップを取得
+export async function getUserRoleMap() {
+  const result = await getFile('data/users.json');
+  const map = {};
+  if (!result?.content?.users) return map;
+  for (const u of result.content.users) {
+    if (u.active === true && isValidUserId(u.userId)) {
+      map[u.userId] = u.role || 'member';
     }
   }
   return map;

@@ -20,7 +20,10 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 <main style="padding:14px;">
-  <h1>日報入力</h1>
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px;">
+    <h1 style="margin:0;flex:1;">日報入力</h1>
+    <button class="btn" id="cancelBtn" style="background:var(--gray);color:#333;font-size:12px;padding:6px 12px;">キャンセル</button>
+  </div>
 
   <section class="card">
     <label class="muted">乗務日</label>
@@ -278,6 +281,11 @@ document.getElementById('saveBtn').onclick = async () => {
     document.getElementById('saveStatus').textContent = 'エラー: ' + e.message;
     btn.disabled = false;
   }
+};
+
+document.getElementById('cancelBtn').onclick = () => {
+  if (history.length > 1) history.back();
+  else location.href = 'index.html';
 };
 
 if (localStorage.getItem('github_token') && localStorage.getItem('github_data_repo')) init();

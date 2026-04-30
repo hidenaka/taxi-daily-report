@@ -59,7 +59,10 @@ if ('serviceWorker' in navigator) {
     <button class="btn" onclick="history.length > 1 ? history.back() : location.href='index.html'" style="background:var(--gray);padding:6px 12px;font-size:13px;">← 戻る</button>
     <a href="index.html" style="font-size:12px;color:var(--muted);text-decoration:none;">ホーム</a>
   </div>
-  <h1 id="title" style="margin-top:0;">乗務詳細</h1>
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px;">
+    <h1 id="title" style="margin-top:0;flex:1;">乗務詳細</h1>
+    <button class="btn" id="editBtnTop" style="background:var(--primary);color:#fff;font-size:12px;padding:6px 12px;white-space:nowrap;">編集</button>
+  </div>
   <div id="navDates" style="display:flex;justify-content:space-between;gap:8px;margin-bottom:10px;"></div>
 
   <section class="card" id="kpiCard"></section>
@@ -182,7 +185,9 @@ async function load() {
   // 日報明細(完全版)
   renderTripsTable(drive);
 
-  document.getElementById('editBtn').onclick = () => location.href = `input.html?date=${date}`;
+  const goEdit = () => location.href = `input.html?date=${date}`;
+  document.getElementById('editBtn').onclick = goEdit;
+  document.getElementById('editBtnTop').onclick = goEdit;
 }
 
 function renderReviewMemo(drive) {

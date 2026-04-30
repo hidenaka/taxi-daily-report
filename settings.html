@@ -21,7 +21,7 @@ if ('serviceWorker' in navigator) {
   <section class="card">
     <h3>GitHub（データリポジトリ）</h3>
     <label class="muted">データリポジトリ (username/repo-data)</label>
-    <input class="input" id="repoInput" placeholder="hidenaka/taxi-daily-report-data" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <input class="input" id="repoInput" placeholder="hidenaka/taxi-daily-report-data" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="font-size:13px;">
     <label class="muted" style="margin-top:8px;display:block;">Personal Access Token (repo権限)</label>
     <input class="input" id="tokenInput" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
     <div style="display:flex;gap:6px;margin-top:8px;">
@@ -32,14 +32,15 @@ if ('serviceWorker' in navigator) {
   </section>
 
   <section class="card">
-    <h3>ユーザー</h3>
+    <h3>ユーザー <span class="muted" style="font-size:11px;font-weight:normal;background:var(--bg);padding:2px 6px;border-radius:4px;border:1px solid var(--border);">自動設定済み</span></h3>
+    <p class="muted" style="font-size:11px;margin-top:-4px;margin-bottom:6px;">管理者配布リンクから自動設定されています。データ保存先のフォルダ名として使用されます。</p>
     <label class="muted">あなたのユーザーID(共有時のフォルダ名)</label>
-    <input class="input" id="userIdInput" placeholder="user_self" pattern="^[a-z][a-z0-9_]*$" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <input class="input" id="userIdInput" placeholder="user_self" pattern="^[a-z][a-z0-9_]*$" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" readonly style="background:var(--bg);">
     <p class="muted" style="font-size:10px;margin-top:2px;">英小文字始まり・英小文字/数字/アンダースコアのみ。本名は推奨しない(例: user_self, user_a)。</p>
     <label class="muted" style="margin-top:8px;display:block;">表示名(任意)</label>
     <input class="input" id="displayNameInput" placeholder="自分">
     <p class="muted" style="font-size:10px;margin-top:2px;">集計画面の表示用。</p>
-    <button class="btn" id="saveUserBtn" style="margin-top:8px;">保存</button>
+
     <div id="userStatus" class="muted" style="margin-top:6px;font-size:11px;"></div>
   </section>
 
@@ -65,36 +66,37 @@ if ('serviceWorker' in navigator) {
 
   <section class="card">
     <h3>天候地点</h3>
-    <label class="muted">緯度</label>
-    <input class="input" id="latInput" type="number" step="0.0001" value="35.6938">
-    <label class="muted" style="margin-top:8px;display:block;">経度</label>
-    <input class="input" id="lonInput" type="number" step="0.0001" value="139.7036">
-    <label class="muted" style="margin-top:8px;display:block;">表示名</label>
-    <input class="input" id="locNameInput" value="千代田区">
+    <input type="hidden" id="latInput" value="35.6938">
+    <input type="hidden" id="lonInput" value="139.7036">
+    <div id="locNameDisplay" style="font-size:13px;padding:8px;background:#f5f5f5;border-radius:4px;margin-bottom:8px;">千代田区</div>
+    <div style="display:flex;gap:6px;">
+      <button class="btn" id="weatherGpsBtn" style="flex:1;background:#fff;color:var(--primary);border:1px solid var(--primary);">📍 現在地</button>
+      <button class="btn" id="weatherDefaultBtn" style="flex:1;background:var(--gray);color:#333;">デフォルトに戻す</button>
+    </div>
+    <div id="weatherGpsInfo" class="muted" style="font-size:10px;margin-top:4px;"></div>
   </section>
 
-  <section class="card">
-    <h3>レートテーブル</h3>
+  <section class="card" id="rateTableSection" style="display:none;">
+    <h3>レートテーブル <span class="muted" style="font-size:10px;font-weight:normal;">(管理者のみ)</span></h3>
     <p class="muted">乗務数別の売上ティアと歩率。編集は慎重に。</p>
     <div id="rateTableEditor"></div>
-    <button class="btn" id="saveConfigBtn" style="margin-top:10px;">設定全体を保存</button>
   </section>
 
-  <section class="card">
-    <h3>データ</h3>
-    <button class="btn" id="exportBtn">全データをエクスポート</button>
-    <button class="btn" id="recalcBtn" style="margin-left:8px;background:var(--gray);">全drives再計算（ドライラン）</button>
-  </section>
 </main>
+<div style="position:sticky;bottom:0;background:#fff;border-top:1px solid #eee;padding:10px 14px;z-index:10;">
+  <button class="btn" id="saveConfigBtn" style="width:100%;">💾 設定を保存</button>
+</div>
 <div id="navHost"></div>
 <script type="module">
 import { renderBottomNav } from './js/app.js';
-import { getConfig, saveConfig, getDrivesForMonth, getMyUserId, setMyUserId } from './js/storage.js';
+import { getConfig, saveConfig, getDrivesForMonth, getMyUserId, setMyUserId, getUserRoleMap } from './js/storage.js';
+import { DEFAULT_CONFIG } from './js/default-config.js';
 import { calcTotalPay } from './js/payroll.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('settings');
 
 let currentConfig = null;
+let myRole = 'member';
 
 // GitHub設定 復元
 document.getElementById('repoInput').value = localStorage.getItem('github_data_repo') || '';
@@ -147,40 +149,22 @@ document.getElementById('testBtn').onclick = async () => {
   } catch (e) { log(`✗ config取得失敗: ${e.message}`); }
 };
 
-document.getElementById('saveUserBtn').onclick = async () => {
-  const status = document.getElementById('userStatus');
-  status.textContent = '';
-  const userIdRaw = document.getElementById('userIdInput').value;
-  // userId 保存(localStorage)
-  try {
-    setMyUserId(userIdRaw);
-  } catch (e) {
-    status.textContent = '✗ ' + e.message;
-    status.style.color = 'red';
-    return;
-  }
-  status.style.color = '';
-  status.textContent = '✓ userId を localStorage に保存しました';
-  // displayName を config に保存(GitHub への push が伴う)
-  if (currentConfig) {
-    currentConfig.displayName = document.getElementById('displayNameInput').value;
-    try {
-      await saveConfig(currentConfig);
-      status.textContent += '\n✓ 表示名を config に保存しました';
-    } catch (e) {
-      status.textContent += '\n✗ config 保存失敗: ' + e.message;
-      status.style.color = 'red';
-      return;
-    }
-  } else {
-    status.textContent += '\n⚠ config がロードされていないため表示名は未保存(GitHub接続して再試行)';
-  }
-};
+// userId は readonly で管理者配布リンクから自動設定されるため、ユーザーが編集することはない
 
 async function loadConfig() {
   try {
-    currentConfig = await getConfig();
-    if (!currentConfig) { document.getElementById('ghStatus').textContent = 'config.json が見つかりません'; return; }
+    const [config, roleMap] = await Promise.all([
+      getConfig().catch(() => null),
+      getUserRoleMap().catch(() => ({}))
+    ]);
+    currentConfig = config;
+    myRole = roleMap[getMyUserId()] || 'member';
+    if (!currentConfig) {
+      currentConfig = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+      document.getElementById('ghStatus').textContent = 'まだ個人設定ファイルがありません。「設定全体を保存」を押すと作成されます。';
+    } else {
+      document.getElementById('ghStatus').textContent = '読み込み成功';
+    }
     document.getElementById('vehicleTypeSel').value = currentConfig.defaults.vehicleType;
     document.getElementById('departureInput').value = currentConfig.defaults.departureTime;
     document.getElementById('takeHomeRateInput').value = currentConfig.takeHomeRate ?? 0.75;
@@ -188,9 +172,14 @@ async function loadConfig() {
     document.getElementById('paidLeaveAmountInput').value = currentConfig.paidLeaveAmount ?? 39340;
     document.getElementById('latInput').value = currentConfig.weatherLocation.lat;
     document.getElementById('lonInput').value = currentConfig.weatherLocation.lon;
-    document.getElementById('locNameInput').value = currentConfig.weatherLocation.name;
+    document.getElementById('locNameDisplay').textContent = currentConfig.weatherLocation.name || '千代田区';
     document.getElementById('displayNameInput').value = currentConfig.displayName || '';
-    renderRateTable(currentConfig.rateTable);
+    if (myRole === 'admin') {
+      document.getElementById('rateTableSection').style.display = '';
+      renderRateTable(currentConfig.rateTable);
+    } else {
+      document.getElementById('rateTableSection').style.display = 'none';
+    }
     document.getElementById('ghStatus').textContent = '読み込み成功';
   } catch (e) {
     document.getElementById('ghStatus').textContent = 'エラー: ' + e.message;
@@ -221,8 +210,8 @@ function renderRateTable(rt) {
 }
 
 document.getElementById('saveConfigBtn').onclick = async () => {
-  if (!currentConfig) return;
-  // フォームから currentConfig を更新
+  if (!currentConfig) { alert('設定が読み込まれていません'); return; }
+  currentConfig.displayName = document.getElementById('displayNameInput').value;
   currentConfig.defaults.vehicleType = document.getElementById('vehicleTypeSel').value;
   currentConfig.defaults.departureTime = document.getElementById('departureInput').value;
   currentConfig.takeHomeRate = parseFloat(document.getElementById('takeHomeRateInput').value);
@@ -231,40 +220,67 @@ document.getElementById('saveConfigBtn').onclick = async () => {
   currentConfig.weatherLocation = {
     lat: parseFloat(document.getElementById('latInput').value),
     lon: parseFloat(document.getElementById('lonInput').value),
-    name: document.getElementById('locNameInput').value
+    name: document.getElementById('locNameDisplay').textContent
   };
-  // レートテーブル
-  document.querySelectorAll('#rateTableEditor input[data-shifts]').forEach(inp => {
-    const s = inp.dataset.shifts; const i = parseInt(inp.dataset.idx); const k = inp.dataset.key;
-    if (!currentConfig.rateTable[s][i]) currentConfig.rateTable[s][i] = {};
-    currentConfig.rateTable[s][i][k] = parseFloat(inp.value);
-  });
-  currentConfig.rateTable['12_13rate'] = parseFloat(document.getElementById('rate1213').value);
+  if (myRole === 'admin') {
+    document.querySelectorAll('#rateTableEditor input[data-shifts]').forEach(inp => {
+      const s = inp.dataset.shifts; const i = parseInt(inp.dataset.idx); const k = inp.dataset.key;
+      if (!currentConfig.rateTable[s][i]) currentConfig.rateTable[s][i] = {};
+      currentConfig.rateTable[s][i][k] = parseFloat(inp.value);
+    });
+    currentConfig.rateTable['12_13rate'] = parseFloat(document.getElementById('rate1213').value);
+  }
   currentConfig.lastUpdated = new Date().toISOString();
   await saveConfig(currentConfig);
   alert('保存しました');
 };
 
-document.getElementById('exportBtn').onclick = async () => {
-  // 当月だけでなく全月を取得（簡略化のため過去12ヶ月）
-  const all = [];
-  const now = new Date();
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(now); d.setMonth(now.getMonth() - i);
-    const ym = d.toISOString().slice(0, 7);
-    const drives = await getDrivesForMonth(ym);
-    all.push(...drives);
+document.getElementById('weatherGpsBtn').onclick = async () => {
+  const info = document.getElementById('weatherGpsInfo');
+  const btn = document.getElementById('weatherGpsBtn');
+  if (!navigator.geolocation) { info.textContent = 'このブラウザは位置情報非対応'; return; }
+  btn.disabled = true; btn.textContent = '📍 取得中…';
+  info.textContent = '位置情報取得中…';
+  try {
+    const pos = await new Promise((resolve, reject) =>
+      navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000, enableHighAccuracy: true })
+    );
+    const { latitude: lat, longitude: lon } = pos.coords;
+    info.textContent = `緯度${lat.toFixed(5)}, 経度${lon.toFixed(5)} → 住所取得中…`;
+    const res = await fetch(`https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress?lat=${lat}&lon=${lon}`);
+    const data = await res.json();
+    let name = '';
+    if (data.results) {
+      const muniCd = data.results.muniCd;
+      const lv01Nm = data.results.lv01Nm;
+      try {
+        const muniRes = await fetch(`https://maps.gsi.go.jp/js/muni.js`);
+        const muniText = await muniRes.text();
+        const match = muniText.match(new RegExp(`'${muniCd}',[^']*'([^']+)'`));
+        if (match) name = match[1].split(',').pop();
+      } catch (e) {}
+      if (!name) {
+        const fb = { '13101':'千代田区','13102':'中央区','13103':'港区','13104':'新宿区','13105':'文京区','13106':'台東区','13107':'墨田区','13108':'江東区','13109':'品川区','13110':'目黒区','13111':'大田区','13112':'世田谷区','13113':'渋谷区','13114':'中野区','13115':'杉並区','13116':'豊島区','13117':'北区','13118':'荒川区','13119':'板橋区','13120':'練馬区','13121':'足立区','13122':'葛飾区','13123':'江戸川区' };
+        name = fb[muniCd] || '';
+      }
+      if (lv01Nm) name += (name ? ' ' : '') + lv01Nm;
+    }
+    document.getElementById('latInput').value = lat.toFixed(4);
+    document.getElementById('lonInput').value = lon.toFixed(4);
+    document.getElementById('locNameDisplay').textContent = name || `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+    info.textContent = `📍 設定しました: ${name || '現在地'}`;
+  } catch (err) {
+    info.textContent = '位置情報取得エラー: ' + (err.message || err.code);
+  } finally {
+    btn.disabled = false; btn.textContent = '📍 現在地';
   }
-  const blob = new Blob([JSON.stringify({ config: currentConfig, drives: all }, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = 'taxi-export.json'; a.click();
 };
 
-document.getElementById('recalcBtn').onclick = async () => {
-  const ym = new Date().toISOString().slice(0, 7);
-  const drives = await getDrivesForMonth(ym);
-  const result = calcTotalPay(drives, currentConfig);
-  alert(`当月再計算結果: 乗務${result.shiftCount} 推定¥${Math.round(result.total).toLocaleString()}`);
+document.getElementById('weatherDefaultBtn').onclick = () => {
+  document.getElementById('latInput').value = '35.6938';
+  document.getElementById('lonInput').value = '139.7036';
+  document.getElementById('locNameDisplay').textContent = '千代田区';
+  document.getElementById('weatherGpsInfo').textContent = 'デフォルト（千代田区）に戻しました';
 };
 
 if (localStorage.getItem('github_token') && localStorage.getItem('github_data_repo')) loadConfig();

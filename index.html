@@ -61,8 +61,35 @@ if ('serviceWorker' in navigator) {
 <script type="module">
 import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js';
 import { getConfig, getDrivesForMonth, flushPendingQueue } from './js/storage.js';
+import { DEFAULT_CONFIG } from './js/default-config.js';
 import { calcTotalPay, calcDailySales, calcMonthlySales } from './js/payroll.js';
 import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js';
+import { processInvite } from './js/invite-crypto.js';
+
+// 暗号化招待リンク処理（優先）
+const inviteProcessed = await processInvite();
+if (inviteProcessed) {
+  // トースト通知は後でrender後に行うため、ここではフラグだけ設定
+}
+
+// URL パラメータによる自動設定（管理者配布リンク対応）
+const urlParams = new URLSearchParams(location.search);
+const paramPat = urlParams.get('pat');
+const paramUser = urlParams.get('user');
+const paramRepo = urlParams.get('repo');
+let autoConfigured = false;
+if (paramPat) { localStorage.setItem('github_token', paramPat); autoConfigured = true; }
+if (paramRepo) { localStorage.setItem('github_data_repo', paramRepo); autoConfigured = true; }
+if (paramUser) {
+  const norm = paramUser.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9_]+/, '');
+  if (/^[a-z][a-z0-9_]*$/.test(norm)) {
+    localStorage.setItem('taxi_user_id', norm);
+    autoConfigured = true;
+  }
+}
+if (autoConfigured) {
+  history.replaceState(null, '', location.pathname + location.hash);
+}
 
 document.getElementById('navHost').innerHTML = renderBottomNav('home');
 
@@ -76,7 +103,9 @@ async function load() {
   }
   await flushPendingQueue();
   config = await getConfig();
-  if (!config) { document.getElementById('summaryCard').innerHTML = 'config未取得'; return; }
+  if (!config) {
+    config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  }
   await render();
 }
 
