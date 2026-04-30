@@ -624,7 +624,7 @@ function renderHistoryFallback(area, hour, expand) {
   const todayCat = todayIsHol ? '祝日' : (todayDow === 0 || todayDow === 6) ? '土日' : '平日';
   let html = `<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">過去 ${s.totalDropoffs} 件の降車 ・ 待ち平均 ${s.avgWait != null ? formatMin(s.avgWait) : '—'} ・ 中央 ${s.medianWait != null ? formatMin(s.medianWait) : '—'} ・ 今日${DOW_LABELS[todayDow]}${todayIsHol ? '祝' : ''}(${todayCat})基準で並替え</div>`;
   html += distBar;
-  html += '<table style="width:100%;font-size:10px;border-collapse:collapse;margin-top:6px;">'
+  html += '<div style="overflow-x:auto;"><table style="width:100%;font-size:9px;border-collapse:collapse;margin-top:6px;min-width:520px;">'
     + '<thead><tr style="color:var(--muted);"><th style="text-align:left;padding:8px 6px;border-bottom:1px solid #eee;">日付</th><th style="text-align:left;padding:8px 6px;border-bottom:1px solid #eee;">降車地→次乗車地→次降車地</th><th style="padding:8px 6px;border-bottom:1px solid #eee;">降/<strong style="color:#1b5e20;">乗</strong>/降</th><th style="padding:8px 6px;border-bottom:1px solid #eee;">待ち</th><th style="padding:8px 6px;border-bottom:1px solid #eee;">実車</th><th style="text-align:right;padding:8px 6px;border-bottom:1px solid #eee;">運賃</th></tr></thead><tbody>';
   for (const e of sortedEntries) {
     const next = e.nextBoardTime ? `${e.nextBoardPlace || '—'} <span style="color:var(--muted);">→</span> ${e.nextAlightPlace || '—'}` : '<span style="color:var(--muted);">(次なし=帰庫または長時間休憩)</span>';
@@ -639,156 +639,9 @@ function renderHistoryFallback(area, hour, expand) {
     const holBadge = isHoliday(e.date) ? '<span style="font-size:8px;background:#ffebee;color:#c62828;padding:0 3px;border-radius:2px;margin-right:2px;">祝</span>' : '';
     html += `<tr style="${rowStyle}"><td style="padding:8px 6px;border-bottom:1px solid #f5f5f5;white-space:nowrap;${dateStyle}">${userBadge(e.userId)}${holBadge}${formatDateY(e.date)}</td><td style="padding:8px 6px;border-bottom:1px solid #f5f5f5;line-height:1.4;">${e.dropoffPlace} <span style="color:var(--muted);">→</span> ${next}</td><td style="padding:8px 6px;border-bottom:1px solid #f5f5f5;text-align:center;color:var(--muted);white-space:nowrap;">${times}</td><td style="padding:8px 6px;border-bottom:1px solid #f5f5f5;text-align:center;">${waitStr}</td><td style="padding:8px 6px;border-bottom:1px solid #f5f5f5;text-align:center;">${durStr}</td><td style="padding:8px 6px;border-bottom:1px solid #f5f5f5;text-align:right;font-weight:700;border-radius:3px;${amtStyle}">${amountStr}</td></tr>`;
   }
-  html += '</tbody></table>';
-  if (s.totalDropoffs > result.entries.length) {
-    html += `<p class="muted" style="font-size:10px;margin-top:4px;">直近${result.entries.length}件のみ表示(全${s.totalDropoffs}件)</p>`;
-  }
-  return html;
-}
-
-document.getElementById('recSearch').onclick = () => {
-  const area = document.getElementById('recArea').value;
-  const time = document.getElementById('recTime').value;
-  const expand = document.getElementById('recExpand').checked;
-  if (!area || !time) return;
-  const hour = parseInt(time.split(':')[0]);
-  // GPS広域モードなら配列で渡す。それ以外は通常通り単一エリア
-  const dropoffArg = gpsWideAreas ? gpsWideAreas : area;
-  const result = nextBoardBreakdown(allDrives, dropoffArg, hour, 1, expand ? neighborMap : null);
-  // 30分以内取得率の高い順
-  const evaluated = result.rows
-    .filter(r => r.count >= 3)
-    .sort((a, b) => b.ratio30 - a.ratio30);
-  const body = document.getElementById('recBody');
-  const winLabel = `${String((hour-1+24)%24).padStart(2,'0')}:00-${String((hour+1)%24).padStart(2,'0')}:59`;
-  const wideLabel = gpsWideAreas ? '📍GPS推定' : '手動選択';
-  const includedLabel = result.includedAreas.length > 1
-    ? `(${wideLabel}・${result.includedAreas.length}エリア・降車${result.totalDropoffs}件中30分以内取得${result.totalNextWithin30}件)`
-    : `(降車${result.totalDropoffs}件中30分以内取得${result.totalNextWithin30}件)`;
-  if (evaluated.length === 0) {
-    body.innerHTML = `<p class="muted" style="font-size:11px;margin-bottom:6px;">${wideLabel}: <strong>${area}</strong> — 3件以上の該当データなし ${includedLabel}。下に過去の動き履歴を表示します</p>`
-      + renderHistoryFallback(area, hour, expand);
-    return;
-  }
-  const top = evaluated.slice(0, 10);
-  const maxSales = Math.max(...top.map(r => r.avgSales || 0), 1);
-  let html = `<div class="muted" style="font-size:11px;margin-bottom:6px;">${wideLabel}: <strong>${area}</strong>${expand && result.includedAreas.length > 1 ? '+近隣' : ''} で <strong>${winLabel}</strong>(±1h) に降ろした後の次乗車TOP${top.length} ${includedLabel}</div>`;
-  html += '<div style="overflow-x:auto;"><table class="area-table"><thead><tr>'
-    + '<th class="l">次乗車エリア</th><th>件数</th><th>15分内</th><th>30分内</th><th>次運賃(平均/中央)</th>'
-    + '</tr></thead><tbody>';
-  for (let idx = 0; idx < top.length; idx++) {
-    const r = top[idx];
-    const salesPct = r.avgSales ? (r.avgSales / maxSales * 100) : 0;
-    const r15 = Math.round(r.ratio15 * 100);
-    const r30 = Math.round(r.ratio30 * 100);
-    html += `<tr data-idx="${idx}" style="cursor:pointer;" title="タップで根拠データ">
-      <td class="l">${r.area}</td>
-      <td>${r.count}</td>
-      <td>${r15}%</td>
-      <td>${r30}%</td>
-      <td><div class="bar"><div class="fill" style="width:${salesPct}%;"></div><div class="v">${formatYen(r.avgSales)}<span style="color:rgba(255,255,255,0.85);font-size:9px;margin-left:4px;">中${formatYen(r.medianSales)}</span></div></div></td>
-    </tr>
-    <tr id="recDetail-${idx}" style="display:none;background:#fafafa;"><td colspan="5" style="padding:8px;"></td></tr>`;
-  }
   html += '</tbody></table></div>';
-  html += '<p class="muted" style="font-size:10px;margin-top:4px;">「15分内」=反応速い「30分内」=仕事ありエリア。「次運賃」=次tripの平均/中央値(¥0除外)。30分内取得率の高い順。タップで根拠データ表示</p>';
-  // 全履歴フォールバック (折りたたみ)
-  html += `<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:11px;color:var(--primary);">▶ このエリアでの全履歴を見る(待ちの目安)</summary><div style="margin-top:8px;">${renderHistoryFallback(area, hour, expand)}</div></details>`;
-  body.innerHTML = html;
-  body.querySelectorAll('tr[data-idx]').forEach(tr => {
-    tr.onclick = () => {
-      const idx = parseInt(tr.dataset.idx);
-      const detail = document.getElementById(`recDetail-${idx}`);
-      if (detail.style.display === 'none') {
-        const r = top[idx];
-        const todayDate = todayIso();
-        const todayDow = dowOf(todayDate);
-        const centerMin = hour * 60;
-        const samples = sortByDowAndTime(r.samples || [], todayDate, centerMin);
-        const maxSampleAmount = Math.max(...samples.map(s => s.amount || 0), 1);
-        let dh = `<div style="font-size:10px;color:var(--muted);margin-bottom:4px;">過去${r.count}件中 直近${samples.length}件 (今日${DOW_LABELS[todayDow]}${isHoliday(todayDate)?'祝':''}基準で並び替え):</div>`;
-        dh += '<table style="width:100%;font-size:10px;border-collapse:collapse;">'
-          + '<thead><tr style="color:var(--muted);"><th style="text-align:left;padding:8px 6px;border-bottom:1px solid #eee;">日付</th><th style="text-align:left;padding:8px 6px;border-bottom:1px solid #eee;">降車地→次乗車地→次降車地</th><th style="padding:8px 6px;border-bottom:1px solid #eee;">降/<strong style="color:#1b5e20;">乗</strong>/降</th><th style="padding:8px 6px;border-bottom:1px solid #eee;">待</th><th style="padding:8px 6px;border-bottom:1px solid #eee;">実車</th><th style="text-align:right;padding:8px 6px;border-bottom:1px solid #eee;">運賃</th></tr></thead><tbody>';
-        for (const s of samples) {
-          const grp = dateCategoryKey(s.date, todayDate);
-          const rowStyle = grp === 2 ? 'opacity:0.45;background:#fafafa;' : '';
-          const dateStyle = grp === 0 ? 'color:var(--primary);font-weight:700;' : grp === 2 ? 'color:#999;' : '';
-          const amtStyle = amountHeatStyle(s.amount, maxSampleAmount);
-          const holBadge = isHoliday(s.date) ? '<span style="font-size:8px;background:#ffebee;color:#c62828;padding:0 3px;border-radius:2px;margin-right:2px;">祝</span>' : '';
-          dh += `<tr style="${rowStyle}"><td style="padding:8px 6px;border-bottom:1px solid #f5f5f5;white-space:nowrap;${dateStyle}">${holBadge}${formatDateY(s.date)}</td><td style="padding:8px 6px;border-bottom:1px solid #f5f5f5;line-height:1.4;">${s.dropoffPlace} <span style="color:var(--muted);">→</span> ${s.nextBoardPlace} <span style="color:var(--muted);">→</span> ${s.nextAlightPlace}</td><td style="padding:8px 6px;border-bottom:1px solid #f5f5f5;text-align:center;color:var(--muted);white-space:nowrap;">${s.alightTime}/<strong style="color:#1b5e20;font-weight:700;">${s.nextBoardTime}</strong>/${s.nextAlightTime}</td><td style="padding:8px 6px;border-bottom:1px solid #f5f5f5;text-align:center;">${s.wait}分</td><td style="padding:8px 6px;border-bottom:1px solid #f5f5f5;text-align:center;">${formatMin(s.dur)}</td><td style="padding:8px 6px;border-bottom:1px solid #f5f5f5;text-align:right;font-weight:700;border-radius:3px;${amtStyle}">${formatYen(s.amount)}</td></tr>`;
-        }
-        dh += '</tbody></table>';
-        detail.querySelector('td').innerHTML = dh;
-        detail.style.display = '';
-      } else {
-        detail.style.display = 'none';
-      }
-    };
-  });
-};
-
-function renderHighValue() {
-  const rows = highValueAreasByZone(allDrives, ZONE_PRESETS.human.zones, { minSamples: 5 }).slice(0, 15);
-  const body = document.getElementById('highValueBody');
-  if (rows.length === 0) { body.innerHTML = '<p class="muted" style="font-size:11px;">該当データなし</p>'; return; }
-  const maxSales = Math.max(...rows.map(r => r.avgSales), 1);
-  const maxMedian = Math.max(...rows.map(r => r.medianSales || 0), 1);
-  let html = '<div style="overflow-x:auto;"><table class="area-table"><thead><tr>'
-    + '<th class="l">エリア</th><th>時間帯</th><th>件数</th><th>平均実車</th><th>単価(中央/平均)</th>'
-    + '</tr></thead><tbody>';
-  for (const r of rows) {
-    const zone = ZONE_PRESETS.human.zones.find(z => z.key === r.zoneKey);
-    const zoneLabel = zone ? zone.label : r.zoneKey;
-    const pct = (r.medianSales || 0) / maxMedian * 100;
-    html += `<tr data-area="${r.area}" data-zone="${r.zoneKey}" style="cursor:pointer;">
-      <td class="l">${r.area}</td>
-      <td>${zoneLabel}</td>
-      <td>${r.count}</td>
-      <td>${formatMin(r.avgDur)}</td>
-      <td><div class="bar"><div class="fill" style="width:${pct}%;"></div><div class="v">${formatYen(r.medianSales)}<span style="color:rgba(255,255,255,0.85);font-size:9px;margin-left:4px;">平${formatYen(r.avgSales)}</span></div></div></td>
-    </tr>`;
-  }
   html += '</tbody></table></div>';
-  body.innerHTML = html;
-  document.querySelectorAll('#highValueBody tr[data-area]').forEach(tr => {
-    tr.onclick = () => {
-      const area = tr.dataset.area;
-      const zoneKey = tr.dataset.zone;
-      const zone = ZONE_PRESETS.human.zones.find(z => z.key === zoneKey);
-      const zoneLabel = zone ? zone.label : zoneKey;
-      const tip = document.getElementById('highValueTip');
-      tip.classList.add('show');
-      tip.innerHTML = `<strong>${area}</strong> で <strong>${zoneLabel}</strong> に乗車した過去履歴<br>` + renderBoardHistoryHTML(area, zoneKey);
-    };
-  });
-}
-
-function renderBoardHistoryHTML(area, zoneKey) {
-  const result = boardHistoryAtAreaByZone(allDrives, area, zoneKey, ZONE_PRESETS.human.zones, 30);
-  if (result.entries.length === 0) return '<p class="muted" style="font-size:11px;">履歴なし</p>';
-  const todayDate = todayIso();
-  const todayDow = dowOf(todayDate);
-  // ソート: 同カテゴリ → 別カテ(グレー)、内部は時刻早い順
-  const anchorMin = 0;
-  const sorted = result.entries.slice().sort((a, b) => {
-    const ga = dateCategoryKey(a.date, todayDate) === 2 ? 1 : 0;
-    const gb = dateCategoryKey(b.date, todayDate) === 2 ? 1 : 0;
-    if (ga !== gb) return ga - gb;
-    return elapsedFromAnchor(a.boardTime, anchorMin) - elapsedFromAnchor(b.boardTime, anchorMin);
-  });
-  const maxAmount = Math.max(...sorted.filter(e => e.amount > 0).map(e => e.amount), 1);
-  let html = `<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">過去 ${result.totalCount} 件中 直近${sorted.length}件 ・ 今日${DOW_LABELS[todayDow]}${isHoliday(todayDate)?'祝':''}基準</div>`;
-  html += '<table style="width:100%;font-size:10px;border-collapse:collapse;">'
-    + '<thead><tr style="color:var(--muted);"><th style="text-align:left;padding:8px 6px;border-bottom:1px solid #eee;">日付</th><th style="text-align:left;padding:8px 6px;border-bottom:1px solid #eee;">乗車地→降車地</th><th style="padding:8px 6px;border-bottom:1px solid #eee;">降/<strong style="color:#1b5e20;">乗</strong>/降</th><th style="padding:8px 6px;border-bottom:1px solid #eee;">実車</th><th style="text-align:right;padding:8px 6px;border-bottom:1px solid #eee;">運賃</th></tr></thead><tbody>';
-  for (const e of sorted) {
-    const grp = dateCategoryKey(e.date, todayDate);
-    const rowStyle = grp === 2 ? 'opacity:0.45;background:#fafafa;' : '';
-    const dateStyle = grp === 0 ? 'color:var(--primary);font-weight:700;' : grp === 2 ? 'color:#999;' : '';
-    const amtStyle = amountHeatStyle(e.amount, maxAmount);
-    const holBadge = isHoliday(e.date) ? '<span style="font-size:8px;background:#ffebee;color:#c62828;padding:0 3px;border-radius:2px;margin-right:2px;">祝</span>' : '';
-    html += `<tr style="${rowStyle}"><td style="padding:8px 6px;border-bottom:1px solid #f5f5f5;white-space:nowrap;${dateStyle}">${userBadge(e.userId)}${holBadge}${formatDateY(e.date)}</td><td style="padding:8px 6px;border-bottom:1px solid #f5f5f5;line-height:1.4;">${e.boardPlace} <span style="color:var(--muted);">→</span> ${e.alightPlace}</td><td style="padding:8px 6px;border-bottom:1px solid #f5f5f5;text-align:center;color:var(--muted);white-space:nowrap;">${e.boardTime}/${e.alightTime}</td><td style="padding:8px 6px;border-bottom:1px solid #f5f5f5;text-align:center;">${formatMin(e.dur)}</td><td style="padding:8px 6px;border-bottom:1px solid #f5f5f5;text-align:right;font-weight:700;border-radius:3px;${amtStyle}">${formatYen(e.amount)}</td></tr>`;
-  }
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   return html;
 }
 
