@@ -210,6 +210,14 @@ function renderPaceBody() {
     const style = active ? 'background:var(--primary);color:#fff;font-weight:600;' : `background:#f0f0f0;color:${color || '#333'};`;
     return `<button data-d="${d.v == null ? '' : d.v}" class="pace-dtab" style="${style}border:none;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;min-width:28px;">${d.l}</button>`;
   }).join('');
+  // 現在実時間が 1h-20h 帯のどこに該当するか（最も近い時間ボタン）
+  const nowHourMark = autoElapsed > 0 ? Math.max(1, Math.min(20, Math.round(autoElapsed / 60))) : 0;
+  const nowClock = (() => {
+    const m = todayDepHour * 60 + autoElapsed;
+    const h = Math.floor(m / 60) % 24;
+    const mm = Math.round(m % 60);
+    return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+  })();
   const elapsedItems = [{m: null, l: '今', h: elapsedMin / 60}];
   for (let h = 1; h <= 20; h++) elapsedItems.push({m: h * 60, l: `${h}h`, h});
   let lastZone = null;
@@ -217,13 +225,22 @@ function renderPaceBody() {
     const eh = e.m != null ? e.h : elapsedMin / 60;
     const z = getZoneAt(Math.floor((todayDepHour + eh) % 24), paceZonePreset);
     const zoneHint = (lastZone && lastZone.label !== z.label)
-      ? `<span style="font-size:9px;color:${z.color};font-weight:600;margin-right:2px;">${z.label}</span>`
+      ? `<span style="font-size:9px;color:${z.color};font-weight:600;margin-right:2px;align-self:flex-end;padding-bottom:14px;">${z.label}</span>`
       : '';
     lastZone = z;
     const active = (e.m == null && !isManual) || (e.m != null && manualElapsedMin === e.m);
-    const style = active ? 'background:var(--orange,#ff9800);color:#fff;font-weight:600;' : 'background:#f0f0f0;color:#333;';
-    return `${zoneHint}<button data-em="${e.m == null ? '' : e.m}" class="pace-etab" style="${style}border:none;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;min-width:28px;">${e.l}</button>`;
+    const isNowMark = e.m != null && nowHourMark > 0 && Math.round(e.m / 60) === nowHourMark;
+    const baseStyle = active ? 'background:var(--orange,#ff9800);color:#fff;font-weight:600;' : 'background:#f0f0f0;color:#333;';
+    const nowBorder = isNowMark && !active ? 'box-shadow:inset 0 0 0 2px var(--orange,#ff9800);' : '';
+    const style = baseStyle + nowBorder;
+    const marker = isNowMark
+      ? `<span style="font-size:9px;color:var(--orange,#ff9800);font-weight:700;line-height:1;">▲今</span>`
+      : `<span style="font-size:9px;line-height:1;visibility:hidden;">▲今</span>`;
+    return `${zoneHint}<span style="display:inline-flex;flex-direction:column;align-items:center;gap:2px;"><button data-em="${e.m == null ? '' : e.m}" class="pace-etab" style="${style}border:none;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;min-width:28px;">${e.l}</button>${marker}</span>`;
   }).join('');
+  const nowLabel = autoElapsed > 0
+    ? `<div style="margin-top:6px;font-size:10px;color:var(--muted);">現在 <strong style="color:var(--orange,#ff9800);">${nowClock}</strong>(出庫から<strong>${(autoElapsed/60).toFixed(1)}h</strong>) — ▲ 印が現在位置</div>`
+    : '';
   const dowName = dowFilter == null ? '全曜日' : DOW_LABELS[dowFilter] + '曜のみ';
   const targetTime = (() => {
     const m = todayDepHour * 60 + elapsedMin;
@@ -276,7 +293,8 @@ function renderPaceBody() {
     </div>
     <div style="display:flex;gap:3px;flex-wrap:wrap;">${dowTabs}</div>
     ${zoneDisplay}
-    <div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:6px;overflow-x:auto;">${elapsedTabs}</div>
+    ${nowLabel}
+    <div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:6px;overflow-x:auto;align-items:flex-start;">${elapsedTabs}</div>
     ${body}
   `;
   card.querySelectorAll('.pace-thtab').forEach(b => { b.onclick = () => { paceState.todayDepHour = parseInt(b.dataset.th); paceState.manualElapsedMin = null; renderPaceBody(); }; });
