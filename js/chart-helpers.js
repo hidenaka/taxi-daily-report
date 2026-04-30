@@ -208,6 +208,41 @@ export function dowZoneMatrix(drives, zones) {
   return { matrix, count: countMap, zones };
 }
 
+// 曜日 × ゾーン 平均時間単価（¥/h）マトリックス
+// workingMinベースで計算（= 乗務時間 - 休憩時間）
+export function dowZoneEfficiency(drives, zones) {
+  const hourly = hourlyDowEfficiency(drives);
+  const keys = zones.map(z => z.key);
+  const dowDays = Array(7).fill(0);
+  for (const d of drives) {
+    if (isSummaryOnly(d) || !d.date) continue;
+    dowDays[dowOf(d.date)]++;
+  }
+  const sumMap = Array.from({length: 7}, () => {
+    const o = {};
+    for (const k of keys) o[k] = { sales: 0, workingMin: 0 };
+    return o;
+  });
+  for (let dow = 0; dow < 7; dow++) {
+    for (let h = 0; h < 24; h++) {
+      const c = hourly[dow][h];
+      if (c.workingMin <= 0) continue;
+      const k = getZoneKey(String(h).padStart(2, '0') + ':00', zones);
+      sumMap[dow][k].sales += c.sales;
+      sumMap[dow][k].workingMin += c.workingMin;
+    }
+  }
+  const matrix = sumMap.map((row) => {
+    const r = {};
+    for (const k of keys) {
+      const s = row[k];
+      r[k] = s.workingMin > 0 ? s.sales / (s.workingMin / 60) : 0;
+    }
+    return r;
+  });
+  return { matrix, days: dowDays, zones };
+}
+
 // 1乗務の出庫〜帰庫を時間帯ごとに分割 (分単位)
 export function periodMinutesInDrive(drive) {
   const result = { morning: 0, noon: 0, evening: 0, night: 0 };
