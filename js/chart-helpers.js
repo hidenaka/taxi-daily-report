@@ -369,17 +369,18 @@ export function depHourDistribution(drives) {
 
 // 曜日別の集計 (各日数/平均営収/平均件数/平均時間単価/平均乗務時間/ベスト日)
 // 曜日(0-6) × 時間(0-23) × 効率 マトリクス
-// 各セル: { sales, activeMin, presentMin, count, days, hourlyA, hourlyB }
+// 各セル: { sales, activeMin, presentMin, restMin, workingMin, count, days, hourlyA }
 //   sales: その時間バケットに発生した売上 (時間按分)
 //   activeMin: 実車中だった合計分
 //   presentMin: 乗務中(出庫〜帰庫)だった合計分 (=空車+実車+休憩 全て含む)
+//   restMin: 休憩していた合計分
+//   workingMin: 実稼働時間 = presentMin - restMin
 //   count: その時間バケット開始のtrip数
 //   days: その時間バケットに乗務していた日数
-//   hourlyA: 実労働時間効率 sales / (presentMin/60)  ← A: 「その時間にいると1hあたりいくら稼げるか」
-//   hourlyB: 1日あたり売上 sales / days  ← B: 「その時間帯に1日平均いくら売上が立つか」
+//   hourlyA: 実稼働時間効率 sales / (workingMin/60)  ← 「その時間に実稼働している時、1hあたりいくら稼げるか」
 export function hourlyDowEfficiency(drives) {
   const matrix = Array.from({length: 7}, () =>
-    Array.from({length: 24}, () => ({ sales: 0, activeMin: 0, presentMin: 0, count: 0, days: 0 }))
+    Array.from({length: 24}, () => ({ sales: 0, activeMin: 0, presentMin: 0, restMin: 0, workingMin: 0, count: 0, days: 0 }))
   );
   for (const d of drives) {
     if (isSummaryOnly(d)) continue;
@@ -401,6 +402,26 @@ export function hourlyDowEfficiency(drives) {
         const h = bi % 24;
         matrix[dow][h].presentMin += overlap;
         if (!seen.has(h)) { seen.add(h); matrix[dow][h].days++; }
+      }
+      // 休憩区間を各時間バケットから引く
+      for (const r of (d.rests || [])) {
+        let rs = timeToMinutes(r.startTime);
+        let re = timeToMinutes(r.endTime);
+        if (re < rs) re += 24 * 60;
+        // 出庫前または帰庫後の休憩は対象外
+        if (re <= dep || rs >= ret) continue;
+        rs = Math.max(rs, dep);
+        re = Math.min(re, ret);
+        const rStartBucket = Math.floor(rs / 60);
+        const rEndBucket = Math.floor((re - 1) / 60);
+        for (let bi = rStartBucket; bi <= rEndBucket; bi++) {
+          const bucketStart = bi * 60;
+          const bucketEnd = bucketStart + 60;
+          const overlap = Math.max(0, Math.min(bucketEnd, re) - Math.max(bucketStart, rs));
+          if (overlap <= 0) continue;
+          const h = bi % 24;
+          matrix[dow][h].restMin += overlap;
+        }
       }
     }
     for (const t of (d.trips || [])) {
@@ -425,8 +446,8 @@ export function hourlyDowEfficiency(drives) {
   for (let dow = 0; dow < 7; dow++) {
     for (let h = 0; h < 24; h++) {
       const c = matrix[dow][h];
-      c.hourlyA = c.presentMin > 0 ? c.sales / (c.presentMin / 60) : 0;
-      c.hourlyB = c.days > 0 ? c.sales / c.days : 0;
+      c.workingMin = Math.max(0, c.presentMin - c.restMin);
+      c.hourlyA = c.workingMin > 0 ? c.sales / (c.workingMin / 60) : 0;
     }
   }
   return matrix;
@@ -712,6 +733,7 @@ export function dropoffHistoryAtArea(drives, area, hourCenter = null, hourWindow
       entries.push({
         date: d.date,
         dow: d.date ? dowOf(d.date) : null,
+        userId: d._userId || null,
         alightTime: t.alightTime,
         dropoffPlace: t._virtual ? OFFICE_AREA + '(出庫)' : t.alightPlace,
         nextBoardTime, nextBoardPlace, nextAlightTime, nextAlightPlace,
@@ -763,6 +785,7 @@ export function boardHistoryAtArea(drives, area, period = null, maxEntries = 30)
       entries.push({
         date: d.date,
         dow: d.date ? dowOf(d.date) : null,
+        userId: d._userId || null,
         boardTime: t.boardTime,
         boardPlace: t.boardPlace,
         alightTime: t.alightTime,
@@ -781,7 +804,7 @@ export function boardHistoryAtArea(drives, area, period = null, maxEntries = 30)
 
 // 高期待値エリア × 時間帯
 // 各trip(乗車)を boardPlace × 時間帯(4区切り) で集計、中央単価が高い順
-// 中央値ベースで並べることでイレギュラー案件の影響を排除
+// 中央値ベースで並べることでイジャパンタクシー案件の影響を排除
 // 戻り値: [{ area, period, count, avgSales, medianSales, avgDur }]
 export function highValueAreas(drives, { minSamples = 5 } = {}) {
   const groups = {};

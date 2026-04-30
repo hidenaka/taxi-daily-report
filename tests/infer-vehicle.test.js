@@ -9,9 +9,9 @@ test('inferVehicleType: 全迎車 → premium', () => {
   assert.equal(r.ratio, 1);
 });
 
-test('inferVehicleType: 全流し → regular', () => {
+test('inferVehicleType: 全流し → japantaxi', () => {
   const trips = [{ isPickup: false }, { isPickup: false }];
-  assert.equal(inferVehicleType(trips).value, 'regular');
+  assert.equal(inferVehicleType(trips).value, 'japantaxi');
 });
 
 test('inferVehicleType: 70%境界(7/10) → premium', () => {
@@ -19,9 +19,9 @@ test('inferVehicleType: 70%境界(7/10) → premium', () => {
   assert.equal(inferVehicleType(trips).value, 'premium');
 });
 
-test('inferVehicleType: 70%未満(6/10) → regular', () => {
+test('inferVehicleType: 70%未満(6/10) → japantaxi', () => {
   const trips = Array.from({ length: 10 }, (_, i) => ({ isPickup: i < 6 }));
-  assert.equal(inferVehicleType(trips).value, 'regular');
+  assert.equal(inferVehicleType(trips).value, 'japantaxi');
 });
 
 test('inferVehicleType: 空配列 → unknown', () => {

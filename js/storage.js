@@ -194,6 +194,19 @@ export async function listActiveUserIds() {
     .map(u => u.userId);
 }
 
+// data/users.json から active: true の {userId: displayName} マップを取得
+export async function getUserDisplayMap() {
+  const result = await getFile('data/users.json');
+  const map = {};
+  if (!result?.content?.users) return map;
+  for (const u of result.content.users) {
+    if (u.active === true && isValidUserId(u.userId)) {
+      map[u.userId] = u.displayName || u.userId;
+    }
+  }
+  return map;
+}
+
 // 全 active userId の月度データを並列取得して flatten
 export async function getAllUsersDrivesForMonth(yearMonth) {
   const { start, end } = getBillingPeriodRange(yearMonth);

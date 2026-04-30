@@ -66,8 +66,9 @@
 
 ---
 
-## 3. データ取込フロー(知り合い視点)
+## 3. データ取込フロー
 
+### 3.1 アプリ内ペースト取込(手動)
 ```
 [1] 出番終了後、日報の写真を撮る
         ↓
@@ -95,6 +96,25 @@
         ↓
 [7] data/drives/user_a/2026-04-26.json として GitHub APIで自動push
 ```
+
+### 3.2 import スクリプト取込(初期投入/管理者ローカル実行)
+
+今回手元にある過去分の写真100枚のように、管理者がまとめて初期投入する場合だけ、ローカルの import スクリプトで変換・検証・保存する経路を使う。実際の通常運用では、知り合い本人がアプリの「テキストペースト」モードから自分の日報を登録する。
+
+```bash
+node scripts/import-friend-report.mjs --user user_a --photo /path/to/report.jpg
+
+# 複数枚で1乗務を構成する場合、または日付を明示する場合
+node scripts/import-friend-report.mjs --user user_a --photo p1.jpg --photo p2.jpg --date 2026-04-26
+```
+
+処理手順:
+1. `scripts/prompts/friend-report.md` の指定プロンプトを使い、写真を Codex または Gemini CLI に渡して所定フォーマットへ変換する
+2. AI 出力を `parseFormattedReport` で検証し、日付・時刻・CSV列・料金・休憩行を正規化する
+3. 検証 OK なら `data/drives/{userId}/{date}.json` に GitHub API 経由で push する
+4. 失敗時は AI 出力、OCR/変換ログ、検証エラーを `tmp/` に保存し、手修正して再試行できるようにする
+
+このスクリプトは過去分の移行・一括投入用ツールとして扱う。書き込み先 userId を CLI 引数で明示するが、`userId` バリデーションと `data/users.json` への存在確認を必須にする。アプリ内の通常保存 API は引き続き自分の userId のみを書き込む。
 
 ### AIプロンプトテンプレ(イメージ、別ドキュメントで詳細化)
 ```
@@ -309,7 +329,18 @@ function parseFormattedReport(text) {
 ### 9.1 docs/ai-prompt-template.md(新規)
 知り合い向けの AIプロンプトテンプレ全文。コピペで使える形。
 
-### 9.2 docs/setup-for-collaborator.md(新規)
+### 9.2 scripts/prompts/friend-report.md(新規)
+`scripts/import-friend-report.mjs` が Codex/Gemini CLI に渡すプロンプト。Task 11 のテンプレートと同じ出力形式に揃え、以下を明記する。
+
+- 先頭4行ヘッダー: `日付` / `車種` / `出庫` / `帰庫`
+- 区切り行 `---`
+- CSVヘッダー: `No,乗車,降車,時間,迎,乗車地,降車地,営Km,男,女,合計`
+- 休憩行は `休`、キャンセル行は `キ` で始める
+- 料金はカンマ区切りでクォートする
+- 保存先は `data/drives/{userId}/{date}.json`
+- JSON 化はスクリプト側で行うため、AI は指定テキスト形式のみを返す
+
+### 9.3 docs/setup-for-collaborator.md(新規)
 知り合い向けセットアップ手順書:
 1. アプリURL を開く
 2. ホーム画面に追加(PWAインストール)
@@ -317,9 +348,19 @@ function parseFormattedReport(text) {
 4. 設定画面で userId 入力(あなたが指定)
 5. 入力画面で初回テスト(写真→AI→ペースト→保存)
 
-### 9.3 README.md 更新(既存編集)
+### 9.4 README.md 更新(既存編集)
 - マルチユーザー対応について追記
 - データ構造の説明更新
+
+### 9.5 scripts/import-friend-report.mjs(新規)
+過去分の日報写真をローカルから一括投入するための CLI。通常運用の主経路ではなく、今回の100枚のような初期データ投入や管理者による再取込で使う。引数は `--user`、複数指定可能な `--photo`、任意の `--date` を受け取る。
+
+責務:
+- 入力写真の存在確認
+- AI 変換コマンドの実行(Codex または Gemini CLI)
+- `parseFormattedReport` による検証
+- `data/drives/{userId}/{date}.json` への保存/push
+- 失敗時の `tmp/` 中間テキスト保存
 
 ---
 
@@ -350,8 +391,10 @@ function parseFormattedReport(text) {
 5. 営業サポートの該当機能を全員データに切替(ヒートマップとペース参考は自分のみ維持)
 6. 入力画面に「テキストペースト→parse→保存」モード追加
 7. parser.js 拡張(ヘッダー対応・CSV対応・男女列対応)
-8. AI用プロンプトテンプレ作成(`docs/ai-prompt-template.md`)
-9. 知り合い向けセットアップ手順書作成(`docs/setup-for-collaborator.md`)
+8. 初期投入用 import スクリプト作成(`scripts/import-friend-report.mjs`)
+9. import 用プロンプト作成(`scripts/prompts/friend-report.md`)
+10. AI用プロンプトテンプレ作成(`docs/ai-prompt-template.md`)
+11. 知り合い向けセットアップ手順書作成(`docs/setup-for-collaborator.md`)
 
 ### MVPに入れない(後回し)
 - 各ユーザーごとの「アクティブ/非アクティブ」切替UI(MVPはJSON手編集)
@@ -383,6 +426,8 @@ function parseFormattedReport(text) {
 | 知り合いがフォルダを間違えて他人のデータを上書き | データ損失 | アプリ側で「自分のフォルダ以外は書き込まない」をハードコード |
 | 共有PATが流出 | リポジトリ全データの漏洩 | 信頼できる知り合いのみに配布、定期的に再発行可能にしておく |
 | AI変換ミスで不正なJSON | 保存失敗 | parse段階でバリデーション、プレビュー表示で目視確認 |
+| import スクリプトのAI変換が失敗する | 初期データ投入が止まる | `tmp/` に中間テキストとエラーを残し、手修正後に再試行できるようにする |
+| CLI引数のuserId指定ミス | 別ユーザーへの誤投入 | `data/users.json` に存在する userId のみ許可し、保存前に出力パスを表示して確認可能にする |
 | 知り合いが継続入力しない | データが増えない | MVP検証後に判断(続かないなら無理に拡張しない) |
 | ストレージサイズ増加 | GitHub Pages制限 | JSON1乗務あたり数KB×100乗務×5人=2MB程度。当面問題なし |
 | 既存データのマイグレーション失敗 | 旧データ参照不能 | git で巻き戻し可能。新旧両方データを残してデプロイ |
@@ -394,6 +439,6 @@ function parseFormattedReport(text) {
 - アクティブ/非アクティブ切替UI
 - 匿名表示モード(集計時に displayName を伏せる)
 - 各ユーザーの貢献度ダッシュボード
-- 写真→自動取込スクリプト(あなたがバッチ実行する場合)
+- 写真→自動取込スクリプトのGUI化/ジョブ化
 - 各ユーザーの目標時給を考慮した個別スコアリング
 - 統合データ vs 個人データの差分可視化(自分の傾向と平均の差を見る)

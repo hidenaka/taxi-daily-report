@@ -52,18 +52,18 @@
 3. 知人に `docs/setup-for-collaborator.md` を渡す
 4. 知人本人が手動で OCR する場合: `docs/ai-prompt-template.md` も渡す
 
-### 知人の写真をまとめて取込む(運営者向けスクリプト)
+### 知人の写真をまとめて取込む(運営者向け)
+
+過去分(初期データ)を Gemini Web 経由でテキスト化 → bulk push する手順は `docs/admin-bulk-import.md` を参照。
+
+`scripts/admin-bulk-push.mjs` 一発で users.json 登録 + 全日 push まで完結する。
 
 ```bash
-# 1. gemini CLI 等で写真 → テキスト変換(別途運用)
-# 2. テキストファイルを一括取込
-GITHUB_TOKEN=ghp_xxx DATA_REPO=owner/taxi-daily-report-data \
-  node scripts/import-friend-report.mjs --user user_a \
-    --text ~/friend-imports/2026-04-01.txt \
-    --text ~/friend-imports/2026-04-02.txt
+GITHUB_TOKEN=$(gh auth token) DATA_REPO=owner/taxi-daily-report-data \
+  node scripts/admin-bulk-push.mjs --user user_X --display "Xさん"
 ```
 
-写真を直接渡す形(gemini multimodal 経由)もサポート: `--photo path.jpg`(`GEMINI_API_KEY` + Python `google.genai` 必須)。詳細は `scripts/import-friend-report.mjs --help` 相当を参照。
+知人本人の **日次運用** は別経路: `docs/setup-for-collaborator.md`(本人がアプリの入力画面ペーストモードから push)。
 
 ### マイグレーション(既存データを userId フォルダに移動)
 

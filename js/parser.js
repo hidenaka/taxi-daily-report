@@ -21,11 +21,16 @@ function parseClaudeRow(cells) {
   if (no === '休') {
     return { type: 'rest', startTime: board, endTime: alight, place: bp };
   }
-  // キャンセル判定: km=0 で (amount=500 or 乗車地==降車地)
-  const isCancel = parseKm(km) === 0 && (parseAmount(amt) === 500 || bp === ap);
+  // キャンセル判定: 行頭が「キ」、または amount=400 (無条件)、または km=0 で amount=500/1000
+  // 乗降同所+0kmは待機料金で売上が立つこともあるため、金額が400/500/1000以外なら通常乗車扱い
+  const amtNum = parseAmount(amt);
+  const kmNum = parseKm(km);
+  const isCancelMarker = no === 'キ';
+  const isCancel = isCancelMarker || amtNum === 400 || (kmNum === 0 && (amtNum === 500 || amtNum === 1000));
   return {
     type: 'trip',
-    no: parseInt(no, 10),
+    no: isCancelMarker ? null : parseInt(no, 10),
+    pickupKind: pickup || '',
     boardTime: board,
     alightTime: alight,
     boardPlace: bp,
@@ -59,11 +64,16 @@ function parseGeminiRow(cells) {
   if (no === '休') {
     return { type: 'rest', startTime: board, endTime: alight, place: bp };
   }
-  // キャンセル判定: km=0 で (amount=500 or 乗車地==降車地)
-  const isCancel = parseKm(km) === 0 && (parseAmount(amt) === 500 || bp === ap);
+  // キャンセル判定: 行頭が「キ」、または amount=400 (無条件)、または km=0 で amount=500/1000
+  // 乗降同所+0kmは待機料金で売上が立つこともあるため、金額が400/500/1000以外なら通常乗車扱い
+  const amtNum = parseAmount(amt);
+  const kmNum = parseKm(km);
+  const isCancelMarker = no === 'キ';
+  const isCancel = isCancelMarker || amtNum === 400 || (kmNum === 0 && (amtNum === 500 || amtNum === 1000));
   return {
     type: 'trip',
-    no: parseInt(no, 10),
+    no: isCancelMarker ? null : parseInt(no, 10),
+    pickupKind: pickup || '',
     boardTime: board,
     alightTime: alight,
     boardPlace: bp,
