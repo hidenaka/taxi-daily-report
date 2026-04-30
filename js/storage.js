@@ -1,5 +1,6 @@
 import { DEFAULT_USER_ID, isValidUserId, normalizeUserId } from './userid.js';
 import { getBillingPeriodRange } from './app.js';
+import { getCached, setCached, delCached, notifyChanged, notifyRefresh } from './cache.js';
 
 const API_BASE = 'https://api.github.com';
 
@@ -40,29 +41,71 @@ function authHeaders() {
   };
 }
 
+// インフライトリクエスト dedup（同じpath/dirへの並行fetchを1本に集約）
+const inflightFile = new Map();
+const inflightList = new Map();
+
 // 単一ファイルを取得 → JSONパース済みで返す
 export async function getFile(path) {
-  const repo = getRepo();
-  const res = await fetch(`${API_BASE}/repos/${repo}/contents/${path}`, {
-    headers: authHeaders()
-  });
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`GitHub API error: ${res.status}`);
-  const data = await res.json();
-  // base64デコード → UTF-8 → JSON
-  const decoded = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ''))));
-  return { content: JSON.parse(decoded), sha: data.sha };
+  if (inflightFile.has(path)) return inflightFile.get(path);
+  const p = (async () => {
+    const repo = getRepo();
+    const res = await fetch(`${API_BASE}/repos/${repo}/contents/${path}`, {
+      headers: authHeaders()
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`GitHub API error: ${res.status}`);
+    const data = await res.json();
+    const decoded = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ''))));
+    const result = { content: JSON.parse(decoded), sha: data.sha };
+    setCached(`file:${path}`, result.content, result.sha);
+    return result;
+  })().finally(() => inflightFile.delete(path));
+  inflightFile.set(path, p);
+  return p;
 }
 
 // ディレクトリ内のファイル一覧
 export async function listFiles(dir) {
-  const repo = getRepo();
-  const res = await fetch(`${API_BASE}/repos/${repo}/contents/${dir}`, {
-    headers: authHeaders()
-  });
-  if (res.status === 404) return [];
-  if (!res.ok) throw new Error(`GitHub API error: ${res.status}`);
-  return res.json(); // [{ name, path, sha, ... }]
+  if (inflightList.has(dir)) return inflightList.get(dir);
+  const p = (async () => {
+    const repo = getRepo();
+    const res = await fetch(`${API_BASE}/repos/${repo}/contents/${dir}`, {
+      headers: authHeaders()
+    });
+    if (res.status === 404) return [];
+    if (!res.ok) throw new Error(`GitHub API error: ${res.status}`);
+    const list = await res.json(); // [{ name, path, sha, ... }]
+    setCached(`list:${dir}`, list);
+    return list;
+  })().finally(() => inflightList.delete(dir));
+  inflightList.set(dir, p);
+  return p;
+}
+
+// ===== Cache 利用ヘルパ =====
+
+// キャッシュ済みファイルを返す（ない/破損/エラーは null）。fetch しない
+export function getFileCached(path) {
+  const c = getCached(`file:${path}`);
+  if (!c) return null;
+  return { content: c.value, sha: c.sha };
+}
+export function getListCached(dir) {
+  const c = getCached(`list:${dir}`);
+  return c ? c.value : null;
+}
+
+// list を取得しつつキャッシュ
+export async function listFilesFresh(dir) {
+  return listFiles(dir);
+}
+
+// 個別ファイル: sha が一致したらキャッシュをそのまま使い、API は叩かない
+async function getFileBySha(path, expectedSha) {
+  const cached = getFileCached(path);
+  if (cached && expectedSha && cached.sha === expectedSha) return cached;
+  return getFile(path);
 }
 
 export async function getConfig() {
@@ -80,17 +123,48 @@ export async function getDrive(date) {
 // 月度（YYYY-MM）の全drive並列取得 — 16-15 サイクル対応
 export async function getDrivesForMonth(yearMonth) {
   const userId = getMyUserId();
+  return fetchDrivesForUserMonth(userId, yearMonth);
+}
+
+// 内部: 1ユーザー × 1月度を sha 比較で最小コストに取得
+async function fetchDrivesForUserMonth(userId, yearMonth) {
   const { start, end } = getBillingPeriodRange(yearMonth);
-  const files = await listFiles(`data/drives/${userId}`);
+  let files;
+  try {
+    files = await listFiles(`data/drives/${userId}`);
+  } catch (e) {
+    return []; // listできない場合はスキップ
+  }
   const periodFiles = files.filter(f => {
     if (!f.name.endsWith('.json')) return false;
     const date = f.name.replace('.json', '');
     return date >= start && date <= end;
   });
   const drives = await Promise.all(
-    periodFiles.map(f => getFile(f.path).then(r => r?.content))
+    periodFiles.map(f => getFileBySha(f.path, f.sha).then(r => r?.content))
   );
   return drives.filter(d => d !== null);
+}
+
+// キャッシュからのみ復元（fetch しない）。初期表示用。
+export function getDrivesForMonthCached(yearMonth) {
+  const userId = getMyUserId();
+  return getDrivesForUserMonthCached(userId, yearMonth);
+}
+function getDrivesForUserMonthCached(userId, yearMonth) {
+  const { start, end } = getBillingPeriodRange(yearMonth);
+  const files = getListCached(`data/drives/${userId}`);
+  if (!files) return null; // キャッシュなし
+  const drives = [];
+  for (const f of files) {
+    if (!f.name?.endsWith('.json')) continue;
+    const date = f.name.replace('.json', '');
+    if (date < start || date > end) continue;
+    const cached = getFileCached(f.path);
+    if (!cached) return null; // 一部欠け → 安全側で null（=「キャッシュ不完全」扱い）
+    drives.push(cached.content);
+  }
+  return drives;
 }
 
 // UTF-8文字列を base64 エンコード
@@ -132,7 +206,11 @@ export async function saveDrive(drive) {
   const message = sha
     ? `update drive ${userId}/${drive.date}`
     : `add drive ${userId}/${drive.date}`;
-  return putFile(path, drive, message, sha);
+  const result = await putFile(path, drive, message, sha);
+  // キャッシュ即時更新: ファイル本体とディレクトリリスト
+  setCached(`file:${path}`, drive, result?.content?.sha || null);
+  delCached(`list:data/drives/${userId}`); // 次の listFiles で再取得
+  return result;
 }
 
 export async function saveConfig(config) {
@@ -140,7 +218,9 @@ export async function saveConfig(config) {
   const path = `data/config/${userId}.json`;
   const existing = await getFile(path);
   const sha = existing?.sha || null;
-  return putFile(path, config, `update config ${userId}`, sha);
+  const result = await putFile(path, config, `update config ${userId}`, sha);
+  setCached(`file:${path}`, config, result?.content?.sha || null);
+  return result;
 }
 
 const PENDING_QUEUE_KEY = 'pending_saves';
@@ -222,26 +302,66 @@ export async function getUserRoleMap() {
 
 // 全 active userId の月度データを並列取得して flatten
 export async function getAllUsersDrivesForMonth(yearMonth) {
-  const { start, end } = getBillingPeriodRange(yearMonth);
   const userIds = await listActiveUserIds();
   const perUser = await Promise.all(userIds.map(async userId => {
-    let files;
-    try {
-      files = await listFiles(`data/drives/${userId}`);
-    } catch (e) {
-      // GitHub API エラー(401/500等)時はそのユーザーをスキップ
-      return [];
-    }
-    const periodFiles = files.filter(f => {
-      if (!f.name.endsWith('.json')) return false;
-      const date = f.name.replace('.json', '');
-      return date >= start && date <= end;
-    });
-    const drives = await Promise.all(
-      periodFiles.map(f => getFile(f.path).then(r => r?.content))
-    );
-    // 集計時にユーザー識別できるよう、_userId を非破壊的に付与
-    return drives.filter(d => d !== null).map(d => ({ ...d, _userId: userId }));
+    const drives = await fetchDrivesForUserMonth(userId, yearMonth);
+    return drives.map(d => ({ ...d, _userId: userId }));
   }));
   return perUser.flat();
+}
+
+// users.json キャッシュから active userIds を導出
+function getActiveUserIdsCached() {
+  const cachedUsers = getFileCached('data/users.json');
+  if (!cachedUsers?.content?.users) return null;
+  return cachedUsers.content.users
+    .filter(u => u.active === true && isValidUserId(u.userId))
+    .map(u => u.userId);
+}
+
+// キャッシュからのみ復元（fetch しない）。1ユーザーでも欠けたら null
+export function getAllUsersDrivesForMonthCached(yearMonth) {
+  const userIds = getActiveUserIdsCached();
+  if (!userIds) return null;
+  const out = [];
+  for (const userId of userIds) {
+    const drives = getDrivesForUserMonthCached(userId, yearMonth);
+    if (drives === null) return null;
+    for (const d of drives) out.push({ ...d, _userId: userId });
+  }
+  return out;
+}
+
+// users.json キャッシュから displayMap/roleMap を即時導出
+export function getUserDisplayMapCached() {
+  const cached = getFileCached('data/users.json');
+  if (!cached?.content?.users) return null;
+  const map = {};
+  for (const u of cached.content.users) {
+    if (u.active === true && isValidUserId(u.userId)) {
+      map[u.userId] = u.displayName || u.userId;
+    }
+  }
+  return map;
+}
+export function getUserRoleMapCached() {
+  const cached = getFileCached('data/users.json');
+  if (!cached?.content?.users) return null;
+  const map = {};
+  for (const u of cached.content.users) {
+    if (u.active === true && isValidUserId(u.userId)) {
+      map[u.userId] = u.role || 'member';
+    }
+  }
+  return map;
+}
+export function listActiveUserIdsCached() {
+  return getActiveUserIdsCached();
+}
+
+// config キャッシュ
+export function getConfigCached() {
+  const userId = getMyUserId();
+  const cached = getFileCached(`data/config/${userId}.json`);
+  return cached?.content || null;
 }

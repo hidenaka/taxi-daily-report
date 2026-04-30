@@ -155,10 +155,9 @@ if ('serviceWorker' in navigator) {
 <div id="navHost"></div>
 <script type="module">
 import { renderBottomNav, formatYen, formatDate, formatDateY, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod } from './js/app.js';
-import { getDrivesForMonth } from './js/storage.js';
+import { getDrivesForMonth, getDrivesForMonthCached, getConfig, getConfigCached } from './js/storage.js';
 import { calcDailySales, calcTotalPay, calcMonthlySales } from './js/payroll.js';
 import { calcTimeBreakdown, dowPeriodMatrix, dowZoneMatrix, dowZoneEfficiency, dowAggregation, rankDrivesBySales, weatherSalesAggregation, WEATHER_LABELS, DOW_LABELS, isSummaryOnly, formatMin, ZONE_PRESETS, formatZoneRange } from './js/chart-helpers.js';
-import { getConfig } from './js/storage.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('analytics');
 
@@ -186,22 +185,12 @@ document.querySelectorAll('#metricTabs button').forEach(b => {
   };
 });
 
-async function load() {
-  if (!localStorage.getItem('github_token') || !localStorage.getItem('github_data_repo')) {
-    document.querySelector('main').innerHTML = '<div class="loading">設定からGitHubトークンを設定してください</div>';
-    return;
-  }
-  document.getElementById('rangeInfo').textContent = '読み込み中…';
-  config = await getConfig();
-  const current = currentBillingPeriod();
-  const periods = [];
-  for (let i = monthsRange - 1; i >= 0; i--) {
-    periods.push(shiftBillingPeriod(current, -i));
-  }
+function buildMonthSummaries(periods, drivesByMonth) {
   monthSummaries = [];
   allDrives = [];
-  for (const ym of periods) {
-    const drives = await getDrivesForMonth(ym);
+  for (let i = 0; i < periods.length; i++) {
+    const ym = periods[i];
+    const drives = drivesByMonth[i] || [];
     allDrives.push(...drives);
     const monthly = calcMonthlySales(drives);
     const pay = calcTotalPay(drives, config);
@@ -217,13 +206,56 @@ async function load() {
       hourly: totalMin > 0 ? monthly.inclTax / (totalMin / 60) : 0
     });
   }
-  document.getElementById('rangeInfo').textContent = `${formatBillingPeriod(periods[0])} 〜 ${formatBillingPeriod(periods[periods.length-1])} (${allDrives.length}乗務)`;
+}
+
+function renderAll(periods, label) {
+  document.getElementById('rangeInfo').textContent =
+    `${formatBillingPeriod(periods[0])} 〜 ${formatBillingPeriod(periods[periods.length-1])} (${allDrives.length}乗務)${label || ''}`;
   renderTrend();
   renderDow();
   renderHeatmap();
   renderWeather();
   renderRanks();
   renderMemos();
+}
+
+async function load() {
+  if (!localStorage.getItem('github_token') || !localStorage.getItem('github_data_repo')) {
+    document.querySelector('main').innerHTML = '<div class="loading">設定からGitHubトークンを設定してください</div>';
+    return;
+  }
+  const current = currentBillingPeriod();
+  const periods = [];
+  for (let i = monthsRange - 1; i >= 0; i--) {
+    periods.push(shiftBillingPeriod(current, -i));
+  }
+
+  // === Phase 1: キャッシュから即時描画 ===
+  const cachedConfig = getConfigCached();
+  const cachedByMonth = periods.map(ym => getDrivesForMonthCached(ym));
+  const cacheComplete = cachedConfig && cachedByMonth.every(d => d !== null);
+  if (cacheComplete) {
+    config = cachedConfig;
+    buildMonthSummaries(periods, cachedByMonth);
+    renderAll(periods, ' · 同期中…');
+  } else {
+    document.getElementById('rangeInfo').textContent = '読み込み中…';
+  }
+
+  // === Phase 2: バックグラウンドで最新を取得 ===
+  try {
+    const [freshConfig, ...freshByMonth] = await Promise.all([
+      getConfig(),
+      ...periods.map(ym => getDrivesForMonth(ym))
+    ]);
+    config = freshConfig;
+    buildMonthSummaries(periods, freshByMonth);
+    renderAll(periods, '');
+  } catch (e) {
+    if (!cacheComplete) {
+      document.getElementById('rangeInfo').textContent = `読み込み失敗: ${e.message}`;
+    }
+  }
 }
 
 function renderDow() {
