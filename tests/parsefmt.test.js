@@ -41,9 +41,31 @@ test('parseFormattedReport: 不完全ヘッダーでも data 部分は処理', (
   assert.equal(r.trips.length, 1);
 });
 
-test('parseFormattedReport: --- 区切りなしならthrow', () => {
-  const text = '日付: 2026-04-26\n車種: premium\n出庫: 07:00\n帰庫: 23:00';
-  assert.throws(() => parseFormattedReport(text), /--- separator not found/);
+test('parseFormattedReport: 区切り線なし＆ヘッダー4行揃えば後続を data 扱い', () => {
+  const text = '日付: 2026-04-26\n車種: premium\n出庫: 07:00\n帰庫: 23:00\nNo,乗車,降車,時間,迎,乗車地,降車地,営Km,男,女,合計\n1,07:00,07:10,0:10,,A,B,1.0,,,"500"';
+  const r = parseFormattedReport(text);
+  assert.equal(r.date, '2026-04-26');
+  assert.equal(r.trips.length, 1);
+});
+
+test('parseFormattedReport: ヘッダーがまったく無ければthrow', () => {
+  const text = '何かのテキスト\nだけがある';
+  assert.throws(() => parseFormattedReport(text), /ヘッダー/);
+});
+
+test('parseFormattedReport: em-dash (—) 区切りも受け入れる', () => {
+  const text = '日付: 2026-04-26\n車種: premium\n出庫: 07:00\n帰庫: 23:00\n—\nNo,乗車,降車,時間,迎,乗車地,降車地,営Km,男,女,合計\n1,07:00,07:10,0:10,,A,B,1.0,,,"500"';
+  const r = parseFormattedReport(text);
+  assert.equal(r.trips.length, 1);
+});
+
+test('parseFormattedReport: 「貸N」行を isCharter:true でパース', () => {
+  const text = '日付: 2026-04-26\n車種: premium\n出庫: 07:00\n帰庫: 23:00\n---\nNo,乗車,降車,時間,迎,乗車地,降車地,営Km,男,女,合計\n貸1,09:32,11:46,2:14,,千代田区六番町,千代田区六番町,20.9,1,,"16,000"';
+  const r = parseFormattedReport(text);
+  assert.equal(r.trips.length, 1);
+  assert.equal(r.trips[0].no, 1);
+  assert.equal(r.trips[0].isCharter, true);
+  assert.equal(r.trips[0].amount, 16000);
 });
 
 test('parseFormattedReport: rawText に元テキストをそのまま含む', () => {

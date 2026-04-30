@@ -15,6 +15,13 @@ function parseKm(s) {
   return parseFloat(s) || 0;
 }
 
+// "1" → 1 / "貸1" → 1 / "キ" → null / "" → null
+function parseNo(noStr) {
+  if (!noStr) return null;
+  const m = noStr.match(/(\d+)/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
 function parseClaudeRow(cells) {
   // [No, 乗車, 降車, 時間, 迎, 乗車地, 降車地, 営Km, 合計, 待機]
   const [no, board, alight, dur, pickup, bp, ap, km, amt, wait] = cells;
@@ -26,10 +33,11 @@ function parseClaudeRow(cells) {
   const amtNum = parseAmount(amt);
   const kmNum = parseKm(km);
   const isCancelMarker = no === 'キ';
+  const isCharter = typeof no === 'string' && no.startsWith('貸');
   const isCancel = isCancelMarker || amtNum === 400 || (kmNum === 0 && (amtNum === 500 || amtNum === 1000));
   return {
     type: 'trip',
-    no: isCancelMarker ? null : parseInt(no, 10),
+    no: isCancelMarker ? null : parseNo(no),
     pickupKind: pickup || '',
     boardTime: board,
     alightTime: alight,
@@ -38,6 +46,7 @@ function parseClaudeRow(cells) {
     km: parseKm(km),
     amount: isCancel ? 0 : parseAmount(amt),
     isPickup: pickup === '迎',
+    isCharter,
     isCancel,
     waitTime: wait || ''
   };
@@ -69,10 +78,11 @@ function parseGeminiRow(cells) {
   const amtNum = parseAmount(amt);
   const kmNum = parseKm(km);
   const isCancelMarker = no === 'キ';
+  const isCharter = typeof no === 'string' && no.startsWith('貸');
   const isCancel = isCancelMarker || amtNum === 400 || (kmNum === 0 && (amtNum === 500 || amtNum === 1000));
   return {
     type: 'trip',
-    no: isCancelMarker ? null : parseInt(no, 10),
+    no: isCancelMarker ? null : parseNo(no),
     pickupKind: pickup || '',
     boardTime: board,
     alightTime: alight,
@@ -81,6 +91,7 @@ function parseGeminiRow(cells) {
     km: parseKm(km),
     amount: isCancel ? 0 : parseAmount(amt),
     isPickup: pickup === '迎',
+    isCharter,
     isCancel,
     waitTime: ''
   };
