@@ -28,13 +28,18 @@
 .dow-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; font-size: 10px; color: var(--muted); text-align: center; }
 .dow-row .sat { color: #1976d2; }
 .dow-row .sun { color: #d32f2f; }
-.sum-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 4px; min-width: 640px; }
-.sum-table th, .sum-table td { padding: 8px 4px; text-align: right; border-bottom: 1px solid #eee; white-space: nowrap; }
-.sum-table th { font-weight: 600; color: var(--muted); font-size: 9px; }
+.sum-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 4px; min-width: 640px; table-layout: auto; }
+.sum-table th, .sum-table td { padding: 8px 4px; text-align: right; border-bottom: 1px solid #eee; white-space: nowrap; height: 32px; }
+.sum-table th { font-weight: 600; color: var(--muted); font-size: 9px; background: #fafafa; }
 .sum-table td.date, .sum-table th.date, .sum-table td.l, .sum-table th.l { text-align: left; }
 .sum-table td.date { cursor: pointer; }
+.sum-table tbody tr:not(.total):nth-child(even) { background: #fcfcfc; }
+.sum-table tbody tr:not(.total):hover { background: #eef5ff; }
 .sum-table tr.total { background: #f5f5f5; font-weight: 600; }
 .sum-table tr.total td { border-top: 2px solid #ddd; }
+.sum-table .dow-sun { color: #d32f2f; font-weight: 600; }
+.sum-table .dow-sat { color: #1976d2; font-weight: 600; }
+.sum-table .memo { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #555; }
 .period-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 4px; min-width: 480px; }
 .period-table th, .period-table td { padding: 8px 4px; text-align: right; border-bottom: 1px solid #eee; white-space: nowrap; }
 .period-table th { font-weight: 600; color: var(--muted); font-size: 9px; }
@@ -233,28 +238,54 @@ function renderSummaryTable(drives) {
   card.style.display = '';
   const sorted = [...drives].sort((a, b) => a.date.localeCompare(b.date));
   const PKEYS = ['morning', 'noon', 'evening', 'night'];
-  let totalIncl = 0, totalExcl = 0, totalKm = 0;
-  let detIncl = 0, detExcl = 0, detCount = 0, detDays = 0, detKm = 0, detTripMin = 0, detTotalMin = 0;
-  const periodTotals = { morning: 0, noon: 0, evening: 0, night: 0 };
-  const rows = sorted.map(d => {
+
+  // 1パス目: max 値を求めて heatmap 用に正規化
+  const dailyAgg = sorted.map(d => {
     const sales = calcDailySales(d);
     const valid = (d.trips || []).filter(t => !t.isCancel);
     const km = valid.reduce((s, t) => s + (t.km || 0), 0);
     const bd = calcTimeBreakdown(d);
     const summary = isSummaryOnly(d);
+    const hourly = bd.totalMin > 0 ? sales.inclTax / (bd.totalMin / 60) : 0;
+    const pb = !summary ? calcPeriodBreakdown(d) : null;
+    return { d, sales, valid, km, bd, summary, hourly, pb, count: valid.length };
+  });
+  const maxIncl = Math.max(...dailyAgg.filter(a => !a.summary).map(a => a.sales.inclTax), 1);
+  const maxHourly = Math.max(...dailyAgg.filter(a => !a.summary).map(a => a.hourly), 1);
+
+  // 緑系の濃淡 (低=薄, 高=濃)
+  function inclBg(v) {
+    if (!v || v <= 0) return '';
+    const r = Math.min(1, v / maxIncl);
+    const alpha = 0.05 + r * 0.45;
+    return `background:rgba(76,175,80,${alpha.toFixed(2)});`;
+  }
+  // オレンジ系 (時間単価)
+  function hourlyBg(v) {
+    if (!v || v <= 0) return '';
+    const r = Math.min(1, v / maxHourly);
+    const alpha = 0.05 + r * 0.45;
+    return `background:rgba(255,152,0,${alpha.toFixed(2)});`;
+  }
+  function dowClass(iso) {
+    const d = new Date(iso + 'T00:00:00+09:00');
+    const dow = d.getDay();
+    return dow === 0 ? 'dow-sun' : dow === 6 ? 'dow-sat' : '';
+  }
+
+  let totalIncl = 0, totalExcl = 0, totalKm = 0;
+  let detIncl = 0, detExcl = 0, detCount = 0, detDays = 0, detKm = 0, detTripMin = 0, detTotalMin = 0;
+  const periodTotals = { morning: 0, noon: 0, evening: 0, night: 0 };
+  const rows = dailyAgg.map(({ d, sales, valid, km, bd, summary, hourly, pb, count }) => {
     totalIncl += sales.inclTax;
     totalExcl += sales.exclTax;
     totalKm += km;
-    let pb = null;
     if (!summary) {
-      const count = valid.length;
       detIncl += sales.inclTax; detExcl += sales.exclTax; detCount += count; detKm += km;
       detTripMin += bd.tripMin; detTotalMin += bd.totalMin;
       detDays++;
-      pb = calcPeriodBreakdown(d);
       for (const k of PKEYS) periodTotals[k] += pb[k].sales;
     }
-    const count = valid.length;
     const dash = '<span style="color:var(--muted);">—</span>';
     const periodCells = PKEYS.map(k => {
       if (!pb) return `<td>${dash}</td>`;
@@ -263,19 +294,20 @@ function renderSummaryTable(drives) {
     }).join('');
     const memoText = (d.reviewMemo || '').trim();
     const memoCell = memoText
-      ? `<td class="l" style="max-width:160px;color:#555;font-size:10px;line-height:1.3;white-space:normal;">${memoText.replace(/</g,'&lt;').replace(/\n/g,' / ')}</td>`
+      ? `<td class="l memo" title="${memoText.replace(/"/g,'&quot;')}">${memoText.replace(/</g,'&lt;').replace(/\n/g,' / ')}</td>`
       : `<td>—</td>`;
-    const hourly = bd.totalMin > 0 ? sales.inclTax / (bd.totalMin / 60) : 0;
+    const inclStyle = !summary ? inclBg(sales.inclTax) : '';
+    const hourlyStyle = !summary ? hourlyBg(hourly) : '';
     return `<tr onclick="location.href='detail.html?date=${d.date}'" style="cursor:pointer;${summary ? 'background:#fafafa;' : ''}">
-      <td class="date">${formatDate(d.date)}${summary ? '<span class="badge" style="font-size:9px;padding:0 4px;background:#ddd;color:#666;margin-left:3px;">概</span>' : ''}</td>
+      <td class="date ${dowClass(d.date)}">${formatDate(d.date)}${summary ? '<span class="badge" style="font-size:9px;padding:0 4px;background:#ddd;color:#666;margin-left:3px;">概</span>' : ''}</td>
       <td>${summary ? dash : count}</td>
-      <td>${formatYen(sales.inclTax)}</td>
+      <td style="${inclStyle}"><strong>${formatYen(sales.inclTax)}</strong></td>
       <td>${formatYen(sales.exclTax)}</td>
       ${periodCells}
       <td>${summary ? dash : km.toFixed(1)}</td>
       <td>${summary ? dash : formatMin(bd.totalMin)}</td>
       <td>${summary ? dash : formatMin(bd.tripMin)}</td>
-      <td>${summary ? dash : formatYen(hourly)}</td>
+      <td style="${hourlyStyle}">${summary ? dash : formatYen(hourly)}</td>
       ${memoCell}
     </tr>`;
   }).join('');
