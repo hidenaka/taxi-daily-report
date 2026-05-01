@@ -80,7 +80,7 @@ if ('serviceWorker' in navigator) {
 import { renderBottomNav, formatYen, formatDate } from './js/app.js';
 import { getDrive, listFiles, saveDriveSafe } from './js/storage.js';
 import { calcDailySales } from './js/payroll.js';
-import { calcTimeBreakdown, hourlyActivity, calcPeriodBreakdown, PERIOD_LABELS, formatMin, timeToMinutes } from './js/chart-helpers.js';
+import { calcTimeBreakdown, hourlyActivity, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, formatMin, timeToMinutes } from './js/chart-helpers.js';
 import { weatherEmoji } from './js/weather.js';
 
 const SHIFT_START_HOUR = 7;
@@ -221,8 +221,12 @@ function renderReviewMemo(drive) {
 }
 
 function renderPeriodTable(drive) {
-  const pb = calcPeriodBreakdown(drive);
-  const keys = ['morning', 'noon', 'evening', 'night'];
+  // 出庫時刻があればシフト別ゾーン(5時間×4)、なければ従来の固定時間帯
+  const useShift = !!drive.departureTime;
+  const zones = useShift ? getShiftZones(drive.departureTime) : null;
+  const pb = useShift ? calcZoneBreakdown(drive, zones) : calcPeriodBreakdown(drive);
+  const keys = useShift ? zones.map(z => z.key) : ['morning', 'noon', 'evening', 'night'];
+  const labelOf = (k) => useShift ? zones.find(z => z.key === k).label : PERIOD_LABELS[k];
   const totalSales = keys.reduce((s, k) => s + pb[k].sales, 0);
   const totalCount = keys.reduce((s, k) => s + pb[k].count, 0);
   const totalTrip = keys.reduce((s, k) => s + pb[k].tripMin, 0);
@@ -236,12 +240,12 @@ function renderPeriodTable(drive) {
       ${cell(valueFn({ sales: totalSales, count: totalCount, tripMin: totalTrip, restMin: totalRest, periodMin: totalPeriod }))}
     </tr>`;
   document.getElementById('periodCard').innerHTML = `
-    <div class="muted">時間帯別サマリー</div>
+    <div class="muted">時間帯別サマリー${useShift ? ' (出庫時刻基準・5時間ずつ)' : ''}</div>
     <div style="overflow-x:auto;">
     <table class="period-table">
       <thead><tr>
         <th class="lbl"></th>
-        ${keys.map(k => `<th>${PERIOD_LABELS[k]}</th>`).join('')}
+        ${keys.map(k => `<th>${labelOf(k)}</th>`).join('')}
         <th>合計</th>
       </tr></thead>
       <tbody>

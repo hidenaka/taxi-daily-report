@@ -263,6 +263,62 @@ export function periodMinutesInDrive(drive) {
   return result;
 }
 
+// 出庫時刻から5時間ずつ4ゾーンを生成（review.html と同じロジックを共有）
+export function getShiftZones(departureTime) {
+  const dep = parseInt((departureTime || '07:00').split(':')[0]);
+  const raw = [];
+  let start = dep;
+  for (let i = 0; i < 4; i++) {
+    const end = (start + 5) % 24;
+    raw.push({ start, end, idx: i });
+    start = end;
+  }
+  const normal = raw.filter(z => z.start < z.end);
+  const wrap = raw.filter(z => z.start > z.end);
+  const colors = ['#1565c0', '#2e7d32', '#e65100', '#37474f'];
+  return [...normal, ...wrap].map(z => ({
+    key: `z${z.idx + 1}`,
+    label: `${z.start}-${z.end}時${z.start > z.end ? '(翌)' : ''}`,
+    start: z.start,
+    end: z.end,
+    color: colors[z.idx]
+  }));
+}
+
+// 1乗務をゾーン配列でグループ集計（review/detail で共通利用）
+// zones: getShiftZones() などの { key, start, end } 配列
+export function calcZoneBreakdown(drive, zones) {
+  const empty = () => ({ sales: 0, count: 0, tripMin: 0, restMin: 0, periodMin: 0 });
+  const result = {};
+  for (const z of zones) result[z.key] = empty();
+  for (const t of (drive.trips || [])) {
+    if (t.isCancel) continue;
+    const k = getZoneKey(t.boardTime, zones);
+    result[k].sales += (t.amount || 0);
+    result[k].count++;
+    let dur = timeToMinutes(t.alightTime) - timeToMinutes(t.boardTime);
+    if (dur < 0) dur += 24 * 60;
+    result[k].tripMin += dur;
+  }
+  for (const r of (drive.rests || [])) {
+    const k = getZoneKey(r.startTime, zones);
+    let dur = timeToMinutes(r.endTime) - timeToMinutes(r.startTime);
+    if (dur < 0) dur += 24 * 60;
+    result[k].restMin += dur;
+  }
+  // 各ゾーンの滞在時間 (出庫〜帰庫をゾーンで分割)
+  if (drive.departureTime && drive.returnTime) {
+    const dep = timeToMinutes(drive.departureTime);
+    let ret = timeToMinutes(drive.returnTime);
+    if (ret < dep) ret += 24 * 60;
+    for (let m = dep; m < ret; m++) {
+      const k = getZoneKey(String(Math.floor(m / 60) % 24).padStart(2, '0') + ':00', zones);
+      result[k].periodMin++;
+    }
+  }
+  return result;
+}
+
 // 1乗務を時間帯別に集計
 export function calcPeriodBreakdown(drive) {
   const empty = () => ({ sales: 0, count: 0, tripMin: 0, restMin: 0, periodMin: 0 });

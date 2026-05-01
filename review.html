@@ -157,7 +157,7 @@ if ('serviceWorker' in navigator) {
 import { renderBottomNav, formatYen, formatDate, formatDateY, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod } from './js/app.js';
 import { getDrivesForMonth, getDrivesForMonthCached, getConfig, getConfigCached } from './js/storage.js';
 import { calcDailySales, calcTotalPay, calcMonthlySales } from './js/payroll.js';
-import { calcTimeBreakdown, dowPeriodMatrix, dowZoneMatrix, dowZoneEfficiency, dowAggregation, rankDrivesBySales, weatherSalesAggregation, WEATHER_LABELS, DOW_LABELS, isSummaryOnly, formatMin, ZONE_PRESETS, formatZoneRange } from './js/chart-helpers.js';
+import { calcTimeBreakdown, dowPeriodMatrix, dowZoneMatrix, dowZoneEfficiency, dowAggregation, rankDrivesBySales, weatherSalesAggregation, WEATHER_LABELS, DOW_LABELS, isSummaryOnly, formatMin, ZONE_PRESETS, formatZoneRange, getShiftZones } from './js/chart-helpers.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('analytics');
 
@@ -362,29 +362,6 @@ function formatLabelValue(v) {
   if (selectedMetric === 'hourly') return formatYen(v);
   if (v >= 100000) return '¥' + (Math.round(v/1000)/10) + '万';
   return formatYen(v);
-}
-
-function getShiftZones(departureTime) {
-  const dep = parseInt((departureTime || '07:00').split(':')[0]);
-  // 出庫時刻から5時間ずつ4ゾーンを生成
-  const raw = [];
-  let start = dep;
-  for (let i = 0; i < 4; i++) {
-    const end = (start + 5) % 24;
-    raw.push({ start, end, idx: i });
-    start = end;
-  }
-  // start > end（24時をまたぐ）のゾーンは配列の最後に配置（getZoneKeyのため）
-  const normal = raw.filter(z => z.start < z.end);
-  const wrap = raw.filter(z => z.start > z.end);
-  const colors = ['#1565c0', '#2e7d32', '#e65100', '#37474f'];
-  return [...normal, ...wrap].map(z => ({
-    key: `z${z.idx + 1}`,
-    label: `${z.start}-${z.end}時`,
-    start: z.start,
-    end: z.end,
-    color: colors[z.idx]
-  }));
 }
 
 function renderHeatmap() {
