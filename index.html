@@ -20,8 +20,12 @@
 .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; margin-top: 6px; }
 .cal-cell { min-height: 56px; padding: 4px 2px; text-align: center; background: #fafafa; border-radius: 4px; font-size: 11px; cursor: default; user-select: none; border: 1px solid #eee; display: flex; flex-direction: column; justify-content: space-between; }
 .cal-cell.actual { background: #e3f2fd; border-color: var(--primary); cursor: pointer; }
+.cal-cell.planned { background: #e8f5e9; border-color: #66bb6a; border-style: dashed; }
+.cal-cell.paid { background: #f3e5f5; border-color: #ce93d8; }
 .cal-cell.today { box-shadow: 0 0 0 2px #f57f17 inset; }
 .cal-cell.dim { background: transparent; border: none; }
+.cal-cell .tag { font-size: 9px; color: #2e7d32; font-weight: 600; line-height: 1; }
+.cal-cell.paid .tag { color: #6a1b9a; }
 .cal-cell .day { font-weight: 600; font-size: 13px; }
 .cal-cell .yen { font-size: 10px; color: var(--primary); font-weight: 600; line-height: 1.1; }
 .cal-cell .ic { font-size: 10px; color: var(--muted); }
@@ -381,8 +385,35 @@ function renderCalendar(drives, range) {
   const firstDate = new Date(range.start + 'T00:00:00+09:00');
   const startDow = firstDate.getDay();
   const today = todayIso();
+  const plannedSet = new Set(config?.shifts?.expandedDates || []);
+  const paidSet = new Set(config?.shifts?.paidLeaveDates || []);
 
-  let html = `
+  // 未来の予定サマリー
+  const futurePlanned = [...plannedSet].filter(d => d >= today && d >= range.start && d <= range.end).sort();
+  const nextShift = futurePlanned[0];
+  const nextShiftLabel = nextShift ? formatNextShift(nextShift, today) : null;
+  const upcomingList = futurePlanned.slice(0, 5).map(d => `<span style="background:#e8f5e9;color:#2e7d32;padding:2px 6px;border-radius:3px;font-size:11px;font-weight:600;cursor:pointer;" onclick="location.href='calendar.html'">${formatNextShift(d, today, true)}</span>`).join(' ');
+  const futureCount = futurePlanned.length;
+
+  let summary = '';
+  if (nextShift) {
+    summary = `
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;font-size:11px;">
+        <span><strong style="color:#2e7d32;">次の出番:</strong> ${nextShiftLabel} ${futureCount > 1 ? `<span class="muted">(今月残り${futureCount}乗務)</span>` : ''}</span>
+        <a href="calendar.html" style="color:var(--primary);text-decoration:none;font-size:11px;">予定編集 ›</a>
+      </div>
+      ${futureCount > 1 ? `<div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:6px;">${upcomingList}${futureCount > 5 ? `<span class="muted" style="font-size:10px;align-self:center;">…他${futureCount - 5}件</span>` : ''}</div>` : ''}
+    `;
+  } else {
+    summary = `
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;font-size:11px;">
+        <span class="muted">今月以降の予定なし</span>
+        <a href="calendar.html" style="color:var(--primary);text-decoration:none;">予定を入れる ›</a>
+      </div>
+    `;
+  }
+
+  let html = summary + `
     <div class="dow-row">
       <div class="sun">日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div class="sat">土</div>
     </div>
@@ -393,22 +424,53 @@ function renderCalendar(drives, range) {
     const day = parseInt(iso.split('-')[2]);
     const drive = driveByDate[iso];
     const isToday = iso === today;
+    const isPlanned = plannedSet.has(iso);
+    const isPaid = paidSet.has(iso);
     const cls = ['cal-cell'];
     if (drive) cls.push('actual');
+    else if (isPaid) cls.push('paid');
+    else if (isPlanned && iso >= today) cls.push('planned');
     if (isToday) cls.push('today');
     let inner;
     if (drive) {
       const sales = calcDailySales(drive);
       const wIcon = pickWeatherIcon(drive.weather);
       inner = `<div class="day">${day}</div><div class="ic">${wIcon}</div><div class="yen">${shortYen(sales.inclTax)}</div>`;
+    } else if (isPaid) {
+      inner = `<div class="day">${day}</div><div class="tag">有給</div>`;
+    } else if (isPlanned && iso >= today) {
+      inner = `<div class="day">${day}</div><div class="tag">予定</div>`;
     } else {
       inner = `<div class="day">${day}</div>`;
     }
-    const onclick = drive ? ` onclick="location.href='detail.html?date=${iso}'"` : '';
-    html += `<div class="${cls.join(' ')}"${onclick}>${inner}</div>`;
+    const onclick = drive ? ` onclick="location.href='detail.html?date=${iso}'"` : ((isPlanned || isPaid) ? ` onclick="location.href='calendar.html'"` : '');
+    const cursor = drive || isPlanned || isPaid ? 'cursor:pointer;' : '';
+    html += `<div class="${cls.join(' ')}" style="${cursor}"${onclick}>${inner}</div>`;
   }
   html += `</div>`;
+  // 凡例
+  html += `
+    <div style="display:flex;gap:10px;margin-top:6px;font-size:10px;color:var(--muted);flex-wrap:wrap;">
+      <span><span style="display:inline-block;width:10px;height:10px;background:#e3f2fd;border:1px solid var(--primary);border-radius:2px;vertical-align:middle;"></span> 実績</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:#e8f5e9;border:1px dashed #66bb6a;border-radius:2px;vertical-align:middle;"></span> 予定</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:#f3e5f5;border:1px solid #ce93d8;border-radius:2px;vertical-align:middle;"></span> 有給</span>
+    </div>
+  `;
   calCard.innerHTML = html;
+}
+
+function formatNextShift(iso, today, brief = false) {
+  const d = new Date(iso + 'T00:00:00+09:00');
+  const t = new Date(today + 'T00:00:00+09:00');
+  const diffDays = Math.round((d - t) / 86400000);
+  const dow = ['日','月','火','水','木','金','土'][d.getDay()];
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  const dateLabel = `${m}/${day}(${dow})`;
+  if (brief) return dateLabel;
+  if (diffDays === 0) return `${dateLabel} 今日`;
+  if (diffDays === 1) return `${dateLabel} 明日`;
+  return `${dateLabel} ${diffDays}日後`;
 }
 
 function shortYen(n) {
