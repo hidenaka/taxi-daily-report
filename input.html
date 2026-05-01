@@ -63,6 +63,23 @@ if ('serviceWorker' in navigator) {
     <textarea id="memoInput" rows="2" class="input"></textarea>
   </section>
 
+  <section class="card" style="padding:8px 12px;">
+    <details id="violationsDetails">
+      <summary style="cursor:pointer;font-size:13px;color:#555;font-weight:600;list-style:none;padding:6px 0;">
+        <span id="violationsSummary">⚠ 違反・遺背（タップで開く）</span>
+      </summary>
+      <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;font-size:13px;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="vContinuous"> 6時間連続運転超過</label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="vRest"> 休憩時間不足</label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="vGarageOver"> 帰庫オーバー</label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="vSpeed"> 速度超過</label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="vAccident"> 事故</label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="vTraffic"> 交通違反</label>
+        <textarea id="violationNote" rows="2" class="input" placeholder="詳細・状況メモ（任意）" style="margin-top:4px;"></textarea>
+      </div>
+    </details>
+  </section>
+
   <button class="btn btn-block" id="saveBtn" style="font-size:16px;padding:14px;">保存</button>
   <div id="saveStatus" class="muted" style="margin-top:6px;text-align:center;"></div>
 </main>
@@ -78,6 +95,50 @@ document.getElementById('navHost').innerHTML = renderBottomNav('input');
 let config = null;
 let parsed = null;
 let editMode = false;
+
+// === 違反・遺背 ===
+const VIOLATION_FIELDS = [
+  { id: 'vContinuous', key: 'continuousDriving', label: '6h連続超過' },
+  { id: 'vRest', key: 'insufficientRest', label: '休憩不足' },
+  { id: 'vGarageOver', key: 'garageOver', label: '帰庫超過' },
+  { id: 'vSpeed', key: 'speeding', label: '速度超過' },
+  { id: 'vAccident', key: 'accident', label: '事故' },
+  { id: 'vTraffic', key: 'trafficViolation', label: '交通違反' }
+];
+function readViolations() {
+  const out = { note: document.getElementById('violationNote').value.trim() };
+  for (const f of VIOLATION_FIELDS) out[f.key] = document.getElementById(f.id).checked;
+  // 何もチェックされておらず note も空ならまとめて null として保存しない
+  const anyChecked = VIOLATION_FIELDS.some(f => out[f.key]);
+  if (!anyChecked && !out.note) return null;
+  return out;
+}
+function writeViolations(v) {
+  for (const f of VIOLATION_FIELDS) {
+    document.getElementById(f.id).checked = !!(v && v[f.key]);
+  }
+  document.getElementById('violationNote').value = (v && v.note) || '';
+  updateViolationsSummary(v);
+  // 既存の違反があればデフォルトで開く
+  if (v && (VIOLATION_FIELDS.some(f => v[f.key]) || v.note)) {
+    document.getElementById('violationsDetails').open = true;
+  }
+}
+function updateViolationsSummary(v) {
+  const summary = document.getElementById('violationsSummary');
+  const labels = VIOLATION_FIELDS.filter(f => v && v[f.key]).map(f => f.label);
+  if (labels.length === 0 && (!v || !v.note)) {
+    summary.textContent = '⚠ 違反・遺背（タップで開く）';
+    summary.style.color = '#555';
+  } else {
+    summary.innerHTML = `<span style="color:#d32f2f;">⚠ 違反・遺背 — ${labels.join('・') || '備考あり'}</span>`;
+  }
+}
+// チェックボックス変更時にサマリー更新
+for (const f of VIOLATION_FIELDS) {
+  document.getElementById(f.id).addEventListener('change', () => updateViolationsSummary(readViolations()));
+}
+document.getElementById('violationNote').addEventListener('input', () => updateViolationsSummary(readViolations()));
 
 async function init() {
   config = await getConfig();
@@ -97,6 +158,7 @@ async function init() {
       document.getElementById('vehicleTypeSel').value = existing.vehicleType;
       document.getElementById('returnTimeInput').value = existing.returnTime || '';
       document.getElementById('memoInput').value = existing.memo || '';
+      writeViolations(existing.violations || null);
       // 既存trips/restsをparsedに直接セットしてプレビュー描画
       parsed = { trips: existing.trips, rests: existing.rests, returnTime: existing.returnTime, format: 'edit' };
       renderPreview();
@@ -293,6 +355,7 @@ document.getElementById('saveBtn').onclick = async () => {
     trips: parsed.trips,
     rests: parsed.rests,
     weather,
+    violations: readViolations(),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };

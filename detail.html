@@ -70,6 +70,7 @@ if ('serviceWorker' in navigator) {
   <section class="card" id="allocCard"></section>
   <section class="card" id="hourCard"></section>
   <section class="card" id="weatherCard"></section>
+  <section class="card" id="violationsCard" style="display:none;"></section>
   <section class="card" id="reviewMemoCard"></section>
   <section class="card" id="tripsCard"></section>
 
@@ -161,6 +162,9 @@ async function load() {
   // 天候 (絵文字+温度のシンプル表記)
   renderWeather(drive);
 
+  // 違反・遺背
+  renderViolations(drive);
+
   // 振り返りメモ
   renderReviewMemo(drive);
 
@@ -189,6 +193,34 @@ function renderWeather(drive) {
       ${cell('夕夜', w.evening)}
       ${cell('深夜', w.night)}
     </div>
+  `;
+}
+
+const VIOLATION_LABELS = {
+  continuousDriving: '6時間連続運転超過',
+  insufficientRest: '休憩時間不足',
+  garageOver: '帰庫オーバー',
+  speeding: '速度超過',
+  accident: '事故',
+  trafficViolation: '交通違反'
+};
+function renderViolations(drive) {
+  const card = document.getElementById('violationsCard');
+  const v = drive.violations;
+  const flags = v ? Object.keys(VIOLATION_LABELS).filter(k => v[k]) : [];
+  if (!v || (flags.length === 0 && !v.note)) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+  card.style.borderLeft = '4px solid #d32f2f';
+  card.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:baseline;">
+      <strong style="color:#d32f2f;">⚠ 違反・遺背</strong>
+      <span class="muted" style="font-size:10px;">編集ページで修正</span>
+    </div>
+    ${flags.length > 0 ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">${flags.map(k => `<span style="background:#ffebee;color:#c62828;padding:2px 6px;border-radius:3px;font-size:11px;font-weight:600;">${VIOLATION_LABELS[k]}</span>`).join('')}</div>` : ''}
+    ${v.note ? `<div style="margin-top:6px;font-size:12px;color:#555;white-space:pre-wrap;">${v.note.replace(/</g,'&lt;')}</div>` : ''}
   `;
 }
 
