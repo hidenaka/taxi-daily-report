@@ -35,7 +35,7 @@ if ('serviceWorker' in navigator) {
     <label class="muted">日報テキストを貼付（Claude/Gemini/フォーマット済み 自動判別）</label>
     <textarea id="rawTextInput" rows="6" style="width:100%;padding:8px;font-family:monospace;font-size:11px;"></textarea>
     <div style="display:flex;gap:8px;margin-top:6px;">
-      <button class="btn" id="parseBtn">パース</button>
+      <button class="btn" id="parseBtn">テキストを読み込む</button>
       <button class="btn" id="copyPromptBtn" style="background:var(--muted);">プロンプトをコピー</button>
     </div>
   </section>
@@ -209,7 +209,7 @@ document.getElementById('parseBtn').onclick = () => {
     }
     renderPreview();
   } catch (e) {
-    alert('パース失敗: ' + e.message);
+    alert('読み込み失敗: ' + e.message);
   }
 };
 
@@ -273,7 +273,7 @@ function renderPreview() {
 }
 
 document.getElementById('saveBtn').onclick = async () => {
-  if (!parsed) return alert('先にテキストをパースしてください');
+  if (!parsed) return alert('先に「テキストを読み込む」を押してください');
   const btn = document.getElementById('saveBtn');
   btn.disabled = true;
   document.getElementById('saveStatus').textContent = '天候取得中…';
