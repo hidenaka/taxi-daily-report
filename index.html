@@ -274,7 +274,7 @@ function renderSummaryTable(drives) {
   }
 
   let totalIncl = 0, totalExcl = 0, totalKm = 0;
-  let detIncl = 0, detExcl = 0, detCount = 0, detDays = 0, detKm = 0, detTripMin = 0, detTotalMin = 0;
+  let detIncl = 0, detExcl = 0, detCount = 0, detDays = 0, detKm = 0, detTripMin = 0, detTotalMin = 0, detRestMin = 0;
   const periodTotals = { morning: 0, noon: 0, evening: 0, night: 0 };
   const rows = dailyAgg.map(({ d, sales, valid, km, bd, summary, hourly, pb, count }) => {
     totalIncl += sales.inclTax;
@@ -282,7 +282,7 @@ function renderSummaryTable(drives) {
     totalKm += km;
     if (!summary) {
       detIncl += sales.inclTax; detExcl += sales.exclTax; detCount += count; detKm += km;
-      detTripMin += bd.tripMin; detTotalMin += bd.totalMin;
+      detTripMin += bd.tripMin; detTotalMin += bd.totalMin; detRestMin += bd.restMin;
       detDays++;
       for (const k of PKEYS) periodTotals[k] += pb[k].sales;
     }
@@ -307,6 +307,7 @@ function renderSummaryTable(drives) {
       <td>${summary ? dash : km.toFixed(1)}</td>
       <td>${summary ? dash : formatMin(bd.totalMin)}</td>
       <td>${summary ? dash : formatMin(bd.tripMin)}</td>
+      <td>${summary ? dash : formatMin(bd.restMin)}</td>
       <td style="${hourlyStyle}">${summary ? dash : formatYen(hourly)}</td>
       ${memoCell}
     </tr>`;
@@ -318,7 +319,7 @@ function renderSummaryTable(drives) {
         <thead><tr>
           <th class="date">日付</th><th>件数</th><th>税込</th><th>税抜</th>
           ${PKEYS.map(k => `<th>${PERIOD_LABELS[k]}</th>`).join('')}
-          <th>km</th><th>乗務</th><th>実車</th><th>時間単価</th><th class="l">メモ</th>
+          <th>実車km</th><th>乗務</th><th>実車</th><th>休憩</th><th>時間単価</th><th class="l">メモ</th>
         </tr></thead>
         <tbody>
           ${rows}
@@ -331,6 +332,7 @@ function renderSummaryTable(drives) {
             <td>${detKm.toFixed(1)}</td>
             <td>${formatMin(detTotalMin)}</td>
             <td>${formatMin(detTripMin)}</td>
+            <td>${formatMin(detRestMin)}</td>
             <td>${detTotalMin > 0 ? formatYen(detIncl / (detTotalMin / 60)) : '—'}</td>
             <td>—</td>
           </tr>
@@ -344,6 +346,7 @@ function renderSummaryTable(drives) {
             <td>${(detKm / detDays).toFixed(1)}</td>
             <td>${formatMin(detTotalMin / detDays)}</td>
             <td>${formatMin(detTripMin / detDays)}</td>
+            <td>${formatMin(detRestMin / detDays)}</td>
             <td>${detTotalMin > 0 ? formatYen(detIncl / (detTotalMin / 60)) : '—'}</td>
             <td>—</td>
           </tr>` : ''}
