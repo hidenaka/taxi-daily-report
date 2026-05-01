@@ -68,7 +68,7 @@ import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBil
 import { getConfig, getDrivesForMonth, flushPendingQueue } from './js/storage.js';
 import { DEFAULT_CONFIG } from './js/default-config.js';
 import { calcTotalPay, calcDailySales, calcMonthlySales } from './js/payroll.js';
-import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js';
+import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js';
 import { processInvite } from './js/invite-crypto.js';
 
 // 暗号化招待リンク処理（優先）
@@ -246,7 +246,11 @@ function renderSummaryTable(drives) {
   if (drives.length === 0) { card.style.display = 'none'; return; }
   card.style.display = '';
   const sorted = [...drives].sort((a, b) => a.date.localeCompare(b.date));
-  const PKEYS = ['morning', 'noon', 'evening', 'night'];
+  // 設定の出庫時刻を起点に5時間ずつ4ゾーン（review/detail と統一）
+  const defaultDep = config?.defaults?.departureTime || '07:00';
+  const zones = getShiftZones(defaultDep);
+  const PKEYS = zones.map(z => z.key);
+  const labelOf = (k) => zones.find(z => z.key === k).label;
 
   // 1パス目: max 値を求めて heatmap 用に正規化
   const dailyAgg = sorted.map(d => {
@@ -256,7 +260,8 @@ function renderSummaryTable(drives) {
     const bd = calcTimeBreakdown(d);
     const summary = isSummaryOnly(d);
     const hourly = bd.totalMin > 0 ? sales.inclTax / (bd.totalMin / 60) : 0;
-    const pb = !summary ? calcPeriodBreakdown(d) : null;
+    // 列は default 出庫時刻基準で揃える(出庫が違う日も同じ絶対時間帯で集計)
+    const pb = !summary ? calcZoneBreakdown(d, zones) : null;
     return { d, sales, valid, km, bd, summary, hourly, pb, count: valid.length };
   });
   const maxIncl = Math.max(...dailyAgg.filter(a => !a.summary).map(a => a.sales.inclTax), 1);
@@ -284,7 +289,8 @@ function renderSummaryTable(drives) {
 
   let totalIncl = 0, totalExcl = 0, totalKm = 0;
   let detIncl = 0, detExcl = 0, detCount = 0, detDays = 0, detKm = 0, detTripMin = 0, detTotalMin = 0, detRestMin = 0;
-  const periodTotals = { morning: 0, noon: 0, evening: 0, night: 0 };
+  const periodTotals = {};
+  for (const k of PKEYS) periodTotals[k] = 0;
   const rows = dailyAgg.map(({ d, sales, valid, km, bd, summary, hourly, pb, count }) => {
     totalIncl += sales.inclTax;
     totalExcl += sales.exclTax;
@@ -327,7 +333,7 @@ function renderSummaryTable(drives) {
       <table class="sum-table">
         <thead><tr>
           <th class="date">日付</th><th>件数</th><th>税込</th><th>税抜</th>
-          ${PKEYS.map(k => `<th>${PERIOD_LABELS[k]}</th>`).join('')}
+          ${PKEYS.map(k => `<th>${labelOf(k)}</th>`).join('')}
           <th>実車km</th><th>乗務</th><th>実車</th><th>休憩</th><th>時間単価</th><th class="l">メモ</th>
         </tr></thead>
         <tbody>
@@ -362,7 +368,7 @@ function renderSummaryTable(drives) {
         </tbody>
       </table>
     </div>
-    <p class="muted" style="font-size:10px;margin-top:4px;">「概」=サマリーのみの日。乗務=出庫〜帰庫。実車=お客様乗車中。税抜=税込/1.1</p>
+    <p class="muted" style="font-size:10px;margin-top:4px;">時間帯列は出庫${defaultDep}基準で5時間ずつ4ゾーン(分析ページと統一)。「概」=サマリーのみの日。乗務=出庫〜帰庫。実車=お客様乗車中。税抜=税込/1.1</p>
   `;
 }
 
