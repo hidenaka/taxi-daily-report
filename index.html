@@ -151,6 +151,12 @@ async function render() {
   // 月度合計営収+1乗務平均(税込、実績ベース)
   const monthly = calcMonthlySales(drives);
   const avgSalesIncl = actualResult.shiftCount > 0 ? monthly.inclTax / actualResult.shiftCount : 0;
+  // 1〜11乗務目までの税抜平均営収(歩率判定用)。歩率は11乗務目までの平均で決まる
+  const FIRST_N_FOR_RATE = 11;
+  const sortedForRate = [...drives].sort((a, b) => a.date.localeCompare(b.date)).slice(0, FIRST_N_FOR_RATE);
+  const firstNExcl = sortedForRate.reduce((s, d) => s + calcDailySales(d).exclTax, 0);
+  const firstNCount = sortedForRate.length;
+  const avgFirstNExcl = firstNCount > 0 ? firstNExcl / firstNCount : 0;
 
   if (isPast || drives.length >= respShifts) {
     summaryHtml += `
@@ -160,6 +166,7 @@ async function render() {
       <hr style="border:none;border-top:1px dashed #ddd;margin:6px 0;">
       <div class="kv"><div>月度合計 営収(税込)</div><div><strong>${formatYen(monthly.inclTax)}</strong></div></div>
       <div class="kv"><div>1乗務平均 営収(税込)</div><div><strong>${formatYen(avgSalesIncl)}</strong></div></div>
+      <div class="kv"><div>1乗務平均 営収(税抜・1〜${FIRST_N_FOR_RATE}乗務)<span class="badge" style="font-size:9px;background:#e3f2fd;color:#1565c0;">歩率判定</span></div><div><strong>${formatYen(avgFirstNExcl)}</strong>${firstNCount < FIRST_N_FOR_RATE ? ` <span class="muted" style="font-size:10px;">(${firstNCount}/${FIRST_N_FOR_RATE}乗務)</span>` : ''}</div></div>
       ` : ''}
     `;
   } else if (isCurrent && predicted) {
@@ -170,6 +177,7 @@ async function render() {
       <hr style="border:none;border-top:1px dashed #ddd;margin:6px 0;">
       <div class="kv"><div>月度合計 営収(税込)</div><div><strong>${formatYen(monthly.inclTax)}</strong></div></div>
       <div class="kv"><div>1乗務平均 営収(税込)</div><div><strong>${formatYen(avgSalesIncl)}</strong></div></div>
+      <div class="kv"><div>1乗務平均 営収(税抜・1〜${FIRST_N_FOR_RATE}乗務)<span class="badge" style="font-size:9px;background:#e3f2fd;color:#1565c0;">歩率判定</span></div><div><strong>${formatYen(avgFirstNExcl)}</strong>${firstNCount < FIRST_N_FOR_RATE ? ` <span class="muted" style="font-size:10px;">(${firstNCount}/${FIRST_N_FOR_RATE}乗務)</span>` : ''}</div></div>
       <hr style="border:none;border-top:1px dashed #ddd;margin:6px 0;">
       <div class="kv"><div>月度予想 総支給<span class="badge predict">予測</span></div><div><strong>${formatYen(predicted.total)}</strong></div></div>
       <div class="kv"><div>月度予想 手取り</div><div style="color:var(--primary);"><strong>${formatYen(predictedTakeHome)}</strong></div></div>
@@ -219,6 +227,7 @@ async function render() {
       <hr style="border:none;border-top:1px dashed #ddd;margin:6px 0;">
       <div class="kv"><div>残り乗務</div><div><strong>${remainingShifts}乗務</strong></div></div>
       <div class="kv"><div>1乗務あたり必要 売上(税込)</div><div><strong>${formatYen(perShiftSalesInclTax)}</strong></div></div>
+      <div class="kv"><div>1乗務あたり必要 売上(税抜)</div><div><strong>${formatYen(perShiftSalesExclTax)}</strong></div></div>
       ` : '<p class="muted" style="font-size:11px;margin-top:6px;">責任出番達成済</p>'}
     `;
   } else {
