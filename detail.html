@@ -78,10 +78,10 @@ if ('serviceWorker' in navigator) {
 <div id="navHost"></div>
 <script type="module">
 import { renderBottomNav, formatYen, formatDate } from './js/app.js';
-import { getDrive, listFiles, saveDriveSafe } from './js/storage.js';
+import { getDrive, listFiles, saveDriveSafe, getConfig } from './js/storage.js';
 import { calcDailySales } from './js/payroll.js';
 import { calcTimeBreakdown, hourlyActivity, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, formatMin, timeToMinutes } from './js/chart-helpers.js';
-import { weatherEmoji } from './js/weather.js';
+import { weatherEmoji, fetchWeatherForDate } from './js/weather.js';
 
 const SHIFT_START_HOUR = 7;
 function shiftHour(h) { return h < SHIFT_START_HOUR ? h + 24 : h; }
@@ -159,25 +159,7 @@ async function load() {
   renderHourChart(drive);
 
   // 天候 (絵文字+温度のシンプル表記)
-  if (drive.weather) {
-    const w = drive.weather;
-    const cell = (lbl, p) => `<div style="text-align:center;flex:1;">
-      <div style="font-size:10px;color:var(--muted);">${lbl}</div>
-      <div style="font-size:24px;line-height:1.2;">${p ? weatherEmoji(p.code) : '—'}</div>
-      <div style="font-size:11px;color:#444;">${p?.tempAvg != null ? p.tempAvg + '℃' : ''}${p?.precipMm > 0 ? ` / ${p.precipMm}mm` : ''}</div>
-    </div>`;
-    document.getElementById('weatherCard').innerHTML = `
-      <div class="muted">天候</div>
-      <div style="display:flex;gap:4px;margin-top:6px;">
-        ${cell('朝', w.morning)}
-        ${cell('昼', w.noon)}
-        ${cell('夕夜', w.evening)}
-        ${cell('深夜', w.night)}
-      </div>
-    `;
-  } else {
-    document.getElementById('weatherCard').innerHTML = `<div class="muted">天候未取得</div>`;
-  }
+  renderWeather(drive);
 
   // 振り返りメモ
   renderReviewMemo(drive);
@@ -188,6 +170,50 @@ async function load() {
   const goEdit = () => location.href = `input.html?date=${date}`;
   document.getElementById('editBtn').onclick = goEdit;
   document.getElementById('editBtnTop').onclick = goEdit;
+}
+
+function renderWeather(drive) {
+  const card = document.getElementById('weatherCard');
+  const w = drive.weather;
+  const cell = (lbl, p) => `<div style="text-align:center;flex:1;">
+    <div style="font-size:10px;color:var(--muted);">${lbl}</div>
+    <div style="font-size:24px;line-height:1.2;">${p ? weatherEmoji(p.code) : '—'}</div>
+    <div style="font-size:11px;color:#444;">${p?.tempAvg != null ? p.tempAvg + '℃' : ''}${p?.precipMm > 0 ? ` / ${p.precipMm}mm` : ''}</div>
+  </div>`;
+  card.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:baseline;">
+      <span class="muted">${w ? '天候' : '天候未取得'}</span>
+      <button id="refetchWxBtn" style="background:#f0f0f0;color:#333;border:1px solid #ccc;border-radius:3px;padding:2px 8px;font-size:10px;cursor:pointer;">${w ? '再取得' : '取得'}</button>
+    </div>
+    ${w ? `
+    <div style="display:flex;gap:4px;margin-top:6px;">
+      ${cell('朝', w.morning)}
+      ${cell('昼', w.noon)}
+      ${cell('夕夜', w.evening)}
+      ${cell('深夜', w.night)}
+    </div>` : ''}
+    <span id="wxStatus" class="muted" style="font-size:10px;"></span>
+  `;
+  document.getElementById('refetchWxBtn').onclick = async () => {
+    const btn = document.getElementById('refetchWxBtn');
+    const status = document.getElementById('wxStatus');
+    btn.disabled = true;
+    status.textContent = '取得中…';
+    try {
+      const config = await getConfig();
+      if (!config?.weatherLocation) throw new Error('設定の天候取得地点が未設定');
+      const fresh = await fetchWeatherForDate(drive.date, config.weatherLocation);
+      drive.weather = fresh;
+      drive.updatedAt = new Date().toISOString();
+      await saveDriveSafe(drive);
+      renderWeather(drive);
+      const s = document.getElementById('wxStatus');
+      if (s) { s.textContent = '✓ 更新完了'; setTimeout(() => s.textContent = '', 2000); }
+    } catch (e) {
+      status.textContent = '✗ ' + e.message;
+      btn.disabled = false;
+    }
+  };
 }
 
 function renderReviewMemo(drive) {
