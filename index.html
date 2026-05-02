@@ -230,6 +230,8 @@ async function render() {
       ${remainingShifts > 0 ? `
       <hr style="border:none;border-top:1px dashed #ddd;margin:6px 0;">
       <div class="kv"><div>残り乗務</div><div><strong>${remainingShifts}乗務</strong></div></div>
+      <div class="kv"><div>残り必要総売上(税込)</div><div><strong>${formatYen(perShiftSalesInclTax * remainingShifts)}</strong></div></div>
+      <div class="kv"><div>残り必要総売上(税抜)</div><div><strong>${formatYen(perShiftSalesExclTax * remainingShifts)}</strong></div></div>
       <div class="kv"><div>1乗務あたり必要 売上(税込)</div><div><strong>${formatYen(perShiftSalesInclTax)}</strong></div></div>
       <div class="kv"><div>1乗務あたり必要 売上(税抜)</div><div><strong>${formatYen(perShiftSalesExclTax)}</strong></div></div>
       ` : '<p class="muted" style="font-size:11px;margin-top:6px;">責任出番達成済</p>'}
