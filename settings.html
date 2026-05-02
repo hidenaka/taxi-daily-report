@@ -35,8 +35,14 @@ if ('serviceWorker' in navigator) {
     <h3>ユーザー <span class="muted" style="font-size:11px;font-weight:normal;background:var(--bg);padding:2px 6px;border-radius:4px;border:1px solid var(--border);">自動設定済み</span></h3>
     <p class="muted" style="font-size:11px;margin-top:-4px;margin-bottom:6px;">管理者配布リンクから自動設定されています。データ保存先のフォルダ名として使用されます。</p>
     <label class="muted">あなたのユーザーID(共有時のフォルダ名)</label>
-    <input class="input" id="userIdInput" placeholder="user_self" pattern="^[a-z][a-z0-9_]*$" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" readonly style="background:var(--bg);">
+    <input class="input" id="userIdInput" placeholder="user_self" pattern="^[a-z][a-z0-9_]*$" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
     <p class="muted" style="font-size:10px;margin-top:2px;">英小文字始まり・英小文字/数字/アンダースコアのみ。本名は推奨しない(例: user_self, user_a)。</p>
+    <div style="margin-top:10px;padding:10px;background:var(--bg);border-radius:6px;border:1px solid var(--border);">
+      <label class="muted" style="font-size:11px;display:block;margin-bottom:4px;">認証用 PAT（userId変更時のみ入力）</label>
+      <input class="input" id="userIdPatInput" type="password" placeholder="新しいPATを入力" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="font-size:13px;">
+      <button class="btn" id="changeUserIdBtn" style="margin-top:6px;width:100%;font-size:13px;padding:8px;">🔐 PAT認証してuserId変更</button>
+      <div id="userIdChangeStatus" class="muted" style="margin-top:4px;font-size:11px;white-space:pre-wrap;"></div>
+    </div>
     <label class="muted" style="margin-top:8px;display:block;">表示名(任意)</label>
     <input class="input" id="displayNameInput" placeholder="自分">
     <p class="muted" style="font-size:10px;margin-top:2px;">集計画面の表示用。</p>
@@ -105,11 +111,48 @@ document.getElementById('tokenInput').value = localStorage.getItem('github_token
 // userId 初期表示
 document.getElementById('userIdInput').value = getMyUserId();
 
-document.getElementById('saveGhBtn').onclick = () => {
-  localStorage.setItem('github_data_repo', document.getElementById('repoInput').value.trim());
-  localStorage.setItem('github_token', document.getElementById('tokenInput').value.trim());
-  document.getElementById('ghStatus').textContent = '保存しました。設定を読み込みます…';
-  loadConfig();
+document.getElementById('saveGhBtn').onclick = async () => {
+  const token = document.getElementById('tokenInput').value.trim();
+  const repo = document.getElementById('repoInput').value.trim();
+
+  if (!token) {
+    document.getElementById('ghStatus').textContent = '✗ PATを入力してください';
+    return;
+  }
+
+  document.getElementById('ghStatus').textContent = 'PATを認証中…';
+
+  try {
+    // PATでGitHubユーザー名を取得
+    const r = await fetch('https://api.github.com/user', {
+      headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json' }
+    });
+    if (r.status === 401) {
+      document.getElementById('ghStatus').textContent = '✗ PATが無効か期限切れです';
+      return;
+    }
+    if (!r.ok) {
+      document.getElementById('ghStatus').textContent = `✗ 認証失敗: ${r.status}`;
+      return;
+    }
+    const u = await r.json();
+    const githubUser = u.login;
+
+    // userIdを自動設定（GitHubログイン名を正規化）
+    const normalizedId = githubUser.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    setMyUserId(normalizedId);
+    document.getElementById('userIdInput').value = normalizedId;
+
+    // PATとリポジトリを保存
+    localStorage.setItem('github_token', token);
+    if (repo) localStorage.setItem('github_data_repo', repo);
+
+    document.getElementById('ghStatus').textContent = `✓ 認証成功: ${githubUser} → userId: ${normalizedId}\nページを再読み込みします…`;
+
+    setTimeout(() => location.reload(), 800);
+  } catch (e) {
+    document.getElementById('ghStatus').textContent = '✗ 認証エラー: ' + e.message;
+  }
 };
 
 document.getElementById('testBtn').onclick = async () => {
@@ -208,6 +251,35 @@ function renderRateTable(rt) {
   rateDiv.innerHTML = `<strong>12-13乗務率</strong> <input class="input" id="rate1213" type="number" step="0.01" value="${rt['12_13rate']}" style="width:100px;">`;
   host.appendChild(rateDiv);
 }
+
+document.getElementById('changeUserIdBtn').onclick = async () => {
+  const status = document.getElementById('userIdChangeStatus');
+  const pat = document.getElementById('userIdPatInput').value.trim();
+  const newUserId = document.getElementById('userIdInput').value.trim();
+
+  if (!pat) { status.textContent = '✗ PATを入力してください'; return; }
+  if (!newUserId) { status.textContent = '✗ userIdを入力してください'; return; }
+  if (!isValidUserId(newUserId)) { status.textContent = '✗ userIdの形式が不正です（英小文字始まり・英小文字/数字/アンダースコアのみ）'; return; }
+
+  status.textContent = 'PATを認証中…';
+
+  try {
+    const r = await fetch('https://api.github.com/user', {
+      headers: { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json' }
+    });
+    if (r.status === 401) { status.textContent = '✗ PATが無効か期限切れです'; return; }
+    if (!r.ok) { status.textContent = `✗ 認証失敗: ${r.status}`; return; }
+    const u = await r.json();
+
+    // userId変更 + PAT更新
+    setMyUserId(newUserId);
+    localStorage.setItem('github_token', pat);
+    status.textContent = `✓ 認証成功 (${u.login})\nuserId を ${newUserId} に変更しました\nページを再読み込みします…`;
+    setTimeout(() => location.reload(), 800);
+  } catch (e) {
+    status.textContent = '✗ エラー: ' + e.message;
+  }
+};
 
 document.getElementById('saveConfigBtn').onclick = async () => {
   if (!currentConfig) { alert('設定が読み込まれていません'); return; }
