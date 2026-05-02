@@ -69,6 +69,12 @@ if ('serviceWorker' in navigator) {
     <p class="muted" style="font-size:10px;margin-top:2px;">給与明細の「有給手当」÷有給日数。カレンダーで設定した有給日数×この金額を予測/実績に加算。</p>
   </section>
 
+  <section class="card" id="adminToolsSection" style="display:none;">
+    <h3>🛠️ 管理者ツール</h3>
+    <p class="muted" style="font-size:11px;margin-bottom:8px;">ユーザー招待・管理</p>
+    <a href="admin.html" class="btn" style="display:block;text-align:center;text-decoration:none;width:100%;">管理者ツールを開く</a>
+  </section>
+
   <section class="card">
     <h3>天候地点</h3>
     <input type="hidden" id="latInput" value="35.6938">
@@ -182,9 +188,11 @@ async function loadConfig() {
     document.getElementById('displayNameInput').value = currentConfig.displayName || '';
     if (myRole === 'admin') {
       document.getElementById('rateTableSection').style.display = '';
+      document.getElementById('adminToolsSection').style.display = '';
       renderRateTable(currentConfig.rateTable);
     } else {
       document.getElementById('rateTableSection').style.display = 'none';
+      document.getElementById('adminToolsSection').style.display = 'none';
     }
     document.getElementById('ghStatus').textContent = '読み込み成功';
   } catch (e) {
