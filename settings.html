@@ -92,6 +92,7 @@ if ('serviceWorker' in navigator) {
 <script type="module">
 import { renderBottomNav } from './js/app.js';
 import { getConfig, saveConfig, getDrivesForMonth, getMyUserId, setMyUserId, getUserRoleMap } from './js/storage.js';
+import { isValidUserId } from './js/userid.js';
 import { DEFAULT_CONFIG } from './js/default-config.js';
 import { calcTotalPay } from './js/payroll.js';
 
@@ -211,7 +212,6 @@ function renderRateTable(rt) {
   host.appendChild(rateDiv);
 }
 
-document.getElementById('changeUserIdBtn').onclick = async () => {
 document.getElementById('switchAccountBtn').onclick = () => {
   const status = document.getElementById('switchAccountStatus');
   const newUserId = document.getElementById('userIdInput').value.trim();
