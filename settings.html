@@ -18,32 +18,35 @@ if ('serviceWorker' in navigator) {
 <main style="padding:14px;">
   <h1>設定</h1>
 
-  <section class="card">
-    <h3>GitHub（データリポジトリ）</h3>
-    <label class="muted">データリポジトリ (username/repo-data)</label>
-    <input class="input" id="repoInput" placeholder="hidenaka/taxi-daily-report-data" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="font-size:13px;">
-    <label class="muted" style="margin-top:8px;display:block;">Personal Access Token (repo権限)</label>
-    <input class="input" id="tokenInput" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
-    <div style="display:flex;gap:6px;margin-top:8px;">
-      <button class="btn" id="saveGhBtn" style="flex:1;">保存</button>
-      <button class="btn" id="testBtn" style="flex:1;background:var(--gray);">接続テスト</button>
+  <details class="card" id="adminSection" style="padding:0;border:none;">
+    <summary style="padding:14px 20px;cursor:pointer;font-size:15px;font-weight:600;list-style:none;display:flex;justify-content:space-between;align-items:center;">
+      <span>🔧 GitHub設定（管理者専用）</span>
+      <span style="font-size:11px;color:var(--muted);font-weight:400;">タップで開く</span>
+    </summary>
+    <div style="padding:0 20px 14px;">
+      <label class="muted">データリポジトリ (username/repo-data)</label>
+      <input class="input" id="repoInput" placeholder="hidenaka/taxi-daily-report-data" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="font-size:13px;">
+      <label class="muted" style="margin-top:8px;display:block;">Personal Access Token (repo権限)</label>
+      <input class="input" id="tokenInput" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <button class="btn" id="saveGhBtn" style="flex:1;">保存</button>
+        <button class="btn" id="testBtn" style="flex:1;background:var(--gray);">接続テスト</button>
+      </div>
+      <div id="ghStatus" class="muted" style="margin-top:6px;white-space:pre-wrap;font-family:monospace;font-size:11px;"></div>
     </div>
-    <div id="ghStatus" class="muted" style="margin-top:6px;white-space:pre-wrap;font-family:monospace;font-size:11px;"></div>
-  </section>
+  </details>
 
   <section class="card">
-    <h3>ユーザー <span class="muted" style="font-size:11px;font-weight:normal;background:var(--bg);padding:2px 6px;border-radius:4px;border:1px solid var(--border);">自動設定済み</span></h3>
-    <p class="muted" style="font-size:11px;margin-top:-4px;margin-bottom:6px;">管理者配布リンクから自動設定されています。データ保存先のフォルダ名として使用されます。</p>
-    <label class="muted">あなたのユーザーID(共有時のフォルダ名)</label>
-    <input class="input" id="userIdInput" placeholder="user_self" pattern="^[a-z][a-z0-9_]*$" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
-    <p class="muted" style="font-size:10px;margin-top:2px;">英小文字始まり・英小文字/数字/アンダースコアのみ。本名は推奨しない(例: user_self, user_a)。</p>
-    <button class="btn" id="switchAccountBtn" style="margin-top:8px;width:100%;">🔄 アカウントを切り替え</button>
+    <h3>アカウント</h3>
+    <div style="padding:12px;background:var(--bg);border-radius:8px;margin-bottom:10px;">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:2px;">現在のアカウント</div>
+      <div style="font-size:18px;font-weight:600;" id="currentUserIdDisplay">--</div>
+    </div>
+    <button class="btn" id="switchAccountBtn" style="width:100%;">🔄 アカウントを切り替え</button>
     <div id="switchAccountStatus" class="muted" style="margin-top:4px;font-size:11px;"></div>
-    <label class="muted" style="margin-top:8px;display:block;">表示名(任意)</label>
+    <label class="muted" style="margin-top:12px;display:block;">表示名(任意)</label>
     <input class="input" id="displayNameInput" placeholder="自分">
     <p class="muted" style="font-size:10px;margin-top:2px;">集計画面の表示用。</p>
-
-    <div id="userStatus" class="muted" style="margin-top:6px;font-size:11px;"></div>
   </section>
 
   <section class="card">
@@ -106,7 +109,7 @@ document.getElementById('repoInput').value = localStorage.getItem('github_data_r
 document.getElementById('tokenInput').value = localStorage.getItem('github_token') || '';
 
 // userId 初期表示
-document.getElementById('userIdInput').value = getMyUserId();
+document.getElementById('currentUserIdDisplay').textContent = getMyUserId();
 
 document.getElementById('saveGhBtn').onclick = () => {
   localStorage.setItem('github_data_repo', document.getElementById('repoInput').value.trim());
@@ -214,18 +217,23 @@ function renderRateTable(rt) {
 
 document.getElementById('switchAccountBtn').onclick = () => {
   const status = document.getElementById('switchAccountStatus');
-  const newUserId = document.getElementById('userIdInput').value.trim();
-
-  if (!newUserId) { status.textContent = '✗ userIdを入力してください'; return; }
-  if (!isValidUserId(newUserId)) { status.textContent = '✗ userIdの形式が不正です（英小文字始まり・英小文字/数字/アンダースコアのみ）'; return; }
-
   const currentId = getMyUserId();
-  if (newUserId === currentId) { status.textContent = '✓ 同じuserIdです'; return; }
 
-  if (!confirm(`アカウントを「${currentId}」から「${newUserId}」に切り替えますか？\nページが再読み込みされます。`)) return;
+  // プロンプトでuserIdを入力（画面に入力欄がないため、知っている人だけ入力できる）
+  const newUserId = prompt(`アカウント切り替え\n\n現在: ${currentId}\n\n切り替え先のuserIdを入力してください:`);
 
-  setMyUserId(newUserId);
-  status.textContent = `✓ 「${newUserId}」に切り替えました。再読み込みします…`;
+  if (newUserId === null) { status.textContent = 'キャンセルしました'; return; } // キャンセル
+  const trimmed = newUserId.trim();
+
+  if (!trimmed) { status.textContent = '✗ userIdを入力してください'; return; }
+  if (!isValidUserId(trimmed)) { status.textContent = '✗ userIdの形式が不正です（英小文字始まり・英小文字/数字/アンダースコアのみ）'; return; }
+
+  if (trimmed === currentId) { status.textContent = '✓ 同じuserIdです'; return; }
+
+  if (!confirm(`アカウントを「${currentId}」から「${trimmed}」に切り替えますか？\nページが再読み込みされます。`)) return;
+
+  setMyUserId(trimmed);
+  status.textContent = `✓ 「${trimmed}」に切り替えました。再読み込みします…`;
   setTimeout(() => location.reload(), 400);
 };
 
