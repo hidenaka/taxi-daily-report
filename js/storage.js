@@ -26,6 +26,7 @@ export const getDrivesForMonth = provider.getDrivesForMonth;
 export const getDrivesForMonthCached = provider.getDrivesForMonthCached;
 export const putFile = provider.putFile;
 export const saveDrive = provider.saveDrive;
+export const deleteDrive = provider.deleteDrive;
 export const saveConfig = provider.saveConfig;
 export const saveDriveSafe = provider.saveDriveSafe;
 export const flushPendingQueue = provider.flushPendingQueue;

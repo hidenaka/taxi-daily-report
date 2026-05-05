@@ -75,11 +75,12 @@ if ('serviceWorker' in navigator) {
   <section class="card" id="tripsCard"></section>
 
   <button class="btn btn-block" id="editBtn" style="margin-top:8px;">この乗務を編集</button>
+  <button class="btn btn-block" id="deleteBtn" style="margin-top:8px;background:#ffebee;color:#d32f2f;border:1px solid #ef9a9a;">🗑 この乗務を削除</button>
 </main>
 <div id="navHost"></div>
 <script type="module">
 import { renderBottomNav, formatYen, formatDate } from './js/app.js';
-import { getDrive, listFiles, saveDriveSafe } from './js/storage.js';
+import { getDrive, listFiles, saveDriveSafe, deleteDrive } from './js/storage.js';
 import { calcDailySales } from './js/payroll.js';
 import { calcTimeBreakdown, hourlyActivity, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, formatMin, timeToMinutes } from './js/chart-helpers.js';
 import { weatherEmoji } from './js/weather.js';
@@ -174,6 +175,17 @@ async function load() {
   const goEdit = () => location.href = `input.html?date=${date}`;
   document.getElementById('editBtn').onclick = goEdit;
   document.getElementById('editBtnTop').onclick = goEdit;
+
+  document.getElementById('deleteBtn').onclick = async () => {
+    if (!confirm(`${formatDate(drive.date)} の乗務データを削除しますか？\nこの操作は元に戻せません。`)) return;
+    try {
+      await deleteDrive(drive.date);
+      alert('削除しました');
+      location.href = 'index.html';
+    } catch (e) {
+      alert('削除に失敗しました: ' + e.message);
+    }
+  };
 }
 
 function renderWeather(drive) {
