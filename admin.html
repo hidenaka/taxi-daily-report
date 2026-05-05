@@ -70,10 +70,10 @@ localStorage.removeItem('github_data_repo');
     </section>
 
     <section class="admin-card" id="keihoTemplateSection" style="display:none;">
-      <h3>📋 けーほーテンプレート</h3>
-      <p class="muted" style="font-size:11px;margin-bottom:8px;">けーほー所属用のデフォルトテンプレートが未作成です。</p>
+      <h3>📋 デフォルトテンプレート</h3>
+      <p class="muted" style="font-size:11px;margin-bottom:8px;">標準設定のテンプレートが未作成です。新規ユーザー作成時のデフォルトとして使用されます。</p>
       <button class="btn" id="createKeihoTemplateBtn" style="width:100%;background:#e65100;color:#fff;">
-        けーほーテンプレートを作成
+        デフォルトテンプレートを作成
       </button>
     </section>
 
@@ -322,19 +322,18 @@ async function loadTemplates() {
   }
 }
 
-// けーほーテンプレート作成ボタンの表示判定
+// デフォルトテンプレート作成ボタンの表示判定
 async function checkAndShowKeihoTemplateButton() {
   try {
     const templates = await getCompanyTemplates();
-    const hasKeiho = templates.some(t => t.id === 'keiho' || t.name === 'けーほー');
-    console.log('[DEBUG] けーほーテンプレート存在:', hasKeiho);
-    document.getElementById('keihoTemplateSection').style.display = hasKeiho ? 'none' : '';
+    const hasDefault = templates.some(t => t.id === 'keiho');
+    document.getElementById('keihoTemplateSection').style.display = hasDefault ? 'none' : '';
   } catch (e) {
     console.error('テンプレート確認失敗:', e);
   }
 }
 
-// けーほーテンプレート作成
+// デフォルトテンプレート作成
 document.getElementById('createKeihoTemplateBtn').onclick = async () => {
   const btn = document.getElementById('createKeihoTemplateBtn');
   btn.disabled = true;
@@ -342,7 +341,7 @@ document.getElementById('createKeihoTemplateBtn').onclick = async () => {
   
   try {
     const templateData = {
-      name: 'けーほー',
+      name: 'デフォルト',
       payrollMode: DEFAULT_CONFIG.payrollMode || 'step_rate',
       fixedRate: DEFAULT_CONFIG.fixedRate || 0.55,
       responsibilityShifts: DEFAULT_CONFIG.responsibilityShifts || 11,
@@ -353,13 +352,13 @@ document.getElementById('createKeihoTemplateBtn').onclick = async () => {
     };
     
     await saveCompanyTemplate('keiho', templateData);
-    alert('けーほーテンプレートを作成しました');
+    alert('デフォルトテンプレートを作成しました');
     document.getElementById('keihoTemplateSection').style.display = 'none';
     loadTemplates();
   } catch (e) {
     alert('作成に失敗しました: ' + e.message);
     btn.disabled = false;
-    btn.textContent = 'けーほーテンプレートを作成';
+    btn.textContent = 'デフォルトテンプレートを作成';
   }
 };
 
