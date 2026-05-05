@@ -18,12 +18,15 @@ export async function initAuth() {
         currentUser = user;
         // Load or create user profile
         try {
-          const userDoc = await getDoc(doc(db, 'users', user.uid));
+           const userDoc = await getDoc(doc(db, 'users', user.uid));
           if (userDoc.exists()) {
             currentUserId = userDoc.data().userId;
           } else {
-            // Generate a default userId
-            currentUserId = generateUserId();
+            // 既存のlocalStorage userIdがあれば優先、なければランダム生成
+            const existingUserId = localStorage.getItem('taxi_user_id');
+            currentUserId = (existingUserId && /^[a-z][a-z0-9_]*$/.test(existingUserId))
+              ? existingUserId
+              : generateUserId();
             await setDoc(doc(db, 'users', user.uid), {
               userId: currentUserId,
               createdAt: new Date().toISOString(),
@@ -39,9 +42,13 @@ export async function initAuth() {
       } else {
         // Not signed in, sign in anonymously
         try {
-          const result = await signInAnonymously(auth);
+           const result = await signInAnonymously(auth);
           currentUser = result.user;
-          currentUserId = generateUserId();
+          // 既存のlocalStorage userIdがあれば優先、なければランダム生成
+          const existingUserId = localStorage.getItem('taxi_user_id');
+          currentUserId = (existingUserId && /^[a-z][a-z0-9_]*$/.test(existingUserId))
+            ? existingUserId
+            : generateUserId();
           await setDoc(doc(db, 'users', currentUser.uid), {
             userId: currentUserId,
             createdAt: new Date().toISOString(),
