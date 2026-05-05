@@ -2,6 +2,7 @@
 import { db } from './firebase-init.js';
 import { getUserId, waitForAuth, setUserId as fbSetUserId } from './firebase-auth.js';
 import { DEFAULT_USER_ID, isValidUserId, normalizeUserId } from './userid.js';
+import { getBillingPeriodRange } from './app.js';
 import { 
   doc, getDoc, setDoc, deleteDoc, collection, 
   query, where, getDocs, orderBy, writeBatch,
@@ -41,15 +42,13 @@ export async function deleteDrive(date) {
 export async function getDrivesForMonth(period) {
   await waitForAuth();
   const userId = getUserId();
-  const [year, month] = period.split('-').map(Number);
-  const startDate = `${period}-01`;
-  const endDate = `${period}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
+  const { start, end } = getBillingPeriodRange(period);
 
   // orderBy を使わず範囲フィルタのみ（複合インデックス不要）
   const q = query(
     collection(db, 'drives', userId, 'daily'),
-    where('date', '>=', startDate),
-    where('date', '<=', endDate)
+    where('date', '>=', start),
+    where('date', '<=', end)
   );
 
   const snap = await getDocs(q);
