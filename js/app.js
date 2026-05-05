@@ -1,4 +1,4 @@
-// 開発環境判定
+// 開発環境判定 (GitHub Actions test)
 export function isDevEnvironment() {
   return location.hostname.includes('-dev') || 
          location.pathname.includes('/dev/');
