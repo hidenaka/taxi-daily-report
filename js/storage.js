@@ -1,23 +1,15 @@
-// storage.js - Dynamic provider switcher
-// GitHub PATが設定されていればGitHub版、なければFirebase版を自動使用
-//
-// 切替え方法:
-//   - GitHub: localStorage に github_token があれば自動
-//   - Firebase: github_token がなければ自動、または use_firebase=1 で強制
+// storage.js - Firebase-only (GitHub deprecated)
+// GitHub版は完全に廃止。常にFirebase版を使用。
 
-const USE_FIREBASE = localStorage.getItem('use_firebase') === '1' || !localStorage.getItem('github_token');
+const USE_FIREBASE = true;
 
 // Active provider module (loaded dynamically)
 let provider;
 
-if (USE_FIREBASE) {
-  // Firebase: initialize auth before loading storage
-  const { initAuth } = await import('./firebase-auth.js');
-  await initAuth();
-  provider = await import('./firebase-storage.js');
-} else {
-  provider = await import('./storage-github.js');
-}
+// Firebase: initialize auth before loading storage
+const { initAuth } = await import('./firebase-auth.js');
+await initAuth();
+provider = await import('./firebase-storage.js');
 
 // Re-export all storage functions from the active provider
 export const getMyUserId = provider.getMyUserId;

@@ -356,10 +356,7 @@ function applyLoaded(periods, myParts, allParts, userIds, displayMap, roleMap, l
 }
 
 async function load() {
-  if (!localStorage.getItem('use_firebase') && !localStorage.getItem('github_token')) {
-    document.querySelector('main').innerHTML = '<div class="loading">設定からGitHubトークンを設定してください</div>';
-    return;
-  }
+  // Firebase-only mode (GitHub deprecated)
   const current = currentBillingPeriod();
   const periods = [];
   for (let i = monthsRange - 1; i >= 0; i--) periods.push(shiftBillingPeriod(current, -i));

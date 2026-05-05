@@ -50,6 +50,19 @@ if ('serviceWorker' in navigator) {
   </section>
 
   <section class="admin-card">
+    <h3>👤 新規ユーザー作成（Firebase認証）</h3>
+    <p class="muted" style="font-size:11px;margin-bottom:8px;">メールアドレス不要。userId + パスワードでアカウント作成。</p>
+    <label class="muted">ユーザーID</label>
+    <input class="input" id="newUserId" placeholder="taro" pattern="^[a-z][a-z0-9_]*$" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <label class="muted" style="margin-top:8px;display:block;">初期パスワード</label>
+    <input class="input" id="newUserPassword" type="password" placeholder="8文字以上" autocomplete="off">
+    <label class="muted" style="margin-top:8px;display:block;">表示名（任意）</label>
+    <input class="input" id="newUserDisplayName" placeholder="山田太郎" autocomplete="off">
+    <button class="btn" id="createUserBtn" style="margin-top:10px;width:100%;">ユーザーを作成</button>
+    <div id="createUserResult"></div>
+  </section>
+
+  <section class="admin-card">
     <h3>📋 使い方</h3>
     <ol style="font-size:12px;color:#666;padding-left:20px;margin:0;">
       <li>上のフォームに新規ユーザーのIDとPATを入力</li>
@@ -66,6 +79,7 @@ if ('serviceWorker' in navigator) {
 <script type="module">
 import { getMyUserId } from './js/storage.js';
 import { generateInvite, fetchUsers } from './js/admin-invite.js';
+import { createUserWithCredentials } from './js/firebase-auth.js';
 
 // 管理者チェック
 const myId = getMyUserId();
@@ -135,6 +149,53 @@ document.getElementById('generateBtn').onclick = async () => {
   } finally {
     btn.disabled = false;
     btn.textContent = '招待リンクを生成';
+  }
+};
+
+// 新規ユーザー作成
+document.getElementById('createUserBtn').onclick = async () => {
+  const btn = document.getElementById('createUserBtn');
+  const result = document.getElementById('createUserResult');
+  const userId = document.getElementById('newUserId').value.trim();
+  const password = document.getElementById('newUserPassword').value;
+  const displayName = document.getElementById('newUserDisplayName').value.trim();
+
+  if (!userId || !password) {
+    result.innerHTML = '<p style="color:#d32f2f;font-size:12px;">userIdとパスワードを入力してください</p>';
+    return;
+  }
+  if (password.length < 6) {
+    result.innerHTML = '<p style="color:#d32f2f;font-size:12px;">パスワードは6文字以上にしてください</p>';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '作成中…';
+  result.innerHTML = '';
+
+  try {
+    const res = await createUserWithCredentials(userId, password);
+    if (res.success) {
+      result.innerHTML = `
+        <div class="invite-result">
+          <strong>✓ ユーザー作成完了</strong>
+          <p style="font-size:12px;margin:6px 0;">userId: <strong>${userId}</strong></p>
+          <p style="font-size:11px;color:#666;">パスワード: ${password.replace(/./g, '•')}</p>
+          <p class="muted" style="font-size:10px;margin-top:6px;">ユーザーにuserIdとパスワードを伝えてください。</p>
+        </div>
+      `;
+      document.getElementById('newUserId').value = '';
+      document.getElementById('newUserPassword').value = '';
+      document.getElementById('newUserDisplayName').value = '';
+      loadUsers(); // 一覧更新
+    } else {
+      result.innerHTML = `<p style="color:#d32f2f;font-size:12px;">エラー: ${res.error}</p>`;
+    }
+  } catch (e) {
+    result.innerHTML = `<p style="color:#d32f2f;font-size:12px;">エラー: ${e.message}</p>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'ユーザーを作成';
   }
 };
 

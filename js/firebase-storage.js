@@ -3,6 +3,7 @@ import { db } from './firebase-init.js';
 import { getUserId, waitForAuth, setUserId as fbSetUserId } from './firebase-auth.js';
 import { DEFAULT_USER_ID, isValidUserId, normalizeUserId } from './userid.js';
 import { getBillingPeriodRange } from './app.js';
+import { DEFAULT_CONFIG } from './default-config.js';
 import { 
   doc, getDoc, setDoc, deleteDoc, collection, 
   query, where, getDocs, orderBy, writeBatch,
@@ -83,16 +84,21 @@ export async function getAllDriveDates() {
 export async function getConfig() {
   await waitForAuth();
   const userId = getUserId();
-  const ref = doc(db, 'configs', userId);
+  const ref = doc(db, 'userConfigs', userId);
   const snap = await getDoc(ref);
-  if (!snap.exists()) return null;
+  if (!snap.exists()) {
+    // 初回: DEFAULT_CONFIG をコピーして保存
+    const defaultConfig = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+    await setDoc(ref, defaultConfig);
+    return defaultConfig;
+  }
   return snap.data();
 }
 
 export async function saveConfig(config) {
   await waitForAuth();
   const userId = getUserId();
-  const ref = doc(db, 'configs', userId);
+  const ref = doc(db, 'userConfigs', userId);
   await setDoc(ref, {
     ...config,
     updatedAt: new Date().toISOString()
@@ -216,3 +222,168 @@ export function setMyUserId(id) {
 export function getRepo() {
   return 'firebase://taxi-dailydata';
 }
+
+// ========== COMPATIBILITY FUNCTIONS (migrated from GitHub API) ==========
+
+export async function saveDriveSafe(drive) {
+  try {
+    return await saveDrive(drive.date, drive);
+  } catch (err) {
+    queuePending(drive.date, drive);
+    throw new Error(`保存失敗: ${err.message} (キューに退避済、復帰時に再送します)`);
+  }
+}
+
+// GitHub-style file listing: dir = 'data/drives' or 'data/drives/{userId}'
+export async function listFiles(dir) {
+  await waitForAuth();
+  const userId = getUserId();
+  if (dir === 'data/drives' || dir === `data/drives/${userId}`) {
+    const dates = await getAllDriveDates();
+    return dates.map(date => ({
+      name: `${date}.json`,
+      path: `data/drives/${userId}/${date}.json`,
+      sha: null
+    }));
+  }
+  return [];
+}
+
+// GitHub-style getFile: returns { content, sha } or null
+export async function getFile(path) {
+  await waitForAuth();
+  const driveMatch = path.match(/^data\/drives\/([^/]+)\/(\d{4}-\d{2}-\d{2})\.json$/);
+  if (driveMatch) {
+    const [, targetUserId, date] = driveMatch;
+    const ref = doc(db, 'drives', targetUserId, 'daily', date);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return null;
+    return { content: snap.data(), sha: null };
+  }
+  const configMatch = path.match(/^data\/config\/([^/]+)\.json$/);
+  if (configMatch) {
+    const [, targetUserId] = configMatch;
+    const ref = doc(db, 'configs', targetUserId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return null;
+    return { content: snap.data(), sha: null };
+  }
+  return null;
+}
+
+// GitHub-style putFile: returns { content: { sha } }
+export async function putFile(path, jsonObject, message, sha = null) {
+  await waitForAuth();
+  const driveMatch = path.match(/^data\/drives\/([^/]+)\/(\d{4}-\d{2}-\d{2})\.json$/);
+  if (driveMatch) {
+    const [, targetUserId, date] = driveMatch;
+    const ref = doc(db, 'drives', targetUserId, 'daily', date);
+    await setDoc(ref, {
+      ...jsonObject,
+      updatedAt: new Date().toISOString()
+    });
+    return { content: { sha: null } };
+  }
+  const configMatch = path.match(/^data\/config\/([^/]+)\.json$/);
+  if (configMatch) {
+    const [, targetUserId] = configMatch;
+    const ref = doc(db, 'configs', targetUserId);
+    await setDoc(ref, {
+      ...jsonObject,
+      updatedAt: new Date().toISOString()
+    });
+    return { content: { sha: null } };
+  }
+  throw new Error(`Unsupported path: ${path}`);
+}
+
+// ========== USER MANAGEMENT (for support / multi-user features) ==========
+
+export async function listActiveUserIds() {
+  await waitForAuth();
+  try {
+    const snap = await getDocs(collection(db, 'users'));
+    return snap.docs
+      .map(d => d.data().userId)
+      .filter(id => id && isValidUserId(id));
+  } catch (e) {
+    // 権限不足など: 自分のみ返す
+    return [getUserId() || getMyUserId()];
+  }
+}
+
+export async function getUserDisplayMap() {
+  await waitForAuth();
+  const map = {};
+  try {
+    const snap = await getDocs(collection(db, 'users'));
+    for (const d of snap.docs) {
+      const data = d.data();
+      if (data.userId && isValidUserId(data.userId)) {
+        map[data.userId] = data.displayName || data.userId;
+      }
+    }
+  } catch (e) {
+    // 権限不足: 自分のみ
+    const myId = getUserId() || getMyUserId();
+    map[myId] = myId;
+  }
+  return map;
+}
+
+export async function getUserRoleMap() {
+  await waitForAuth();
+  const map = {};
+  try {
+    const snap = await getDocs(collection(db, 'users'));
+    for (const d of snap.docs) {
+      const data = d.data();
+      if (data.userId && isValidUserId(data.userId)) {
+        map[data.userId] = data.role || 'member';
+      }
+    }
+  } catch (e) {
+    const myId = getUserId() || getMyUserId();
+    map[myId] = 'member';
+  }
+  return map;
+}
+
+export async function getAllUsersDrivesForMonth(yearMonth) {
+  await waitForAuth();
+  const { start, end } = getBillingPeriodRange(yearMonth);
+  let userIds;
+  try {
+    userIds = await listActiveUserIds();
+  } catch (e) {
+    userIds = [getUserId() || getMyUserId()];
+  }
+  const allDrives = [];
+  for (const uid of userIds) {
+    try {
+      const q = query(
+        collection(db, 'drives', uid, 'daily'),
+        where('date', '>=', start),
+        where('date', '<=', end)
+      );
+      const snap = await getDocs(q);
+      for (const d of snap.docs) {
+        allDrives.push({ ...d.data(), _userId: uid });
+      }
+    } catch (e) {
+      // skip user if permission denied
+    }
+  }
+  allDrives.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  return allDrives;
+}
+
+// ========== CACHE COMPATIBILITY (no-op / fallback) ==========
+
+export function getFileCached(path) { return null; }
+export function getListCached(dir) { return null; }
+export async function listFilesFresh(dir) { return listFiles(dir); }
+export function getAllUsersDrivesForMonthCached(yearMonth) { return null; }
+export function getUserDisplayMapCached() { return null; }
+export function getUserRoleMapCached() { return null; }
+export function listActiveUserIdsCached() { return null; }

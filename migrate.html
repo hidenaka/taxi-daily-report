@@ -22,7 +22,13 @@
   </section>
 
   <section class="card">
-    <h3>② 移行対象ユーザー</h3>
+    <h3>② 移行対象日付（任意）</h3>
+    <p class="muted" style="font-size:12px;margin-top:4px;">空白の場合は全データ移行。日付を指定した場合はその日のみ移行します。</p>
+    <input type="date" id="migrateDateInput" value="2026-05-05" style="padding:8px;border:1px solid #ddd;border-radius:4px;width:100%;margin-top:8px;">
+  </section>
+
+  <section class="card">
+    <h3>③ 移行対象ユーザー</h3>
     <div style="display:flex;gap:8px;margin-top:8px;">
       <button class="btn" id="migrateSelf" style="flex:1;" disabled>user_self を移行</button>
       <button class="btn" id="migrateMm" style="flex:1;" disabled>mm を移行</button>
@@ -41,7 +47,7 @@ import { initAuth } from './js/firebase-auth.js';
 import { db } from './js/firebase-init.js';
 import { doc, setDoc, writeBatch, getFirestore } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-const REPO = 'hidenaka/taxi-daily-report-data';
+const REPO = localStorage.getItem('github_data_repo') || 'hidenaka/taxi-daily-report-data';
 const logEl = document.getElementById('log');
 const log = (msg) => { logEl.textContent += msg + '\n'; logEl.scrollTop = logEl.scrollHeight; };
 
@@ -113,8 +119,9 @@ async function ghList(dir) {
 }
 
 // Migrate a single user
-async function migrateUser(userId) {
-  log(`\n=== ${userId} の移行開始 ===`);
+// specificDate: 'YYYY-MM-DD' or null (all data)
+async function migrateUser(userId, specificDate = null) {
+  log(`\n=== ${userId} の移行開始 ${specificDate ? `(${specificDate} のみ)` : '(全データ)'} ===`);
 
   // 1. Migrate drives
   const driveDir = `data/drives/${userId}`;
@@ -123,13 +130,24 @@ async function migrateUser(userId) {
   if (!files || files.length === 0) {
     log(`  ドライブデータなし`);
   } else {
-    log(`  ${files.length}ファイル発見`);
+    let targetFiles = files;
+    if (specificDate) {
+      targetFiles = files.filter(f => f.name === `${specificDate}.json`);
+      if (targetFiles.length === 0) {
+        log(`  ${specificDate}.json が見つかりません`);
+      } else {
+        log(`  対象ファイル: ${specificDate}.json`);
+      }
+    } else {
+      log(`  ${files.length}ファイル発見`);
+    }
+
     let count = 0;
     // Batch write (max 500 per batch)
     let batch = writeBatch(db);
     let batchCount = 0;
 
-    for (const file of files) {
+    for (const file of targetFiles) {
       if (!file.name.endsWith('.json')) continue;
       const date = file.name.replace('.json', '');
       const data = await ghGet(`${driveDir}/${file.name}`);
@@ -142,7 +160,7 @@ async function migrateUser(userId) {
 
       if (batchCount >= 400) {
         await batch.commit();
-        log(`  ${count}/${files.length} 件コミット済み`);
+        log(`  ${count}/${targetFiles.length} 件コミット済み`);
         batch = writeBatch(db);
         batchCount = 0;
       }
@@ -151,10 +169,12 @@ async function migrateUser(userId) {
     if (batchCount > 0) {
       await batch.commit();
     }
-    log(`✓ ドライブ: ${count}件 移行完了`);
+    if (targetFiles.length > 0) {
+      log(`✓ ドライブ: ${count}件 移行完了`);
+    }
   }
 
-  // 2. Migrate config
+  // 2. Migrate config (config は特定日付移行時も移行する)
   log(`📁 config/${userId}.json を読み込み中...`);
   const config = await ghGet(`data/config/${userId}.json`);
   if (config) {
@@ -169,18 +189,24 @@ async function migrateUser(userId) {
 }
 
 // Button handlers
+function getMigrateDate() {
+  const val = document.getElementById('migrateDateInput').value;
+  return val || null;
+}
+
 document.getElementById('migrateSelf').onclick = async () => {
-  try { await migrateUser('user_self'); } catch (e) { log(`✗ エラー: ${e.message}`); }
+  try { await migrateUser('user_self', getMigrateDate()); } catch (e) { log(`✗ エラー: ${e.message}`); }
 };
 document.getElementById('migrateMm').onclick = async () => {
-  try { await migrateUser('mm'); } catch (e) { log(`✗ エラー: ${e.message}`); }
+  try { await migrateUser('mm', getMigrateDate()); } catch (e) { log(`✗ エラー: ${e.message}`); }
 };
 document.getElementById('migrateAll').onclick = async () => {
   try {
-    await migrateUser('user_self');
-    await migrateUser('mm');
+    const date = getMigrateDate();
+    await migrateUser('user_self', date);
+    await migrateUser('mm', date);
     log('\n🎉 すべての移行が完了しました！');
-    log('Firebase版で確認: localStorage から github_token を削除してリロード');
+    log('次のステップ: storage.js の GitHub 依存を解除して Firebase のみにする');
   } catch (e) { log(`✗ エラー: ${e.message}`); }
 };
 

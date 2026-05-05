@@ -376,8 +376,7 @@ document.getElementById('cancelBtn').onclick = () => {
   else location.href = 'index.html';
 };
 
-if (localStorage.getItem('use_firebase') || (localStorage.getItem('github_token') && localStorage.getItem('github_data_repo'))) init();
-else alert('先に設定画面でGitHubトークンを設定してください');
+init();
 </script>
 </body>
 </html>

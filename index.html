@@ -106,11 +106,6 @@ let viewPeriod = currentBillingPeriod();
 let config = null;
 
 async function load() {
-  // GitHub版のみ設定が必要。Firebase版（github_tokenなし）はスキップ
-  if (localStorage.getItem('github_token') && !localStorage.getItem('github_data_repo')) {
-    document.getElementById('summaryCard').innerHTML = '<a href="settings.html">設定からGitHubトークンとデータリポジトリ名を設定</a>';
-    return;
-  }
   await flushPendingQueue();
   config = await getConfig();
   if (!config) {

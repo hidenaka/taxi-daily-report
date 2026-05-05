@@ -36,13 +36,26 @@ if ('serviceWorker' in navigator) {
     </div>
   </details>
 
-  <section class="card">
+  <section class="card" id="loginSection">
+    <h3>🔐 ログイン</h3>
+    <p class="muted" style="font-size:11px;margin-bottom:8px;">管理者から受け取ったuserIdとパスワードでログイン</p>
+    <label class="muted">ユーザーID</label>
+    <input class="input" id="loginUserId" placeholder="userId" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <label class="muted" style="margin-top:8px;display:block;">パスワード</label>
+    <input class="input" id="loginPassword" type="password" placeholder="パスワード" autocomplete="off">
+    <button class="btn" id="loginBtn" style="margin-top:10px;width:100%;">ログイン</button>
+    <div id="loginStatus" class="muted" style="margin-top:6px;font-size:11px;"></div>
+  </section>
+
+  <section class="card" id="accountSection" style="display:none;">
     <h3>アカウント</h3>
     <div style="padding:12px;background:var(--bg);border-radius:8px;margin-bottom:10px;">
       <div style="font-size:11px;color:var(--muted);margin-bottom:2px;">現在のアカウント</div>
       <div style="font-size:18px;font-weight:600;" id="currentUserIdDisplay">--</div>
+      <div style="font-size:11px;color:var(--primary);margin-top:4px;" id="authTypeDisplay"></div>
     </div>
     <button class="btn" id="switchAccountBtn" style="width:100%;">🔄 アカウントを切り替え</button>
+    <button class="btn" id="logoutBtn" style="width:100%;margin-top:8px;background:var(--gray);color:#333;">ログアウト</button>
     <div id="switchAccountStatus" class="muted" style="margin-top:4px;font-size:11px;"></div>
     <label class="muted" style="margin-top:12px;display:block;">表示名(任意)</label>
     <input class="input" id="displayNameInput" placeholder="自分">
@@ -104,6 +117,7 @@ import { getConfig, saveConfig, getDrivesForMonth, getMyUserId, setMyUserId, get
 import { isValidUserId } from './js/userid.js';
 import { DEFAULT_CONFIG } from './js/default-config.js';
 import { calcTotalPay } from './js/payroll.js';
+import { loginWithUserId, logout, isEmailAuth } from './js/firebase-auth.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('settings');
 
@@ -124,8 +138,66 @@ if (isGitHubMode) {
   document.getElementById('tokenInput').value = localStorage.getItem('github_token') || '';
 }
 
-// userId 初期表示
-document.getElementById('currentUserIdDisplay').textContent = getMyUserId();
+// ログイン状態に応じてUI切り替え
+function updateAuthUI() {
+  const userId = getMyUserId();
+  const isLoggedIn = !!userId;
+  const isEmail = isEmailAuth();
+  
+  if (isLoggedIn && isEmail) {
+    // メール認証ログイン済み
+    document.getElementById('loginSection').style.display = 'none';
+    document.getElementById('accountSection').style.display = '';
+    document.getElementById('currentUserIdDisplay').textContent = userId;
+    document.getElementById('authTypeDisplay').textContent = '✓ ログイン中';
+  } else if (isLoggedIn) {
+    // 匿名認証（既存ユーザー）
+    document.getElementById('loginSection').style.display = 'none';
+    document.getElementById('accountSection').style.display = '';
+    document.getElementById('currentUserIdDisplay').textContent = userId;
+    document.getElementById('authTypeDisplay').textContent = '匿名アクセス（設定でログインできます）';
+  } else {
+    // 未ログイン
+    document.getElementById('loginSection').style.display = '';
+    document.getElementById('accountSection').style.display = 'none';
+  }
+}
+
+updateAuthUI();
+
+// ログイン
+document.getElementById('loginBtn').onclick = async () => {
+  const userId = document.getElementById('loginUserId').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const status = document.getElementById('loginStatus');
+  
+  if (!userId || !password) {
+    status.textContent = '✗ userIdとパスワードを入力してください';
+    status.style.color = '#d32f2f';
+    return;
+  }
+  
+  status.textContent = 'ログイン中…';
+  status.style.color = '';
+  
+  const res = await loginWithUserId(userId, password);
+  if (res.success) {
+    status.textContent = '✓ ログイン成功';
+    status.style.color = 'green';
+    updateAuthUI();
+    loadConfig();
+  } else {
+    status.textContent = '✗ ' + res.error;
+    status.style.color = '#d32f2f';
+  }
+};
+
+// ログアウト
+document.getElementById('logoutBtn').onclick = async () => {
+  await logout();
+  updateAuthUI();
+  location.reload();
+};
 
 document.getElementById('saveGhBtn').onclick = () => {
   localStorage.setItem('github_data_repo', document.getElementById('repoInput').value.trim());
