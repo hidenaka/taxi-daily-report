@@ -15,6 +15,8 @@
 .user-list-item:last-child { border-bottom: none; }
 .badge { font-size: 10px; padding: 2px 6px; border-radius: 3px; background: #e3f2fd; color: #1565c0; }
 .badge.inactive { background: #eee; color: #999; }
+.login-card { background: #fff3e0; border: 1px solid #ffcc80; border-radius: 8px; padding: 20px; margin-bottom: 10px; }
+.login-card h3 { margin: 0 0 12px; font-size: 16px; color: #e65100; }
 </style>
 </head>
 <body>
@@ -25,131 +27,128 @@ if ('serviceWorker' in navigator) {
 </script>
 <main style="padding:14px;">
   <h1>管理者ツール</h1>
-  <p class="muted" style="font-size:12px;margin-bottom:12px;">ユーザー招待・管理</p>
+  <p class="muted" style="font-size:12px;margin-bottom:12px;">ユーザー管理</p>
 
-  <section class="admin-card">
-    <h3>👥 ユーザー一覧</h3>
-    <div id="userList" class="user-list">読み込み中…</div>
-  </section>
-
-  <section class="admin-card">
-    <h3>🎟️ 招待リンク生成</h3>
+  <!-- ログインセクション -->
+  <section class="login-card" id="loginSection">
+    <h3>🔐 管理者ログイン</h3>
+    <p class="muted" style="font-size:11px;margin-bottom:10px;">ID: admin / PW: admin でログイン</p>
     <label class="muted">ユーザーID</label>
-    <input class="input" id="inviteUserId" placeholder="mm" pattern="^[a-z][a-z0-9_]*$" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
-    <label class="muted" style="margin-top:8px;display:block;">新規ユーザーのPAT（repo権限）</label>
-    <input class="input" id="invitePat" type="password" placeholder="github_pat_xxx" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
-    <label class="muted" style="margin-top:8px;display:block;">有効期限</label>
-    <select class="select" id="inviteTtl">
-      <option value="24">24時間</option>
-      <option value="72" selected>72時間（3日）</option>
-      <option value="168">7日</option>
-      <option value="720">30日</option>
-    </select>
-    <button class="btn" id="generateBtn" style="margin-top:10px;width:100%;">招待リンクを生成</button>
-    <div id="inviteResult"></div>
+    <input class="input" id="loginUserId" placeholder="admin" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <label class="muted" style="margin-top:8px;display:block;">パスワード</label>
+    <input class="input" id="loginPassword" type="password" placeholder="admin" autocomplete="off">
+    <button class="btn" id="loginBtn" style="margin-top:12px;width:100%;">ログイン</button>
+    <div id="loginStatus" style="margin-top:8px;font-size:12px;"></div>
   </section>
 
-  <section class="admin-card">
-    <h3>👤 新規ユーザー作成（Firebase認証）</h3>
-    <p class="muted" style="font-size:11px;margin-bottom:8px;">メールアドレス不要。userId + パスワードでアカウント作成。</p>
-    <label class="muted">ユーザーID</label>
-    <input class="input" id="newUserId" placeholder="taro" pattern="^[a-z][a-z0-9_]*$" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
-    <label class="muted" style="margin-top:8px;display:block;">初期パスワード</label>
-    <input class="input" id="newUserPassword" type="password" placeholder="8文字以上" autocomplete="off">
-    <label class="muted" style="margin-top:8px;display:block;">表示名（任意）</label>
-    <input class="input" id="newUserDisplayName" placeholder="山田太郎" autocomplete="off">
-    <button class="btn" id="createUserBtn" style="margin-top:10px;width:100%;">ユーザーを作成</button>
-    <div id="createUserResult"></div>
-  </section>
+  <!-- 管理者コンテンツ（ログイン後に表示） -->
+  <div id="adminContent" style="display:none;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div style="font-size:12px;">管理者: <strong id="adminName">--</strong></div>
+      <button class="btn" id="logoutBtn" style="font-size:12px;padding:6px 12px;background:var(--gray);color:#333;">ログアウト</button>
+    </div>
 
-  <section class="admin-card">
-    <h3>📋 使い方</h3>
-    <ol style="font-size:12px;color:#666;padding-left:20px;margin:0;">
-      <li>上のフォームに新規ユーザーのIDとPATを入力</li>
-      <li>「招待リンクを生成」をクリック</li>
-      <li>生成されたURLをコピーして相手に送る</li>
-      <li>相手はURLを開くだけで自動設定される</li>
-    </ol>
-    <p class="muted" style="font-size:11px;margin-top:8px;">※ URLの <code>#key=...</code> 以降は絶対に共有しないこと（暗号化鍵が含まれている）</p>
-  </section>
+    <section class="admin-card">
+      <h3>👤 新規ユーザー作成</h3>
+      <p class="muted" style="font-size:11px;margin-bottom:8px;">メールアドレス不要。userId + パスワードでアカウント作成。</p>
+      <label class="muted">ユーザーID</label>
+      <input class="input" id="newUserId" placeholder="taro" pattern="^[a-z][a-z0-9_]*$" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <label class="muted" style="margin-top:8px;display:block;">初期パスワード</label>
+      <input class="input" id="newUserPassword" type="password" placeholder="6文字以上" autocomplete="off">
+      <label class="muted" style="margin-top:8px;display:block;">表示名（任意）</label>
+      <input class="input" id="newUserDisplayName" placeholder="山田太郎" autocomplete="off">
+      <button class="btn" id="createUserBtn" style="margin-top:10px;width:100%;">ユーザーを作成</button>
+      <div id="createUserResult"></div>
+    </section>
 
-  <a href="settings.html" style="display:block;text-align:center;padding:10px;color:var(--primary);text-decoration:none;font-size:14px;">← 設定画面に戻る</a>
+    <section class="admin-card">
+      <h3>📋 使い方</h3>
+      <ol style="font-size:12px;color:#666;padding-left:20px;margin:0;">
+        <li>上のフォームに新規ユーザーのIDとパスワードを入力</li>
+        <li>「ユーザーを作成」をクリック</li>
+        <li>作成後、userIdとパスワードをユーザーに伝える</li>
+        <li>ユーザーは settings.html でログインして使う</li>
+      </ol>
+    </section>
+
+    <a href="index.html" style="display:block;text-align:center;padding:10px;color:var(--primary);text-decoration:none;font-size:14px;">← ホームに戻る</a>
+  </div>
 </main>
 
 <script type="module">
-import { getMyUserId } from './js/storage.js';
-import { generateInvite, fetchUsers } from './js/admin-invite.js';
+import { loginWithUserId, logout, getCurrentUser } from './js/firebase-auth.js';
 import { createUserWithCredentials } from './js/firebase-auth.js';
+import { getMyUserId } from './js/storage.js';
 
-// 管理者チェック
-const myId = getMyUserId();
-if (myId !== 'user_self') {
-  document.querySelector('main').innerHTML = '<div style="padding:30px;text-align:center;color:#d32f2f;">このページは管理者（user_self）のみ使用できます</div>';
+const loginSection = document.getElementById('loginSection');
+const adminContent = document.getElementById('adminContent');
+const loginStatus = document.getElementById('loginStatus');
+
+// 既存のメール認証ユーザーがadminかチェック
+function checkAdmin() {
+  const user = getCurrentUser();
+  if (user && !user.isAnonymous) {
+    const email = user.email || '';
+    const userId = email.split('@')[0];
+    if (userId === 'admin') {
+      showAdminUI(userId);
+      return true;
+    }
+  }
+  return false;
 }
 
-// ユーザー一覧表示
-async function loadUsers() {
-  const users = await fetchUsers();
-  const container = document.getElementById('userList');
-  if (users.length === 0) {
-    container.innerHTML = '<p class="muted">ユーザーが見つかりません</p>';
-    return;
-  }
-  container.innerHTML = users.map(u => `
-    <div class="user-list-item">
-      <span><strong>${u.userId}</strong> ${u.displayName ? `(${u.displayName})` : ''}</span>
-      <span class="badge ${u.active ? '' : 'inactive'}">${u.active ? '有効' : '無効'}</span>
-    </div>
-  `).join('');
+function showAdminUI(userId) {
+  loginSection.style.display = 'none';
+  adminContent.style.display = '';
+  document.getElementById('adminName').textContent = userId;
 }
 
-// 招待リンク生成
-document.getElementById('generateBtn').onclick = async () => {
-  const btn = document.getElementById('generateBtn');
-  const result = document.getElementById('inviteResult');
-  const userId = document.getElementById('inviteUserId').value.trim();
-  const pat = document.getElementById('invitePat').value.trim();
-  const ttl = parseInt(document.getElementById('inviteTtl').value);
+function showLoginUI() {
+  loginSection.style.display = '';
+  adminContent.style.display = 'none';
+}
 
-  if (!userId || !pat) {
-    result.innerHTML = '<p style="color:#d32f2f;font-size:12px;">userIdとPATを入力してください</p>';
+// 初期表示
+if (!checkAdmin()) {
+  showLoginUI();
+}
+
+// ログイン
+document.getElementById('loginBtn').onclick = async () => {
+  const userId = document.getElementById('loginUserId').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  
+  if (!userId || !password) {
+    loginStatus.textContent = '✗ IDとパスワードを入力してください';
+    loginStatus.style.color = '#d32f2f';
     return;
   }
-
-  btn.disabled = true;
-  btn.textContent = '生成中…';
-  result.innerHTML = '';
-
-  try {
-    const { inviteUrl, code, expiresAt } = await generateInvite({ userId, pat, ttlHours: ttl });
-    const expDate = new Date(expiresAt).toLocaleString('ja-JP');
-
-    result.innerHTML = `
-      <div class="invite-result">
-        <strong>✓ 招待リンク生成完了</strong>
-        <div class="url">${inviteUrl}</div>
-        <div style="display:flex;gap:6px;">
-          <button class="btn" id="copyBtn" style="flex:1;font-size:12px;padding:6px;">📋 URLをコピー</button>
-        </div>
-        <p class="muted" style="font-size:10px;margin-top:6px;">コード: ${code} | 有効期限: ${expDate}</p>
-      </div>
-    `;
-
-    document.getElementById('copyBtn').onclick = async () => {
-      await navigator.clipboard.writeText(inviteUrl);
-      document.getElementById('copyBtn').textContent = '✓ コピーしました';
-      setTimeout(() => document.getElementById('copyBtn').textContent = '📋 URLをコピー', 1500);
-    };
-
-    // フォームクリア
-    document.getElementById('invitePat').value = '';
-    loadUsers(); // 一覧更新
-  } catch (e) {
-    result.innerHTML = `<p style="color:#d32f2f;font-size:12px;">エラー: ${e.message}</p>`;
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '招待リンクを生成';
+  
+  loginStatus.textContent = 'ログイン中…';
+  loginStatus.style.color = '';
+  
+  const res = await loginWithUserId(userId, password);
+  if (res.success) {
+    if (userId === 'admin') {
+      loginStatus.textContent = '✓ ログイン成功';
+      loginStatus.style.color = 'green';
+      showAdminUI(userId);
+    } else {
+      loginStatus.textContent = '✗ 管理者権限がありません';
+      loginStatus.style.color = '#d32f2f';
+      await logout();
+    }
+  } else {
+    loginStatus.textContent = '✗ ' + res.error;
+    loginStatus.style.color = '#d32f2f';
   }
+};
+
+// ログアウト
+document.getElementById('logoutBtn').onclick = async () => {
+  await logout();
+  showLoginUI();
 };
 
 // 新規ユーザー作成
@@ -187,7 +186,6 @@ document.getElementById('createUserBtn').onclick = async () => {
       document.getElementById('newUserId').value = '';
       document.getElementById('newUserPassword').value = '';
       document.getElementById('newUserDisplayName').value = '';
-      loadUsers(); // 一覧更新
     } else {
       result.innerHTML = `<p style="color:#d32f2f;font-size:12px;">エラー: ${res.error}</p>`;
     }
@@ -198,8 +196,6 @@ document.getElementById('createUserBtn').onclick = async () => {
     btn.textContent = 'ユーザーを作成';
   }
 };
-
-loadUsers();
 </script>
 </body>
 </html>
