@@ -184,6 +184,9 @@ const loginSection = document.getElementById('loginSection');
 const adminContent = document.getElementById('adminContent');
 const loginStatus = document.getElementById('loginStatus');
 
+// 現在選択中のテンプレートのrateTable（ユーザー作成時に使用）
+let currentTemplateRateTable = null;
+
 // 既存のメール認証ユーザーがadminかチェック
 function checkAdmin() {
   const user = getCurrentUser();
@@ -277,6 +280,7 @@ document.getElementById('loginBtn').onclick = async () => {
       loginStatus.style.color = 'green';
       showAdminUI(userId);
       loadTemplates();
+      checkAndShowKeihoTemplateButton();
     } else {
       loginStatus.textContent = '✗ 管理者権限がありません';
       loginStatus.style.color = '#d32f2f';
@@ -381,6 +385,7 @@ document.getElementById('templateSelect').onchange = async (e) => {
   
   if (!templateId) {
     editActions.style.display = 'none';
+    currentTemplateRateTable = null;
     return;
   }
   
@@ -397,6 +402,9 @@ document.getElementById('templateSelect').onchange = async (e) => {
     document.getElementById('vehicleTypeSelect').value = template.defaults?.vehicleType || 'japantaxi';
     document.getElementById('departureTimeInput').value = template.defaults?.departureTime || '07:00';
     document.getElementById('shareDataCheckbox').checked = template.privacy?.shareDataWithOthers !== false;
+    
+    // rateTableを保持（ユーザー作成時に使用）
+    currentTemplateRateTable = template.rateTable || null;
     
     document.getElementById('payrollModeSelect').dispatchEvent(new Event('change'));
     
@@ -428,6 +436,7 @@ document.getElementById('updateTemplateBtn').onclick = async () => {
       fixedRate: parseInt(document.getElementById('fixedRateInput').value) / 100,
       responsibilityShifts: parseInt(document.getElementById('responsibilityShiftsInput').value),
       extraRate: parseFloat(document.getElementById('extraRateInput').value),
+      rateTable: existing?.rateTable || DEFAULT_CONFIG.rateTable || null,
       defaults: {
         vehicleType: document.getElementById('vehicleTypeSelect').value,
         departureTime: document.getElementById('departureTimeInput').value
@@ -458,6 +467,7 @@ document.getElementById('saveTemplateBtn').onclick = async () => {
     fixedRate: parseInt(document.getElementById('fixedRateInput').value) / 100,
     responsibilityShifts: parseInt(document.getElementById('responsibilityShiftsInput').value),
     extraRate: parseFloat(document.getElementById('extraRateInput').value),
+    rateTable: currentTemplateRateTable || DEFAULT_CONFIG.rateTable || null,
     defaults: {
       vehicleType: document.getElementById('vehicleTypeSelect').value,
       departureTime: document.getElementById('departureTimeInput').value
@@ -501,32 +511,35 @@ document.getElementById('createUserBtn').onclick = async () => {
     const res = await createUserWithCredentials(userId, password);
     if (res.success) {
       // 設定値をFirestoreに保存
+      // テンプレートが選択されていればそのrateTable、なければDEFAULT_CONFIGのrateTable
+      const rateTable = currentTemplateRateTable || DEFAULT_CONFIG.rateTable || {
+        "11": [
+          { salesMin: 0, salesMax: 275001, rate: 0.807 },
+          { salesMin: 275001, salesMax: 330001, rate: 0.673 },
+          { salesMin: 330001, salesMax: 385001, rate: 0.577 },
+          { salesMin: 385001, salesMax: 440001, rate: 0.563 },
+          { salesMin: 440001, salesMax: 462001, rate: 0.619 },
+          { salesMin: 462001, salesMax: 495001, rate: 0.623 },
+          { salesMin: 495001, salesMax: 550001, rate: 0.624 },
+          { salesMin: 550001, salesMax: 605001, rate: 0.628 },
+          { salesMin: 605001, salesMax: 660001, rate: 0.632 },
+          { salesMin: 660001, salesMax: 715001, rate: 0.637 },
+          { salesMin: 715001, salesMax: 770001, rate: 0.643 },
+          { salesMin: 770001, salesMax: 825001, rate: 0.649 },
+          { salesMin: 825001, salesMax: 880001, rate: 0.656 },
+          { salesMin: 880001, salesMax: 935001, rate: 0.664 },
+          { salesMin: 935001, salesMax: 990001, rate: 0.671 },
+          { salesMin: 990001, salesMax: 1045001, rate: 0.679 },
+          { salesMin: 1045001, salesMax: 1100001, rate: 0.687 },
+          { salesMin: 1100001, salesMax: 9999999, rate: 0.687 }
+        ],
+        "12_13rate": 0.62
+      };
+      
       const config = {
         payrollMode: document.getElementById('payrollModeSelect').value,
         fixedRate: parseInt(document.getElementById('fixedRateInput').value) / 100,
-        rateTable: {
-          "11": [
-            { salesMin: 0, salesMax: 275001, rate: 0.807 },
-            { salesMin: 275001, salesMax: 330001, rate: 0.673 },
-            { salesMin: 330001, salesMax: 385001, rate: 0.577 },
-            { salesMin: 385001, salesMax: 440001, rate: 0.563 },
-            { salesMin: 440001, salesMax: 462001, rate: 0.619 },
-            { salesMin: 462001, salesMax: 495001, rate: 0.623 },
-            { salesMin: 495001, salesMax: 550001, rate: 0.624 },
-            { salesMin: 550001, salesMax: 605001, rate: 0.628 },
-            { salesMin: 605001, salesMax: 660001, rate: 0.632 },
-            { salesMin: 660001, salesMax: 715001, rate: 0.637 },
-            { salesMin: 715001, salesMax: 770001, rate: 0.643 },
-            { salesMin: 770001, salesMax: 825001, rate: 0.649 },
-            { salesMin: 825001, salesMax: 880001, rate: 0.656 },
-            { salesMin: 880001, salesMax: 935001, rate: 0.664 },
-            { salesMin: 935001, salesMax: 990001, rate: 0.671 },
-            { salesMin: 990001, salesMax: 1045001, rate: 0.679 },
-            { salesMin: 1045001, salesMax: 1100001, rate: 0.687 },
-            { salesMin: 1100001, salesMax: 9999999, rate: 0.687 }
-          ],
-          "12_13rate": 0.62
-        },
+        rateTable: rateTable,
         extraRate: parseFloat(document.getElementById('extraRateInput').value),
         premiumIncentive: {
           thresholdSalesExclTax: 80000,
