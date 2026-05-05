@@ -89,6 +89,9 @@ export async function getConfig() {
   if (!snap.exists()) {
     // 初回: DEFAULT_CONFIG をコピーして保存
     const defaultConfig = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+    defaultConfig.payrollMode = 'step_rate';
+    defaultConfig.fixedRate = 0.55;
+    defaultConfig.privacy = { shareDataWithOthers: true };
     await setDoc(ref, defaultConfig);
     return defaultConfig;
   }
@@ -376,6 +379,24 @@ export async function getAllUsersDrivesForMonth(yearMonth) {
   }
   allDrives.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   return allDrives;
+}
+
+// ========== COMPANY TEMPLATES (for admin) ==========
+
+export async function getCompanyTemplates() {
+  await waitForAuth();
+  const snap = await getDocs(collection(db, 'companyTemplates'));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function saveCompanyTemplate(templateId, templateData) {
+  await waitForAuth();
+  const ref = doc(db, 'companyTemplates', templateId);
+  await setDoc(ref, {
+    ...templateData,
+    updatedAt: new Date().toISOString()
+  });
+  return true;
 }
 
 // ========== CACHE COMPATIBILITY (no-op / fallback) ==========
