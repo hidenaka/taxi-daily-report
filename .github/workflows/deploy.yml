@@ -9,15 +9,10 @@ on:
         required: true
         default: 'no'
 
-  # releaseブランチへのpushでも自動実行（オプション）
-  push:
-    branches:
-      - release
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: github.event.inputs.confirm == 'yes' || github.ref == 'refs/heads/release'
+    if: github.event.inputs.confirm == 'yes'
     
     steps:
       - name: Checkout dev repo
@@ -34,7 +29,7 @@ jobs:
           
       - name: Copy files to prod
         run: |
-          # devリポジトリのファイルをprodにコピー
+          # devリポジトリのファイルをprodにコピー（不要ファイル除外）
           rsync -av --delete \
             --exclude='.git/' \
             --exclude='.github/' \
