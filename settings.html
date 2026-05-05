@@ -110,9 +110,19 @@ document.getElementById('navHost').innerHTML = renderBottomNav('settings');
 let currentConfig = null;
 let myRole = 'member';
 
-// GitHub設定 復元
-document.getElementById('repoInput').value = localStorage.getItem('github_data_repo') || '';
-document.getElementById('tokenInput').value = localStorage.getItem('github_token') || '';
+// GitHub版かFirebase版か判定
+const isGitHubMode = !!localStorage.getItem('github_token');
+
+// Firebase版ではGitHub設定セクションを非表示
+if (!isGitHubMode) {
+  document.getElementById('adminSection').style.display = 'none';
+}
+
+// GitHub設定 復元（GitHub版のみ）
+if (isGitHubMode) {
+  document.getElementById('repoInput').value = localStorage.getItem('github_data_repo') || '';
+  document.getElementById('tokenInput').value = localStorage.getItem('github_token') || '';
+}
 
 // userId 初期表示
 document.getElementById('currentUserIdDisplay').textContent = getMyUserId();
@@ -319,7 +329,11 @@ document.getElementById('weatherDefaultBtn').onclick = () => {
   document.getElementById('weatherGpsInfo').textContent = 'デフォルト（千代田区）に戻しました';
 };
 
-if (localStorage.getItem('use_firebase') || (localStorage.getItem('github_token') && localStorage.getItem('github_data_repo'))) loadConfig();
+// GitHub版: tokenとrepoが設定されている場合のみ
+// Firebase版: 常に読み込み
+if (!isGitHubMode || (localStorage.getItem('github_token') && localStorage.getItem('github_data_repo'))) {
+  loadConfig();
+}
 </script>
 </body>
 </html>
