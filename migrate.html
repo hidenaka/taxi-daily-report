@@ -12,11 +12,21 @@
   <p class="muted" style="font-size:12px;">GitHub上のデータをFirebase Firestoreにコピーします。既存データは上書きされます。</p>
 
   <section class="card">
-    <h3>① 移行対象ユーザー</h3>
+    <h3>① GitHub Token 設定</h3>
+    <p class="muted" style="font-size:12px;margin-top:4px;">GitHub API 読み取り用の Personal Access Token（classic）を入力してください。<br>repo スコープが必要です。</p>
     <div style="display:flex;gap:8px;margin-top:8px;">
-      <button class="btn" id="migrateSelf" style="flex:1;">user_self を移行</button>
-      <button class="btn" id="migrateMm" style="flex:1;">mm を移行</button>
-      <button class="btn" id="migrateAll" style="flex:1;background:var(--primary);">両方 移行</button>
+      <input type="password" id="tokenInput" placeholder="ghp_xxxxxxxxxxxx" style="flex:1;padding:8px;border:1px solid #ddd;border-radius:4px;">
+      <button class="btn" id="saveToken">保存</button>
+    </div>
+    <div id="tokenStatus" style="margin-top:6px;font-size:12px;"></div>
+  </section>
+
+  <section class="card">
+    <h3>② 移行対象ユーザー</h3>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="btn" id="migrateSelf" style="flex:1;" disabled>user_self を移行</button>
+      <button class="btn" id="migrateMm" style="flex:1;" disabled>mm を移行</button>
+      <button class="btn" id="migrateAll" style="flex:1;background:var(--primary);" disabled>両方 移行</button>
     </div>
   </section>
 
@@ -34,6 +44,42 @@ import { doc, setDoc, writeBatch, getFirestore } from "https://www.gstatic.com/f
 const REPO = 'hidenaka/taxi-daily-report-data';
 const logEl = document.getElementById('log');
 const log = (msg) => { logEl.textContent += msg + '\n'; logEl.scrollTop = logEl.scrollHeight; };
+
+// Token management
+const tokenInput = document.getElementById('tokenInput');
+const tokenStatus = document.getElementById('tokenStatus');
+const btnSelf = document.getElementById('migrateSelf');
+const btnMm = document.getElementById('migrateMm');
+const btnAll = document.getElementById('migrateAll');
+
+function updateTokenUI() {
+  const token = localStorage.getItem('github_token');
+  if (token) {
+    tokenInput.value = '••••••••••••••••••••';
+    tokenStatus.textContent = '✓ GitHub Token 設定済み';
+    tokenStatus.style.color = 'green';
+    btnSelf.disabled = false;
+    btnMm.disabled = false;
+    btnAll.disabled = false;
+  } else {
+    tokenInput.value = '';
+    tokenStatus.textContent = '⚠ GitHub Token 未設定（入力して保存してください）';
+    tokenStatus.style.color = 'orange';
+    btnSelf.disabled = true;
+    btnMm.disabled = true;
+    btnAll.disabled = true;
+  }
+}
+
+document.getElementById('saveToken').onclick = () => {
+  const val = tokenInput.value.trim();
+  if (!val || val.startsWith('•')) return;
+  localStorage.setItem('github_token', val);
+  updateTokenUI();
+  log('✓ GitHub Token を保存しました');
+};
+
+updateTokenUI();
 
 // Initialize Firebase auth
 await initAuth();
