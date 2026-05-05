@@ -106,7 +106,7 @@ let viewPeriod = currentBillingPeriod();
 let config = null;
 
 async function load() {
-  if (!localStorage.getItem('github_token') || !localStorage.getItem('github_data_repo')) {
+  if (!localStorage.getItem('use_firebase') && !localStorage.getItem('github_token')) {
     document.getElementById('summaryCard').innerHTML = '<a href="settings.html">設定からGitHubトークンとデータリポジトリ名を設定</a>';
     return;
   }

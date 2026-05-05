@@ -219,7 +219,7 @@ document.getElementById('nextBtn').onclick = () => {
   render();
 };
 
-if (localStorage.getItem('github_token') && localStorage.getItem('github_data_repo')) load();
+if (localStorage.getItem('use_firebase') || (localStorage.getItem('github_token') && localStorage.getItem('github_data_repo'))) load();
 else alert('先に設定画面でGitHubトークンを設定してください');
 </script>
 </body>

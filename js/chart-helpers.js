@@ -1175,7 +1175,7 @@ export function dropoffAreaAnalysis(drives) {
 }
 
 export function dowAggregation(drives) {
-  const empty = () => ({ days: 0, totalSales: 0, totalCount: 0, totalTripMin: 0, totalShiftMin: 0, bestSales: 0, bestDate: null });
+  const empty = () => ({ days: 0, totalSales: 0, totalCount: 0, totalTripMin: 0, totalShiftMin: 0, bestSales: 0, bestDate: null, dates: [] });
   const result = Array.from({length: 7}, empty);
   for (const d of drives) {
     if (isSummaryOnly(d)) continue;
@@ -1189,10 +1189,15 @@ export function dowAggregation(drives) {
     result[dow].totalCount += valid.length;
     result[dow].totalTripMin += bd.tripMin;
     result[dow].totalShiftMin += bd.totalMin;
+    result[dow].dates.push({ date: d.date, sales, count: valid.length, shiftMin: bd.totalMin, tripMin: bd.tripMin, restMin: bd.restMin });
     if (sales > result[dow].bestSales) {
       result[dow].bestSales = sales;
       result[dow].bestDate = d.date;
     }
+  }
+  // 各曜日の日付リストを新しい順にソート
+  for (let i = 0; i < 7; i++) {
+    result[i].dates.sort((a, b) => b.date.localeCompare(a.date));
   }
   return result;
 }

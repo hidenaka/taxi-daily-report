@@ -319,7 +319,7 @@ document.getElementById('weatherDefaultBtn').onclick = () => {
   document.getElementById('weatherGpsInfo').textContent = 'デフォルト（千代田区）に戻しました';
 };
 
-if (localStorage.getItem('github_token') && localStorage.getItem('github_data_repo')) loadConfig();
+if (localStorage.getItem('use_firebase') || (localStorage.getItem('github_token') && localStorage.getItem('github_data_repo'))) loadConfig();
 </script>
 </body>
 </html>

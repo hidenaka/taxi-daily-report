@@ -45,9 +45,12 @@ self.addEventListener('fetch', e => {
   const isHtmlOrJs = e.request.destination === 'document' || /\.(html|js)$/i.test(url.pathname);
   if (isHtmlOrJs) {
     e.respondWith(
-      fetch(e.request)
-        .then(res => { caches.open(CACHE_NAME).then(c => c.put(e.request, res.clone())); return res; })
-        .catch(() => caches.match(e.request))
+      fetch(e.request).then(async res => {
+        const cache = await caches.open(CACHE_NAME);
+        const clone = res.clone();
+        await cache.put(e.request, clone);
+        return res;
+      }).catch(() => caches.match(e.request))
     );
     return;
   }

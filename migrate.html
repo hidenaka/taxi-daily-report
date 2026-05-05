@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>データ移行 — GitHub → Firebase</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<main style="padding:14px;">
+  <h1>データ移行ツール</h1>
+  <p class="muted" style="font-size:12px;">GitHub上のデータをFirebase Firestoreにコピーします。既存データは上書きされます。</p>
+
+  <section class="card">
+    <h3>① 移行対象ユーザー</h3>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="btn" id="migrateSelf" style="flex:1;">user_self を移行</button>
+      <button class="btn" id="migrateMm" style="flex:1;">mm を移行</button>
+      <button class="btn" id="migrateAll" style="flex:1;background:var(--primary);">両方 移行</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h3>② ログ</h3>
+    <div id="log" style="font-family:monospace;font-size:11px;white-space:pre-wrap;max-height:400px;overflow-y:auto;background:#f5f5f5;padding:8px;border-radius:4px;"></div>
+  </section>
+</main>
+
+<script type="module">
+import { initAuth } from './js/firebase-auth.js';
+import { db } from './js/firebase-init.js';
+import { doc, setDoc, writeBatch, getFirestore } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+const REPO = 'hidenaka/taxi-daily-report-data';
+const logEl = document.getElementById('log');
+const log = (msg) => { logEl.textContent += msg + '\n'; logEl.scrollTop = logEl.scrollHeight; };
+
+// Initialize Firebase auth
+await initAuth();
+log('✓ Firebase認証完了');
+
+// GitHub API helper
+async function ghGet(path) {
+  const token = localStorage.getItem('github_token');
+  if (!token) throw new Error('github_token が設定されていません');
+  const r = await fetch(`https://api.github.com/repos/${REPO}/contents/${path}`, {
+    headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json' }
+  });
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`GitHub API ${r.status}: ${path}`);
+  const data = await r.json();
+  if (data.content) {
+    return JSON.parse(atob(data.content.replace(/\n/g, '')));
+  }
+  return data;
+}
+
+async function ghList(dir) {
+  const token = localStorage.getItem('github_token');
+  if (!token) throw new Error('github_token が設定されていません');
+  const r = await fetch(`https://api.github.com/repos/${REPO}/contents/${dir}`, {
+    headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json' }
+  });
+  if (r.status === 404) return [];
+  if (!r.ok) throw new Error(`GitHub API ${r.status}: ${dir}`);
+  return await r.json();
+}
+
+// Migrate a single user
+async function migrateUser(userId) {
+  log(`\n=== ${userId} の移行開始 ===`);
+
+  // 1. Migrate drives
+  const driveDir = `data/drives/${userId}`;
+  log(`📁 ${driveDir}/ を読み込み中...`);
+  const files = await ghList(driveDir);
+  if (!files || files.length === 0) {
+    log(`  ドライブデータなし`);
+  } else {
+    log(`  ${files.length}ファイル発見`);
+    let count = 0;
+    // Batch write (max 500 per batch)
+    let batch = writeBatch(db);
+    let batchCount = 0;
+
+    for (const file of files) {
+      if (!file.name.endsWith('.json')) continue;
+      const date = file.name.replace('.json', '');
+      const data = await ghGet(`${driveDir}/${file.name}`);
+      if (!data) continue;
+
+      const ref = doc(db, 'drives', userId, 'daily', date);
+      batch.set(ref, data);
+      batchCount++;
+      count++;
+
+      if (batchCount >= 400) {
+        await batch.commit();
+        log(`  ${count}/${files.length} 件コミット済み`);
+        batch = writeBatch(db);
+        batchCount = 0;
+      }
+    }
+
+    if (batchCount > 0) {
+      await batch.commit();
+    }
+    log(`✓ ドライブ: ${count}件 移行完了`);
+  }
+
+  // 2. Migrate config
+  log(`📁 config/${userId}.json を読み込み中...`);
+  const config = await ghGet(`data/config/${userId}.json`);
+  if (config) {
+    const ref = doc(db, 'configs', userId);
+    await setDoc(ref, config);
+    log(`✓ 設定 移行完了`);
+  } else {
+    log(`  設定ファイルなし`);
+  }
+
+  log(`=== ${userId} 移行完了 ===`);
+}
+
+// Button handlers
+document.getElementById('migrateSelf').onclick = async () => {
+  try { await migrateUser('user_self'); } catch (e) { log(`✗ エラー: ${e.message}`); }
+};
+document.getElementById('migrateMm').onclick = async () => {
+  try { await migrateUser('mm'); } catch (e) { log(`✗ エラー: ${e.message}`); }
+};
+document.getElementById('migrateAll').onclick = async () => {
+  try {
+    await migrateUser('user_self');
+    await migrateUser('mm');
+    log('\n🎉 すべての移行が完了しました！');
+    log('Firebase版で確認: localStorage から github_token を削除してリロード');
+  } catch (e) { log(`✗ エラー: ${e.message}`); }
+};
+
+log('✓ 準備完了。「user_self を移行」「mm を移行」または「両方 移行」をクリックしてください。');
+</script>
+</body>
+</html>

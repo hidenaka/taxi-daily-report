@@ -107,6 +107,10 @@ if ('serviceWorker' in navigator) {
       <span class="desc">どの曜日が稼げるか</span>
     </div>
     <div id="dowBody"></div>
+    <div id="dowDetailPanel" style="display:none;margin-top:12px;border-top:1px dashed #ddd;padding-top:12px;">
+      <div id="dowDateList" style="margin-bottom:12px;"></div>
+      <div id="dowDayCard"></div>
+    </div>
   </section>
 
   <section class="card" id="heatCard"
@@ -157,7 +161,7 @@ if ('serviceWorker' in navigator) {
 import { renderBottomNav, formatYen, formatDate, formatDateY, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod } from './js/app.js';
 import { getDrivesForMonth, getDrivesForMonthCached, getConfig, getConfigCached } from './js/storage.js';
 import { calcDailySales, calcTotalPay, calcMonthlySales } from './js/payroll.js';
-import { calcTimeBreakdown, dowPeriodMatrix, dowZoneMatrix, dowZoneEfficiency, dowAggregation, rankDrivesBySales, weatherSalesAggregation, WEATHER_LABELS, DOW_LABELS, isSummaryOnly, formatMin, ZONE_PRESETS, formatZoneRange, getShiftZones } from './js/chart-helpers.js';
+import { calcTimeBreakdown, dowPeriodMatrix, dowZoneMatrix, dowZoneEfficiency, dowAggregation, rankDrivesBySales, weatherSalesAggregation, WEATHER_LABELS, DOW_LABELS, isSummaryOnly, formatMin, ZONE_PRESETS, formatZoneRange, getShiftZones, dowOf, calcZoneBreakdown } from './js/chart-helpers.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('analytics');
 
@@ -220,7 +224,7 @@ function renderAll(periods, label) {
 }
 
 async function load() {
-  if (!localStorage.getItem('github_token') || !localStorage.getItem('github_data_repo')) {
+  if (!localStorage.getItem('use_firebase') && !localStorage.getItem('github_token')) {
     document.querySelector('main').innerHTML = '<div class="loading">設定からGitHubトークンを設定してください</div>';
     return;
   }
@@ -274,7 +278,7 @@ function renderDow() {
     const avgHourly = a.totalShiftMin > 0 ? a.totalSales / (a.totalShiftMin / 60) : 0;
     const avgShiftMin = a.totalShiftMin / a.days;
     const pct = (avgSales / max) * 100;
-    html += `<tr style="cursor:${a.bestDate ? 'pointer' : 'default'};" ${a.bestDate ? `onclick="location.href='detail.html?date=${a.bestDate}'"` : ''}>
+    html += `<tr style="cursor:pointer;" onclick="showDowDates(${dow})">
       <td class="l" style="color:${dow===0?'#d32f2f':dow===6?'#1976d2':''};font-weight:600;">${DOW_LABELS[dow]}</td>
       <td>${a.days}</td>
       <td><div style="position:relative;background:#f0f0f0;border-radius:3px;height:18px;min-width:80px;">
@@ -289,6 +293,164 @@ function renderDow() {
   }
   html += '</tbody></table></div>';
   document.getElementById('dowBody').innerHTML = html;
+}
+
+function showDowDates(dow) {
+  const agg = dowAggregation(allDrives);
+  const a = agg[dow];
+  const panel = document.getElementById('dowDetailPanel');
+  const listDiv = document.getElementById('dowDateList');
+  const cardDiv = document.getElementById('dowDayCard');
+
+  if (!a || a.days === 0) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  // 日付リストをテーブル表示（新しい順）
+  let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+    <strong style="font-size:13px;color:${dow===0?'#d32f2f':dow===6?'#1976d2':''};">${DOW_LABELS[dow]}曜日の営業日（${a.days}日）</strong>
+    <button onclick="document.getElementById('dowDetailPanel').style.display='none';" style="background:#f0f0f0;border:none;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;">閉じる</button>
+  </div>
+  <div style="overflow-x:auto;">
+  <table class="rank-table" style="font-size:11px;">
+    <thead><tr><th class="l">日付</th><th>件数</th><th>売上</th><th>時間単価</th><th>乗務時間</th></tr></thead>
+    <tbody>`;
+  for (const d of a.dates) {
+    const hourly = d.shiftMin > 0 ? d.sales / (d.shiftMin / 60) : 0;
+    html += `<tr style="cursor:pointer;" onclick="renderDayDetail('${d.date}')">
+      <td class="l" style="font-weight:600;">${formatDateY(d.date)}</td>
+      <td>${d.count}</td>
+      <td><strong>${formatYen(d.sales)}</strong></td>
+      <td>${formatYen(hourly)}</td>
+      <td>${formatMin(d.shiftMin)}</td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  listDiv.innerHTML = html;
+  cardDiv.innerHTML = '';
+  panel.style.display = 'block';
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function renderDayDetail(dateStr) {
+  const drive = allDrives.find(d => d.date === dateStr);
+  const cardDiv = document.getElementById('dowDayCard');
+  if (!drive) {
+    cardDiv.innerHTML = '<p class="muted" style="font-size:11px;">データが見つかりません</p>';
+    return;
+  }
+
+  const sales = calcDailySales(drive);
+  const valid = (drive.trips || []).filter(t => !t.isCancel);
+  const km = valid.reduce((s, t) => s + (t.km || 0), 0);
+  const bd = calcTimeBreakdown(drive);
+  const summary = isSummaryOnly(drive);
+  const hourly = bd.totalMin > 0 ? sales.inclTax / (bd.totalMin / 60) : 0;
+  const dow = dowOf(dateStr);
+  const dowColor = dow === 0 ? '#d32f2f' : dow === 6 ? '#1976d2' : '';
+
+  // ゾーン別
+  const defaultDep = config?.defaults?.departureTime || '07:00';
+  const zones = getShiftZones(defaultDep);
+  const pb = !summary ? calcZoneBreakdown(drive, zones) : null;
+
+  // 緑系濃淡 (売上)
+  function inclBg(v, max) {
+    if (!v || v <= 0 || !max) return '';
+    const r = Math.min(1, v / max);
+    const alpha = 0.05 + r * 0.45;
+    return `background:rgba(76,175,80,${alpha.toFixed(2)});`;
+  }
+  // オレンジ系 (時間単価)
+  function hourlyBg(v, max) {
+    if (!v || v <= 0 || !max) return '';
+    const r = Math.min(1, v / max);
+    const alpha = 0.05 + r * 0.45;
+    return `background:rgba(255,152,0,${alpha.toFixed(2)});`;
+  }
+
+  // 今月度のmaxを計算（同じ月のドライブから）
+  const ym = dateStr.slice(0, 7);
+  const monthDrives = allDrives.filter(d => d.date.startsWith(ym) && !isSummaryOnly(d));
+  const maxIncl = Math.max(...monthDrives.map(d => calcDailySales(d).inclTax), 1);
+  const maxHourly = Math.max(...monthDrives.map(d => {
+    const b = calcTimeBreakdown(d);
+    return b.totalMin > 0 ? calcDailySales(d).inclTax / (b.totalMin / 60) : 0;
+  }), 1);
+
+  const dash = '<span style="color:var(--muted);">—</span>';
+
+  // ゾーン別セル
+  let zoneCells = '';
+  if (pb) {
+    for (const z of zones) {
+      const v = pb[z.key].sales;
+      zoneCells += `<div style="flex:1;text-align:center;padding:6px 2px;border-radius:4px;background:#fafafa;">
+        <div style="font-size:9px;color:var(--muted);">${z.label}</div>
+        <div style="font-size:12px;font-weight:600;">${v > 0 ? formatYen(v) : dash}</div>
+      </div>`;
+    }
+  }
+
+  // メモ
+  const memoHtml = (drive.reviewMemo || '').trim()
+    ? `<div style="margin-top:8px;padding:8px;background:#fff8e1;border-radius:4px;font-size:12px;white-space:pre-wrap;">${drive.reviewMemo.replace(/</g,'&lt;')}</div>`
+    : '';
+
+  cardDiv.innerHTML = `
+    <div style="border:1px solid #e0e0e0;border-radius:6px;padding:12px;margin-top:8px;background:#fff;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+        <div>
+          <strong style="font-size:15px;color:${dowColor || '#333'};">${formatDateY(dateStr)} (${DOW_LABELS[dow]})</strong>
+          ${summary ? '<span class="badge" style="font-size:9px;padding:0 4px;background:#ddd;color:#666;margin-left:4px;">概</span>' : ''}
+        </div>
+        <a href="detail.html?date=${dateStr}" style="font-size:11px;color:var(--primary);text-decoration:none;font-weight:600;">詳細 ›</a>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+        <div style="padding:8px;border-radius:4px;${inclBg(sales.inclTax, maxIncl)}">
+          <div style="font-size:10px;color:var(--muted);">税込売上</div>
+          <div style="font-size:16px;font-weight:600;">${formatYen(sales.inclTax)}</div>
+        </div>
+        <div style="padding:8px;border-radius:4px;background:#fafafa;">
+          <div style="font-size:10px;color:var(--muted);">税抜売上</div>
+          <div style="font-size:14px;font-weight:600;">${formatYen(sales.exclTax)}</div>
+        </div>
+      </div>
+      ${pb ? `<div style="display:flex;gap:4px;margin-top:8px;">${zoneCells}</div>` : ''}
+      <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:8px;margin-top:8px;font-size:11px;">
+        <div style="text-align:center;padding:6px;background:#fafafa;border-radius:4px;">
+          <div style="color:var(--muted);font-size:10px;">件数</div>
+          <div style="font-weight:600;">${summary ? dash : valid.length}</div>
+        </div>
+        <div style="text-align:center;padding:6px;background:#fafafa;border-radius:4px;">
+          <div style="color:var(--muted);font-size:10px;">実車km</div>
+          <div style="font-weight:600;">${summary ? dash : km.toFixed(1)}</div>
+        </div>
+        <div style="text-align:center;padding:6px;border-radius:4px;${hourlyBg(hourly, maxHourly)}">
+          <div style="color:var(--muted);font-size:10px;">時間単価</div>
+          <div style="font-weight:600;">${summary ? dash : formatYen(hourly)}</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:8px;margin-top:4px;font-size:11px;">
+        <div style="text-align:center;padding:6px;background:#fafafa;border-radius:4px;">
+          <div style="color:var(--muted);font-size:10px;">乗務時間</div>
+          <div style="font-weight:600;">${summary ? dash : formatMin(bd.totalMin)}</div>
+        </div>
+        <div style="text-align:center;padding:6px;background:#fafafa;border-radius:4px;">
+          <div style="color:var(--muted);font-size:10px;">実車時間</div>
+          <div style="font-weight:600;">${summary ? dash : formatMin(bd.tripMin)}</div>
+        </div>
+        <div style="text-align:center;padding:6px;background:#fafafa;border-radius:4px;">
+          <div style="color:var(--muted);font-size:10px;">休憩時間</div>
+          <div style="font-weight:600;">${summary ? dash : formatMin(bd.restMin)}</div>
+        </div>
+      </div>
+      ${memoHtml}
+      <div style="margin-top:8px;font-size:10px;color:var(--muted);text-align:right;">時間帯は出庫${defaultDep}基準</div>
+    </div>
+  `;
+  cardDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function renderTrend() {
@@ -500,6 +662,10 @@ function renderMemos() {
     </div>
   `).join('');
 }
+
+// module内関数をHTML onclickから呼べるように公開
+window.showDowDates = showDowDates;
+window.renderDayDetail = renderDayDetail;
 
 load();
 </script>
