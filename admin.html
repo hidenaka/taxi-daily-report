@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>管理者ツール — タクシー日報</title>
 <link rel="stylesheet" href="css/style.css">
 <style>
@@ -170,11 +173,11 @@ localStorage.removeItem('github_data_repo');
 </main>
 
 <script type="module">
-import { loginWithUserId, logout, getCurrentUser, initAuth } from './js/firebase-auth.js';
-import { createUserWithCredentials } from './js/firebase-auth.js';
-import { getMyUserId } from './js/storage.js';
-import { getCompanyTemplates, saveCompanyTemplate, adminBatchSaveDrives } from './js/firebase-storage.js';
-import { DEFAULT_CONFIG } from './js/default-config.js';
+import { loginWithUserId, logout, getCurrentUser, initAuth } from './js/firebase-auth.js?v=2';
+import { createUserWithCredentials } from './js/firebase-auth.js?v=2';
+import { getMyUserId } from './js/storage.js?v=2';
+import { getCompanyTemplates, saveCompanyTemplate, adminBatchSaveDrives } from './js/firebase-storage.js?v=2';
+import { DEFAULT_CONFIG } from './js/default-config.js?v=2';
 import { parseFormattedReport } from './js/parser.js';
 
 const loginSection = document.getElementById('loginSection');
@@ -293,13 +296,10 @@ document.getElementById('logoutBtn').onclick = async () => {
 
 // テンプレート関連
 async function loadTemplates() {
+  const select = document.getElementById('templateSelect');
   try {
-    console.log('[DEBUG] loadTemplates() 開始');
-    alert('[DEBUG] loadTemplates() 開始'); // 目視確認用
+    select.innerHTML = '<option value="">読み込み中…</option>';
     const templates = await getCompanyTemplates();
-    console.log('[DEBUG] 取得したテンプレート数:', templates.length);
-    alert('[DEBUG] テンプレート数: ' + templates.length);
-    const select = document.getElementById('templateSelect');
     select.innerHTML = '<option value="">-- テンプレートを選択 --</option>';
     templates.forEach(t => {
       const option = document.createElement('option');
@@ -307,11 +307,13 @@ async function loadTemplates() {
       option.textContent = t.name;
       select.appendChild(option);
     });
-    console.log('[DEBUG] select更新完了');
+    if (templates.length === 0) {
+      select.innerHTML = '<option value="">テンプレートがありません</option>';
+    }
     return templates;
   } catch (e) {
     console.error('テンプレート読み込み失敗:', e);
-    alert('テンプレート読み込み失敗: ' + e.message);
+    select.innerHTML = '<option value="">読み込み失敗</option>';
     return [];
   }
 }
