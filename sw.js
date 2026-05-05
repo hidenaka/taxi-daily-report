@@ -41,7 +41,7 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   // GitHub API・天候API・migrate.html はキャッシュせず素通し
   if (url.hostname === 'api.github.com' || url.hostname.includes('open-meteo')) return;
-  if (url.pathname.includes('/migrate.html')) return;
+  if (url.pathname.includes('/migrate.html') || url.pathname.includes('/admin.html')) return;
   // HTMLとJSはネットワーク優先（更新を取りこぼさない）、失敗時のみキャッシュ
   const isHtmlOrJs = e.request.destination === 'document' || /\.(html|js)$/i.test(url.pathname);
   if (isHtmlOrJs) {
