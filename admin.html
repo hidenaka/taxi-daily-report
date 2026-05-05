@@ -326,7 +326,7 @@ async function loadTemplates() {
 async function checkAndShowKeihoTemplateButton() {
   try {
     const templates = await getCompanyTemplates();
-    const hasDefault = templates.some(t => t.id === 'keiho');
+    const hasDefault = templates.some(t => t.id === 'default');
     document.getElementById('keihoTemplateSection').style.display = hasDefault ? 'none' : '';
   } catch (e) {
     console.error('テンプレート確認失敗:', e);
@@ -340,6 +340,7 @@ document.getElementById('createKeihoTemplateBtn').onclick = async () => {
   btn.textContent = '作成中…';
   
   try {
+    // デフォルトテンプレートは基本的な設定値のみ（rateTableは各社/各所属で異なるため含めない）
     const templateData = {
       name: 'デフォルト',
       payrollMode: DEFAULT_CONFIG.payrollMode || 'step_rate',
@@ -347,11 +348,10 @@ document.getElementById('createKeihoTemplateBtn').onclick = async () => {
       responsibilityShifts: DEFAULT_CONFIG.responsibilityShifts || 11,
       extraRate: DEFAULT_CONFIG.extraRate || 0.62,
       defaults: DEFAULT_CONFIG.defaults || { vehicleType: 'japantaxi', departureTime: '07:00' },
-      privacy: DEFAULT_CONFIG.privacy || { shareDataWithOthers: true },
-      rateTable: DEFAULT_CONFIG.rateTable || null
+      privacy: DEFAULT_CONFIG.privacy || { shareDataWithOthers: true }
     };
     
-    await saveCompanyTemplate('keiho', templateData);
+    await saveCompanyTemplate('default', templateData);
     alert('デフォルトテンプレートを作成しました');
     document.getElementById('keihoTemplateSection').style.display = 'none';
     loadTemplates();
