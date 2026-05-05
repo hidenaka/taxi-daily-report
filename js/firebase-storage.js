@@ -44,40 +44,39 @@ export async function getDrivesForMonth(period) {
   const [year, month] = period.split('-').map(Number);
   const startDate = `${period}-01`;
   const endDate = `${period}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
-  
+
+  // orderBy を使わず範囲フィルタのみ（複合インデックス不要）
   const q = query(
     collection(db, 'drives', userId, 'daily'),
     where('date', '>=', startDate),
-    where('date', '<=', endDate),
-    orderBy('date', 'asc')
+    where('date', '<=', endDate)
   );
-  
+
   const snap = await getDocs(q);
-  return snap.docs.map(d => d.data());
+  const drives = snap.docs.map(d => d.data());
+  // クライアント側でソート
+  drives.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  return drives;
 }
 
 // Get all drives (for review/analysis)
 export async function getAllDrives() {
   await waitForAuth();
   const userId = getUserId();
-  const q = query(
-    collection(db, 'drives', userId, 'daily'),
-    orderBy('date', 'asc')
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map(d => d.data());
+  const snap = await getDocs(collection(db, 'drives', userId, 'daily'));
+  const drives = snap.docs.map(d => d.data());
+  drives.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  return drives;
 }
 
 // Get all drive dates (for navigation)
 export async function getAllDriveDates() {
   await waitForAuth();
   const userId = getUserId();
-  const q = query(
-    collection(db, 'drives', userId, 'daily'),
-    orderBy('date', 'asc')
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map(d => d.id); // document ID is the date
+  const snap = await getDocs(collection(db, 'drives', userId, 'daily'));
+  const dates = snap.docs.map(d => d.id); // document ID is the date
+  dates.sort();
+  return dates;
 }
 
 // ========== CONFIG ==========

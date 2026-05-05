@@ -6,26 +6,36 @@ import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/f
 let currentUser = null;
 let currentUserId = null;
 
+let authInitPromise = null;
+
 // Initialize anonymous auth
 export async function initAuth() {
-  return new Promise((resolve, reject) => {
-    onAuthStateChanged(auth, async (user) => {
+  if (authInitPromise) return authInitPromise;
+
+  authInitPromise = new Promise((resolve, reject) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         currentUser = user;
         // Load or create user profile
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          currentUserId = userDoc.data().userId;
-        } else {
-          // Generate a default userId
-          currentUserId = generateUserId();
-          await setDoc(doc(db, 'users', user.uid), {
-            userId: currentUserId,
-            createdAt: new Date().toISOString(),
-            isAnonymous: true
-          });
+        try {
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+            currentUserId = userDoc.data().userId;
+          } else {
+            // Generate a default userId
+            currentUserId = generateUserId();
+            await setDoc(doc(db, 'users', user.uid), {
+              userId: currentUserId,
+              createdAt: new Date().toISOString(),
+              isAnonymous: true
+            });
+          }
+          unsubscribe();
+          resolve(user);
+        } catch (e) {
+          unsubscribe();
+          reject(e);
         }
-        resolve(user);
       } else {
         // Not signed in, sign in anonymously
         try {
@@ -37,13 +47,17 @@ export async function initAuth() {
             createdAt: new Date().toISOString(),
             isAnonymous: true
           });
+          unsubscribe();
           resolve(currentUser);
         } catch (e) {
+          unsubscribe();
           reject(e);
         }
       }
     });
   });
+
+  return authInitPromise;
 }
 
 // Generate a random user ID (alphanumeric, starts with letter)
