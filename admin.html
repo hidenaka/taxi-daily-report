@@ -294,7 +294,11 @@ document.getElementById('logoutBtn').onclick = async () => {
 // テンプレート関連
 async function loadTemplates() {
   try {
+    console.log('[DEBUG] loadTemplates() 開始');
+    alert('[DEBUG] loadTemplates() 開始'); // 目視確認用
     const templates = await getCompanyTemplates();
+    console.log('[DEBUG] 取得したテンプレート数:', templates.length);
+    alert('[DEBUG] テンプレート数: ' + templates.length);
     const select = document.getElementById('templateSelect');
     select.innerHTML = '<option value="">-- テンプレートを選択 --</option>';
     templates.forEach(t => {
@@ -303,9 +307,11 @@ async function loadTemplates() {
       option.textContent = t.name;
       select.appendChild(option);
     });
+    console.log('[DEBUG] select更新完了');
     return templates;
   } catch (e) {
     console.error('テンプレート読み込み失敗:', e);
+    alert('テンプレート読み込み失敗: ' + e.message);
     return [];
   }
 }
@@ -315,6 +321,7 @@ async function checkAndShowKeihoTemplateButton() {
   try {
     const templates = await getCompanyTemplates();
     const hasKeiho = templates.some(t => t.id === 'keiho' || t.name === 'けーほー');
+    console.log('[DEBUG] けーほーテンプレート存在:', hasKeiho);
     document.getElementById('keihoTemplateSection').style.display = hasKeiho ? 'none' : '';
   } catch (e) {
     console.error('テンプレート確認失敗:', e);
@@ -568,6 +575,110 @@ async function saveConfigToUser(userId, config) {
   const { db } = await import('./js/firebase-init.js');
   await setDoc(doc(db, 'userConfigs', userId), config);
 }
+
+// ---- 過去データ一括取込 ---------------------------------------------
+
+function splitReports(text) {
+  const lines = text.split('\n');
+  const sections = [];
+  let current = [];
+  for (const line of lines) {
+    if (/^日付:\s*\d{4}-\d{2}-\d{2}/.test(line.trim())) {
+      if (current.length > 0 && current.some(l => l.includes('---'))) {
+        sections.push(current.join('\n'));
+      }
+      current = [line];
+    } else {
+      current.push(line);
+    }
+  }
+  if (current.length > 0 && current.some(l => l.includes('---'))) {
+    sections.push(current.join('\n'));
+  }
+  return sections;
+}
+
+function inferVehicleType(trips) {
+  if (!trips || trips.length === 0) return 'japantaxi';
+  if (trips.some(t => t.pickupKind === 'ア')) return 'japantaxi';
+  const pickupCount = trips.filter(t => t.isPickup).length;
+  return (pickupCount / trips.length) >= 0.7 ? 'premium' : 'japantaxi';
+}
+
+let parsedBulkReports = [];
+
+document.getElementById('bulkParseBtn').onclick = () => {
+  const targetId = document.getElementById('bulkTargetUserId').value.trim();
+  const text = document.getElementById('bulkTextInput').value;
+  const status = document.getElementById('bulkStatus');
+  const preview = document.getElementById('bulkPreview');
+  
+  if (!targetId) { status.textContent = '✗ 対象ユーザーIDを入力してください'; status.style.color = '#d32f2f'; return; }
+  if (!/^[a-z][a-z0-9_]*$/.test(targetId)) { status.textContent = '✗ userIdの形式が不正です'; status.style.color = '#d32f2f'; return; }
+  if (!text.trim()) { status.textContent = '✗ テキストが空欄です'; status.style.color = '#d32f2f'; return; }
+  
+  const sections = splitReports(text);
+  if (sections.length === 0) { status.textContent = '✗ 「日付:」行が見つかりません'; status.style.color = '#d32f2f'; return; }
+  
+  parsedBulkReports = [];
+  for (const section of sections) {
+    try {
+      const parsed = parseFormattedReport(section);
+      if (!parsed.date || !/^\d{4}-\d{2}-\d{2}$/.test(parsed.date)) throw new Error('日付不正');
+      if (!parsed.trips || parsed.trips.length === 0) throw new Error('データなし');
+      parsedBulkReports.push(parsed);
+    } catch (e) {
+      console.warn('Parse error:', e);
+    }
+  }
+  
+  const okCount = parsedBulkReports.length;
+  preview.innerHTML = `<strong>${okCount}日分</strong> 解析完了（${sections.length}日中）`;
+  preview.innerHTML += parsedBulkReports.map(r => `<div style="margin-top:4px;">• ${r.date}: ${r.trips.length}件 ¥${r.trips.filter(t=>!t.isCancel).reduce((s,t)=>s+(t.amount||0),0).toLocaleString()}</div>`).join('');
+  status.textContent = okCount > 0 ? '✓ 解析完了。保存ボタンを押してください' : '✗ 解析できたデータがありません';
+  status.style.color = okCount > 0 ? 'green' : '#d32f2f';
+  document.getElementById('bulkSaveBtn').disabled = okCount === 0;
+};
+
+document.getElementById('bulkSaveBtn').onclick = async () => {
+  const targetId = document.getElementById('bulkTargetUserId').value.trim();
+  const status = document.getElementById('bulkStatus');
+  const btn = document.getElementById('bulkSaveBtn');
+  
+  if (!confirm(`${parsedBulkReports.length}日分を「${targetId}」に保存します。よろしいですか？`)) return;
+  
+  btn.disabled = true;
+  btn.textContent = '保存中…';
+  status.textContent = 'Firebaseに保存中…';
+  
+  try {
+    const drives = parsedBulkReports.map(r => {
+      const vt = r.vehicleType || inferVehicleType(r.trips);
+      return {
+        date: r.date,
+        vehicleType: vt,
+        departureTime: r.departureTime || null,
+        returnTime: r.returnTime || null,
+        trips: r.trips,
+        rests: r.rests,
+        rawText: r.rawText,
+        importedAt: new Date().toISOString()
+      };
+    });
+    
+    await adminBatchSaveDrives(targetId, drives);
+    status.textContent = `✅ ${drives.length}日分の保存が完了しました`;
+    status.style.color = 'green';
+    document.getElementById('bulkTextInput').value = '';
+    parsedBulkReports = [];
+  } catch (e) {
+    status.textContent = '✗ 保存失敗: ' + e.message;
+    status.style.color = '#d32f2f';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '保存';
+  }
+};
 </script>
 </body>
 </html>
