@@ -32,13 +32,18 @@ if ('serviceWorker' in navigator) {
   <!-- ログインセクション -->
   <section class="login-card" id="loginSection">
     <h3>🔐 管理者ログイン</h3>
-    <p class="muted" style="font-size:11px;margin-bottom:10px;">ID: admin / PW: admin でログイン</p>
+    <p class="muted" style="font-size:11px;margin-bottom:10px;">ID: admin / PW: admin123 でログイン</p>
     <label class="muted">ユーザーID</label>
     <input class="input" id="loginUserId" placeholder="admin" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
     <label class="muted" style="margin-top:8px;display:block;">パスワード</label>
-    <input class="input" id="loginPassword" type="password" placeholder="admin" autocomplete="off">
+    <input class="input" id="loginPassword" type="password" placeholder="admin123" autocomplete="off">
     <button class="btn" id="loginBtn" style="margin-top:12px;width:100%;">ログイン</button>
     <div id="loginStatus" style="margin-top:8px;font-size:12px;"></div>
+    
+    <hr style="border:none;border-top:1px solid #ffcc80;margin:14px 0;">
+    <p class="muted" style="font-size:11px;margin-bottom:8px;">初めての場合は、下のボタンで管理者アカウントを作成してください。</p>
+    <button class="btn" id="initAdminBtn" style="width:100%;background:#e65100;color:#fff;">🔧 管理者アカウントを初期化（初回のみ）</button>
+    <div id="initStatus" style="margin-top:8px;font-size:12px;"></div>
   </section>
 
   <!-- 管理者コンテンツ（ログイン後に表示） -->
@@ -113,6 +118,37 @@ function showLoginUI() {
 if (!checkAdmin()) {
   showLoginUI();
 }
+
+// 管理者アカウント初期化（初回のみ）
+document.getElementById('initAdminBtn').onclick = async () => {
+  const btn = document.getElementById('initAdminBtn');
+  const status = document.getElementById('initStatus');
+  
+  if (!confirm('管理者アカウント（admin / admin123）を作成しますか？\nすでに存在する場合はエラーになります。')) return;
+  
+  btn.disabled = true;
+  btn.textContent = '作成中…';
+  status.textContent = '';
+  
+  try {
+    const res = await createUserWithCredentials('admin', 'admin123');
+    if (res.success) {
+      status.textContent = '✓ admin アカウント作成完了！上のフォームからログインしてください。';
+      status.style.color = 'green';
+      document.getElementById('loginUserId').value = 'admin';
+      document.getElementById('loginPassword').value = 'admin123';
+    } else {
+      status.textContent = '✗ ' + res.error;
+      status.style.color = '#d32f2f';
+    }
+  } catch (e) {
+    status.textContent = '✗ ' + e.message;
+    status.style.color = '#d32f2f';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔧 管理者アカウントを初期化（初回のみ）';
+  }
+};
 
 // ログイン
 document.getElementById('loginBtn').onclick = async () => {
