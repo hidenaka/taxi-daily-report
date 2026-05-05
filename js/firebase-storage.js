@@ -332,9 +332,11 @@ export async function listActiveUserIds() {
   await waitForAuth();
   try {
     const snap = await getDocs(collection(db, 'users'));
-    return snap.docs
+    const ids = snap.docs
       .map(d => d.data().userId)
       .filter(id => id && isValidUserId(id));
+    // 同じuserIdが複数回登録されている場合がある（匿名認証の再ログインなど）
+    return [...new Set(ids)];
   } catch (e) {
     // 権限不足など: 自分のみ返す
     return [getUserId() || getMyUserId()];
