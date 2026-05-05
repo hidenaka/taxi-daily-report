@@ -30,6 +30,16 @@ if ('serviceWorker' in navigator) {
 // GitHub版廃止: 古いtoken/repoが残っていれば削除
 localStorage.removeItem('github_token');
 localStorage.removeItem('github_data_repo');
+
+// 開発環境バッジ
+if (location.hostname.includes('-dev')) {
+  document.addEventListener('DOMContentLoaded', () => {
+    const badge = document.createElement('div');
+    badge.textContent = '🚧 開発環境';
+    badge.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#ff9800;color:#fff;padding:4px 8px;font-size:11px;text-align:center;font-weight:600;z-index:9999;';
+    document.body.appendChild(badge);
+  });
+}
 </script>
 <main style="padding:14px;">
   <h1>管理者ツール</h1>

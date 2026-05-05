@@ -1,3 +1,9 @@
+// 開発環境判定
+export function isDevEnvironment() {
+  return location.hostname.includes('-dev') || 
+         location.pathname.includes('/dev/');
+}
+
 export function renderBottomNav(activePage) {
   const items = [
     { id: 'home', label: 'ホーム', href: 'index.html' },

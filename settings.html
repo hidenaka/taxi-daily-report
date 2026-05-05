@@ -17,9 +17,32 @@ if ('serviceWorker' in navigator) {
 // GitHub版廃止: 古いtoken/repoが残っていれば削除
 localStorage.removeItem('github_token');
 localStorage.removeItem('github_data_repo');
+
+// 開発環境バッジ
+if (location.hostname.includes('-dev')) {
+  document.addEventListener('DOMContentLoaded', () => {
+    const badge = document.createElement('div');
+    badge.textContent = '🚧 開発環境';
+    badge.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#ff9800;color:#fff;padding:4px 8px;font-size:11px;text-align:center;font-weight:600;z-index:9999;';
+    document.body.appendChild(badge);
+  });
+}
 </script>
 <main style="padding:14px;">
   <h1>設定</h1>
+
+  <section class="card">
+    <h3>アカウント</h3>
+    <div style="padding:12px;background:var(--bg);border-radius:8px;margin-bottom:10px;">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:2px;">現在のアカウント</div>
+      <div style="font-size:18px;font-weight:600;" id="currentUserIdDisplay">--</div>
+    </div>
+    <button class="btn" id="switchAccountBtn" style="width:100%;">🔄 アカウントを切り替え</button>
+    <div id="switchAccountStatus" class="muted" style="margin-top:4px;font-size:11px;"></div>
+    <label class="muted" style="margin-top:12px;display:block;">表示名(任意)</label>
+    <input class="input" id="displayNameInput" placeholder="自分">
+    <p class="muted" style="font-size:10px;margin-top:2px;">集計画面の表示用。</p>
+  </section>
 
   <section class="card">
     <h3>デフォルト</h3>
@@ -66,10 +89,10 @@ localStorage.removeItem('github_data_repo');
   </section>
 
 </main>
-<div style="position:sticky;bottom:0;background:#fff;border-top:1px solid #eee;padding:10px 14px;z-index:10;">
+<div id="navHost"></div>
+<div style="position:fixed;bottom:70px;left:0;right:0;background:#fff;border-top:1px solid #eee;padding:10px 14px;z-index:10;">
   <button class="btn" id="saveConfigBtn" style="width:100%;">💾 設定を保存</button>
 </div>
-<div id="navHost"></div>
 <script type="module">
 import { renderBottomNav } from './js/app.js';
 import { getConfig, saveConfig, getDrivesForMonth, getMyUserId, setMyUserId, getUserRoleMap } from './js/storage.js';
@@ -77,7 +100,6 @@ import { isValidUserId } from './js/userid.js';
 import { DEFAULT_CONFIG } from './js/default-config.js';
 import { calcTotalPay } from './js/payroll.js';
 import { isEmailAuth, logout } from './js/firebase-auth.js';
-import { loginWithUserId, logout, isEmailAuth } from './js/firebase-auth.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('settings');
 
@@ -99,9 +121,6 @@ async function loadConfig() {
     myRole = roleMap[getMyUserId()] || 'member';
     if (!currentConfig) {
       currentConfig = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
-      document.getElementById('ghStatus').textContent = 'まだ個人設定ファイルがありません。「設定全体を保存」を押すと作成されます。';
-    } else {
-      document.getElementById('ghStatus').textContent = '読み込み成功';
     }
     document.getElementById('vehicleTypeSel').value = currentConfig.defaults.vehicleType;
     document.getElementById('departureInput').value = currentConfig.defaults.departureTime;
@@ -120,9 +139,8 @@ async function loadConfig() {
       document.getElementById('rateTableSection').style.display = 'none';
       document.getElementById('adminToolsSection').style.display = 'none';
     }
-    document.getElementById('ghStatus').textContent = '読み込み成功';
   } catch (e) {
-    document.getElementById('ghStatus').textContent = 'エラー: ' + e.message;
+    console.error('設定読み込みエラー:', e);
   }
 }
 
@@ -256,11 +274,8 @@ document.getElementById('weatherDefaultBtn').onclick = () => {
   document.getElementById('weatherGpsInfo').textContent = 'デフォルト（千代田区）に戻しました';
 };
 
-// GitHub版: tokenとrepoが設定されている場合のみ
-// Firebase版: 常に読み込み
-if (!isGitHubMode || (localStorage.getItem('github_token') && localStorage.getItem('github_data_repo'))) {
-  loadConfig();
-}
+// 常に読み込み
+loadConfig();
 </script>
 </body>
 </html>

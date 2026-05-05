@@ -7,6 +7,15 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+<script>
+// 開発環境バッジ
+if (location.hostname.includes('-dev')) {
+  const badge = document.createElement('div');
+  badge.textContent = '🚧 開発環境';
+  badge.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#ff9800;color:#fff;padding:4px 8px;font-size:11px;text-align:center;font-weight:600;z-index:9999;';
+  document.body.appendChild(badge);
+}
+</script>
 <main style="padding:14px;">
   <h1>データ移行ツール</h1>
   <p class="muted" style="font-size:12px;">GitHub上のデータをFirebase Firestoreにコピーします。既存データは上書きされます。</p>

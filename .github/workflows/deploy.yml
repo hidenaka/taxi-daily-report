@@ -1,0 +1,60 @@
+name: Deploy to Production
+
+on:
+  # 手動実行（推奨）
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: '本番にデプロイしますか？ (yes/no)'
+        required: true
+        default: 'no'
+
+  # releaseブランチへのpushでも自動実行（オプション）
+  push:
+    branches:
+      - release
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm == 'yes' || github.ref == 'refs/heads/release'
+    
+    steps:
+      - name: Checkout dev repo
+        uses: actions/checkout@v4
+        with:
+          path: dev
+          
+      - name: Checkout prod repo
+        uses: actions/checkout@v4
+        with:
+          repository: hidenaka/taxi-daily-report
+          token: ${{ secrets.PROD_DEPLOY_TOKEN }}
+          path: prod
+          
+      - name: Copy files to prod
+        run: |
+          # devリポジトリのファイルをprodにコピー
+          rsync -av --delete \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='docs/' \
+            --exclude='scripts/' \
+            --exclude='.opencode/' \
+            --exclude='.DS_Store' \
+            --exclude='node_modules/' \
+            dev/ prod/
+          
+      - name: Commit and push to prod
+        working-directory: prod
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add -A
+          git diff --cached --quiet || (
+            git commit -m "deploy: sync from dev repo (${{ github.sha }})"
+            git push origin main
+          )
+          
+      - name: Deployment complete
+        run: echo "✅ 本番デプロイ完了: https://hidenaka.github.io/taxi-daily-report/"
