@@ -18,6 +18,9 @@
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
 }
+// GitHub版廃止: 古いtoken/repoが残っていれば削除
+localStorage.removeItem('github_token');
+localStorage.removeItem('github_data_repo');
 </script>
 <main style="padding:14px;">
   <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px;">
@@ -360,7 +363,7 @@ document.getElementById('saveBtn').onclick = async () => {
     updatedAt: new Date().toISOString()
   };
 
-  document.getElementById('saveStatus').textContent = 'GitHubに保存中…';
+  document.getElementById('saveStatus').textContent = '保存中…';
   try {
     await saveDriveSafe(drive);
     document.getElementById('saveStatus').textContent = '保存完了';

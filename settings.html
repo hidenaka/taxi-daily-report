@@ -14,53 +14,12 @@
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
 }
+// GitHub版廃止: 古いtoken/repoが残っていれば削除
+localStorage.removeItem('github_token');
+localStorage.removeItem('github_data_repo');
 </script>
 <main style="padding:14px;">
   <h1>設定</h1>
-
-  <details class="card" id="adminSection" style="padding:0;border:none;">
-    <summary style="padding:14px 20px;cursor:pointer;font-size:15px;font-weight:600;list-style:none;display:flex;justify-content:space-between;align-items:center;">
-      <span>🔧 GitHub設定（管理者専用）</span>
-      <span style="font-size:11px;color:var(--muted);font-weight:400;">タップで開く</span>
-    </summary>
-    <div style="padding:0 20px 14px;">
-      <label class="muted">データリポジトリ (username/repo-data)</label>
-      <input class="input" id="repoInput" placeholder="hidenaka/taxi-daily-report-data" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="font-size:13px;">
-      <label class="muted" style="margin-top:8px;display:block;">Personal Access Token (repo権限)</label>
-      <input class="input" id="tokenInput" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
-      <div style="display:flex;gap:6px;margin-top:8px;">
-        <button class="btn" id="saveGhBtn" style="flex:1;">保存</button>
-        <button class="btn" id="testBtn" style="flex:1;background:var(--gray);">接続テスト</button>
-      </div>
-      <div id="ghStatus" class="muted" style="margin-top:6px;white-space:pre-wrap;font-family:monospace;font-size:11px;"></div>
-    </div>
-  </details>
-
-  <section class="card" id="loginSection">
-    <h3>🔐 ログイン</h3>
-    <p class="muted" style="font-size:11px;margin-bottom:8px;">管理者から受け取ったuserIdとパスワードでログイン</p>
-    <label class="muted">ユーザーID</label>
-    <input class="input" id="loginUserId" placeholder="userId" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
-    <label class="muted" style="margin-top:8px;display:block;">パスワード</label>
-    <input class="input" id="loginPassword" type="password" placeholder="パスワード" autocomplete="off">
-    <button class="btn" id="loginBtn" style="margin-top:10px;width:100%;">ログイン</button>
-    <div id="loginStatus" class="muted" style="margin-top:6px;font-size:11px;"></div>
-  </section>
-
-  <section class="card" id="accountSection" style="display:none;">
-    <h3>アカウント</h3>
-    <div style="padding:12px;background:var(--bg);border-radius:8px;margin-bottom:10px;">
-      <div style="font-size:11px;color:var(--muted);margin-bottom:2px;">現在のアカウント</div>
-      <div style="font-size:18px;font-weight:600;" id="currentUserIdDisplay">--</div>
-      <div style="font-size:11px;color:var(--primary);margin-top:4px;" id="authTypeDisplay"></div>
-    </div>
-    <button class="btn" id="switchAccountBtn" style="width:100%;">🔄 アカウントを切り替え</button>
-    <button class="btn" id="logoutBtn" style="width:100%;margin-top:8px;background:var(--gray);color:#333;">ログアウト</button>
-    <div id="switchAccountStatus" class="muted" style="margin-top:4px;font-size:11px;"></div>
-    <label class="muted" style="margin-top:12px;display:block;">表示名(任意)</label>
-    <input class="input" id="displayNameInput" placeholder="自分">
-    <p class="muted" style="font-size:10px;margin-top:2px;">集計画面の表示用。</p>
-  </section>
 
   <section class="card">
     <h3>デフォルト</h3>
@@ -117,6 +76,7 @@ import { getConfig, saveConfig, getDrivesForMonth, getMyUserId, setMyUserId, get
 import { isValidUserId } from './js/userid.js';
 import { DEFAULT_CONFIG } from './js/default-config.js';
 import { calcTotalPay } from './js/payroll.js';
+import { isEmailAuth, logout } from './js/firebase-auth.js';
 import { loginWithUserId, logout, isEmailAuth } from './js/firebase-auth.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('settings');
@@ -124,124 +84,8 @@ document.getElementById('navHost').innerHTML = renderBottomNav('settings');
 let currentConfig = null;
 let myRole = 'member';
 
-// GitHub版かFirebase版か判定
-const isGitHubMode = !!localStorage.getItem('github_token');
-
-// Firebase版ではGitHub設定セクションを非表示
-if (!isGitHubMode) {
-  document.getElementById('adminSection').style.display = 'none';
-}
-
-// GitHub設定 復元（GitHub版のみ）
-if (isGitHubMode) {
-  document.getElementById('repoInput').value = localStorage.getItem('github_data_repo') || '';
-  document.getElementById('tokenInput').value = localStorage.getItem('github_token') || '';
-}
-
-// ログイン状態に応じてUI切り替え
-function updateAuthUI() {
-  const userId = getMyUserId();
-  const isLoggedIn = !!userId;
-  const isEmail = isEmailAuth();
-  
-  if (isLoggedIn && isEmail) {
-    // メール認証ログイン済み
-    document.getElementById('loginSection').style.display = 'none';
-    document.getElementById('accountSection').style.display = '';
-    document.getElementById('currentUserIdDisplay').textContent = userId;
-    document.getElementById('authTypeDisplay').textContent = '✓ ログイン中';
-  } else if (isLoggedIn) {
-    // 匿名認証（既存ユーザー）
-    document.getElementById('loginSection').style.display = 'none';
-    document.getElementById('accountSection').style.display = '';
-    document.getElementById('currentUserIdDisplay').textContent = userId;
-    document.getElementById('authTypeDisplay').textContent = '匿名アクセス（設定でログインできます）';
-  } else {
-    // 未ログイン
-    document.getElementById('loginSection').style.display = '';
-    document.getElementById('accountSection').style.display = 'none';
-  }
-}
-
-updateAuthUI();
-
-// ログイン
-document.getElementById('loginBtn').onclick = async () => {
-  const userId = document.getElementById('loginUserId').value.trim();
-  const password = document.getElementById('loginPassword').value;
-  const status = document.getElementById('loginStatus');
-  
-  if (!userId || !password) {
-    status.textContent = '✗ userIdとパスワードを入力してください';
-    status.style.color = '#d32f2f';
-    return;
-  }
-  
-  status.textContent = 'ログイン中…';
-  status.style.color = '';
-  
-  const res = await loginWithUserId(userId, password);
-  if (res.success) {
-    status.textContent = '✓ ログイン成功';
-    status.style.color = 'green';
-    updateAuthUI();
-    loadConfig();
-  } else {
-    status.textContent = '✗ ' + res.error;
-    status.style.color = '#d32f2f';
-  }
-};
-
-// ログアウト
-document.getElementById('logoutBtn').onclick = async () => {
-  await logout();
-  updateAuthUI();
-  location.reload();
-};
-
-document.getElementById('saveGhBtn').onclick = () => {
-  localStorage.setItem('github_data_repo', document.getElementById('repoInput').value.trim());
-  localStorage.setItem('github_token', document.getElementById('tokenInput').value.trim());
-  document.getElementById('ghStatus').textContent = '保存しました。設定を読み込みます…';
-  loadConfig();
-};
-
-document.getElementById('testBtn').onclick = async () => {
-  const status = document.getElementById('ghStatus');
-  const log = (msg) => { status.textContent += msg + '\n'; };
-  status.textContent = '';
-  const repo = document.getElementById('repoInput').value.trim();
-  const token = document.getElementById('tokenInput').value.trim();
-  if (!repo) { log('✗ リポジトリ名が空欄'); return; }
-  if (!token) { log('✗ トークンが空欄'); return; }
-  log(`→ リポジトリ: ${repo}`);
-  log(`→ トークン: ${token.slice(0,4)}...${token.slice(-4)} (${token.length}文字)`);
-  // Test 1: API reachability + auth
-  try {
-    const r = await fetch('https://api.github.com/user', { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json' } });
-    if (r.status === 401) { log('✗ 認証失敗（トークンが無効か期限切れ）'); return; }
-    if (!r.ok) { log(`✗ /user ${r.status}: ${(await r.text()).slice(0,100)}`); return; }
-    const u = await r.json();
-    log(`✓ 認証OK (user: ${u.login})`);
-  } catch (e) { log(`✗ ネットワーク到達失敗: ${e.message}`); return; }
-  // Test 2: Repo existence
-  try {
-    const r = await fetch(`https://api.github.com/repos/${repo}`, { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json' } });
-    if (r.status === 404) { log(`✗ リポジトリが見つからない: ${repo}（タイプミス or トークンの権限不足）`); return; }
-    if (!r.ok) { log(`✗ /repos/${repo} ${r.status}`); return; }
-    log(`✓ リポジトリ存在確認OK`);
-  } catch (e) { log(`✗ リポジトリ確認失敗: ${e.message}`); return; }
-  // Test 3: config/{userId}.json
-  try {
-    const userId = getMyUserId();
-    const configPath = `data/config/${userId}.json`;
-    const r = await fetch(`https://api.github.com/repos/${repo}/contents/${configPath}`, { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json' } });
-    if (r.status === 404) { log(`✗ ${configPath} が見つからない`); return; }
-    if (!r.ok) { log(`✗ ${configPath} 取得失敗 ${r.status}`); return; }
-    log(`✓ ${configPath} 取得OK`);
-    log('→ すべて正常。「保存」を押して設定を反映してください。');
-  } catch (e) { log(`✗ config取得失敗: ${e.message}`); }
-};
+// userId 初期表示
+document.getElementById('currentUserIdDisplay').textContent = getMyUserId();
 
 // userId は readonly で管理者配布リンクから自動設定されるため、ユーザーが編集することはない
 
@@ -305,7 +149,7 @@ function renderRateTable(rt) {
   host.appendChild(rateDiv);
 }
 
-document.getElementById('switchAccountBtn').onclick = () => {
+document.getElementById('switchAccountBtn').onclick = async () => {
   const status = document.getElementById('switchAccountStatus');
   const currentId = getMyUserId();
 
@@ -321,6 +165,17 @@ document.getElementById('switchAccountBtn').onclick = () => {
   if (trimmed === currentId) { status.textContent = '✓ 同じuserIdです'; return; }
 
   if (!confirm(`アカウントを「${currentId}」から「${trimmed}」に切り替えますか？\nページが再読み込みされます。`)) return;
+
+  status.textContent = '切り替え中…';
+
+  // メール認証ユーザーの場合はログアウトして匿名に戻す（そうでないと onAuthStateChanged で上書きされる）
+  if (isEmailAuth()) {
+    try {
+      await logout();
+    } catch (e) {
+      console.warn('Logout failed:', e);
+    }
+  }
 
   setMyUserId(trimmed);
   status.textContent = `✓ 「${trimmed}」に切り替えました。再読み込みします…`;

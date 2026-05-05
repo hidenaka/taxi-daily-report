@@ -32,6 +32,32 @@ export async function saveDrive(date, data) {
   return true;
 }
 
+// Admin専用: 任意ユーザーのデータを保存
+export async function adminSaveDrive(targetUserId, date, data) {
+  await waitForAuth();
+  const ref = doc(db, 'drives', targetUserId, 'daily', date);
+  await setDoc(ref, {
+    ...data,
+    updatedAt: new Date().toISOString()
+  });
+  return true;
+}
+
+// Admin専用: バッチ保存
+export async function adminBatchSaveDrives(targetUserId, drives) {
+  await waitForAuth();
+  const batch = writeBatch(db);
+  for (const drive of drives) {
+    const ref = doc(db, 'drives', targetUserId, 'daily', drive.date);
+    batch.set(ref, {
+      ...drive,
+      updatedAt: new Date().toISOString()
+    });
+  }
+  await batch.commit();
+  return true;
+}
+
 export async function deleteDrive(date) {
   await waitForAuth();
   const userId = getUserId();

@@ -24,6 +24,9 @@
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
 }
+// GitHub版廃止: 古いtoken/repoが残っていれば削除
+localStorage.removeItem('github_token');
+localStorage.removeItem('github_data_repo');
 </script>
 <main style="padding:14px;">
   <h1>シフトカレンダー</h1>
@@ -219,8 +222,7 @@ document.getElementById('nextBtn').onclick = () => {
   render();
 };
 
-if (localStorage.getItem('use_firebase') || (localStorage.getItem('github_token') && localStorage.getItem('github_data_repo'))) load();
-else alert('先に設定画面でGitHubトークンを設定してください');
+load();
 </script>
 </body>
 </html>

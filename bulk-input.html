@@ -33,6 +33,9 @@
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
 }
+// GitHub版廃止: 古いtoken/repoが残っていれば削除
+localStorage.removeItem('github_token');
+localStorage.removeItem('github_data_repo');
 </script>
 <main style="padding:14px;">
   <h1>日報一括取込</h1>

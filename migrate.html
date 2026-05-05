@@ -37,7 +37,7 @@
   </section>
 
   <section class="card">
-    <h3>② ログ</h3>
+    <h3>④ ログ</h3>
     <div id="log" style="font-family:monospace;font-size:11px;white-space:pre-wrap;max-height:400px;overflow-y:auto;background:#f5f5f5;padding:8px;border-radius:4px;"></div>
   </section>
 </main>
@@ -102,7 +102,9 @@ async function ghGet(path) {
   if (!r.ok) throw new Error(`GitHub API ${r.status}: ${path}`);
   const data = await r.json();
   if (data.content) {
-    return JSON.parse(atob(data.content.replace(/\n/g, '')));
+    // UTF-8 対応 base64 デコード
+    const decoded = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ''))));
+    return JSON.parse(decoded);
   }
   return data;
 }
@@ -206,7 +208,11 @@ document.getElementById('migrateAll').onclick = async () => {
     await migrateUser('user_self', date);
     await migrateUser('mm', date);
     log('\n🎉 すべての移行が完了しました！');
-    log('次のステップ: storage.js の GitHub 依存を解除して Firebase のみにする');
+    // GitHub 設定を削除して Firebase のみにする
+    localStorage.removeItem('github_token');
+    localStorage.removeItem('github_data_repo');
+    log('✓ GitHub token / repo を localStorage から削除しました');
+    log('ページをリロードすると Firebase のみで動作します');
   } catch (e) { log(`✗ エラー: ${e.message}`); }
 };
 

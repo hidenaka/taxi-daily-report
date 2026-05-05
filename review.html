@@ -64,6 +64,9 @@
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
 }
+// GitHub版廃止: 古いtoken/repoが残っていれば削除
+localStorage.removeItem('github_token');
+localStorage.removeItem('github_data_repo');
 </script>
 <main style="padding:14px;">
   <h1 style="margin-top:0;">分析</h1>
@@ -224,10 +227,6 @@ function renderAll(periods, label) {
 }
 
 async function load() {
-  if (!localStorage.getItem('use_firebase') && !localStorage.getItem('github_token')) {
-    document.querySelector('main').innerHTML = '<div class="loading">設定からGitHubトークンを設定してください</div>';
-    return;
-  }
   const current = currentBillingPeriod();
   const periods = [];
   for (let i = monthsRange - 1; i >= 0; i--) {

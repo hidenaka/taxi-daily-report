@@ -54,9 +54,12 @@
 </head>
 <body>
 <script>
-if ('serviceWorker' in navigator) {
+  if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
 }
+// GitHub版廃止: 古いtoken/repoが残っていれば削除
+localStorage.removeItem('github_token');
+localStorage.removeItem('github_data_repo');
 </script>
 <main style="padding:14px;">
   <section class="card" id="todayHintCard" style="display:none;"></section>
@@ -75,20 +78,13 @@ import { calcTotalPay, calcDailySales, calcMonthlySales } from './js/payroll.js'
 import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js';
 import { processInvite } from './js/invite-crypto.js';
 
-// 暗号化招待リンク処理（優先）
-const inviteProcessed = await processInvite();
-if (inviteProcessed) {
-  // トースト通知は後でrender後に行うため、ここではフラグだけ設定
-}
+// 暗号化招待リンク処理は GitHub 版専用のためスキップ（Firebase 版）
+const inviteProcessed = false;
 
 // URL パラメータによる自動設定（管理者配布リンク対応）
 const urlParams = new URLSearchParams(location.search);
-const paramPat = urlParams.get('pat');
 const paramUser = urlParams.get('user');
-const paramRepo = urlParams.get('repo');
 let autoConfigured = false;
-if (paramPat) { localStorage.setItem('github_token', paramPat); autoConfigured = true; }
-if (paramRepo) { localStorage.setItem('github_data_repo', paramRepo); autoConfigured = true; }
 if (paramUser) {
   const norm = paramUser.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9_]+/, '');
   if (/^[a-z][a-z0-9_]*$/.test(norm)) {

@@ -59,17 +59,14 @@ export async function processInvite() {
 
     const pat = await decrypt(inviteData.encryptedPat, key);
 
-    localStorage.setItem('github_token', pat);
+    // GitHub版は廃止: token/repo は保存しない
+    console.log('[Invite] GitHub版は廃止されました。Firebase版をご利用ください。');
     if (userId) {
       setMyUserId(userId);
     } else if (inviteData.userId) {
       setMyUserId(inviteData.userId);
     }
-    if (repo) {
-      localStorage.setItem('github_data_repo', repo);
-    } else if (inviteData.repo) {
-      localStorage.setItem('github_data_repo', inviteData.repo);
-    }
+    // repo 情報は不要
 
     // URLから機密情報を消去
     const cleanUrl = new URL(window.location.href);

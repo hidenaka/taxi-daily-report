@@ -8,6 +8,7 @@ import {
   signOut
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { DEFAULT_CONFIG } from './default-config.js';
 
 let currentUser = null;
 let currentUserId = null;
@@ -47,13 +48,23 @@ export async function initAuth() {
         // 匿名ユーザーの場合（既存のロジック）
         try {
           const userDoc = await getDoc(doc(db, 'users', user.uid));
+          const localUserId = localStorage.getItem('taxi_user_id');
           if (userDoc.exists()) {
-            currentUserId = userDoc.data().userId;
+            const storedUserId = userDoc.data().userId;
+            // localStorage の値があれば優先（アカウント切り替え対応）
+            if (localUserId && localUserId !== storedUserId) {
+              currentUserId = localUserId;
+              await setDoc(doc(db, 'users', user.uid), {
+                userId: localUserId,
+                updatedAt: new Date().toISOString()
+              }, { merge: true });
+            } else {
+              currentUserId = storedUserId;
+            }
           } else {
             // 既存のlocalStorage userIdがあれば優先
-            const existingUserId = localStorage.getItem('taxi_user_id');
-            currentUserId = (existingUserId && /^[a-z][a-z0-9_]*$/.test(existingUserId))
-              ? existingUserId
+            currentUserId = (localUserId && /^[a-z][a-z0-9_]*$/.test(localUserId))
+              ? localUserId
               : generateUserId();
             await setDoc(doc(db, 'users', user.uid), {
               userId: currentUserId,
@@ -113,24 +124,9 @@ export async function createUserWithCredentials(userId, password) {
   const email = getDummyEmail(userId);
   try {
     const result = await createUserWithEmailAndPassword(auth, email, password);
-    // userConfigsに初期設定を作成
-    await setDoc(doc(db, 'userConfigs', userId), {
-      rateTable: { /* 会社標準をここに */ },
-      extraRate: 0.62,
-      premiumIncentive: {
-        thresholdSalesExclTax: 80000,
-        amountPerShift: 2000
-      },
-      responsibilityShifts: 11,
-      defaults: { vehicleType: "japantaxi", departureTime: "07:00" },
-      takeHomeRate: 0.75,
-      takeHomeTarget: 500000,
-      paidLeaveAmount: 39340,
-      weatherLocation: { lat: 35.6938, lon: 139.7036, name: "千代田区" },
-      shifts: { patterns: [], exceptions: { added: [], removed: [], swapped: [] }, expandedDates: [], paidLeaveDates: [] },
-      displayName: "",
-      lastUpdated: new Date().toISOString()
-    });
+    // userConfigsに初期設定を作成（DEFAULT_CONFIGをベースに）
+    const defaultConfig = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+    await setDoc(doc(db, 'userConfigs', userId), defaultConfig);
     return { success: true, user: result.user };
   } catch (e) {
     return { success: false, error: e.message };

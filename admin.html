@@ -24,6 +24,9 @@
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
 }
+// GitHub版廃止: 古いtoken/repoが残っていれば削除
+localStorage.removeItem('github_token');
+localStorage.removeItem('github_data_repo');
 </script>
 <main style="padding:14px;">
   <h1>管理者ツール</h1>
@@ -63,14 +66,29 @@ if ('serviceWorker' in navigator) {
       <input class="input" id="newUserDisplayName" placeholder="山田太郎" autocomplete="off">
     </section>
 
+    <section class="admin-card" id="keihoTemplateSection" style="display:none;">
+      <h3>📋 けーほーテンプレート</h3>
+      <p class="muted" style="font-size:11px;margin-bottom:8px;">けーほー所属用のデフォルトテンプレートが未作成です。</p>
+      <button class="btn" id="createKeihoTemplateBtn" style="width:100%;background:#e65100;color:#fff;">
+        けーほーテンプレートを作成
+      </button>
+    </section>
+
     <section class="admin-card">
       <h3>📋 テンプレート設定</h3>
       <label class="muted">テンプレート選択</label>
       <select class="select" id="templateSelect">
         <option value="">-- テンプレートを選択 --</option>
       </select>
-      <button class="btn" id="saveTemplateBtn" style="margin-top:8px;width:100%;background:var(--gray);color:#333;">
-        現在の設定をテンプレートとして保存
+      <div id="templateEditActions" style="margin-top:8px;display:none;">
+        <button class="btn" id="updateTemplateBtn" style="width:100%;background:var(--primary);color:#fff;margin-bottom:6px;">
+          選択中のテンプレートを更新
+        </button>
+        <p class="muted" style="font-size:10px;text-align:center;margin:0;">上の設定値を変更してから「更新」を押してください</p>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:10px 0;">
+      <button class="btn" id="saveTemplateBtn" style="width:100%;background:var(--gray);color:#333;">
+        新規テンプレートとして保存
       </button>
     </section>
 
@@ -122,6 +140,21 @@ if ('serviceWorker' in navigator) {
     <div id="createUserResult"></div>
 
     <section class="admin-card">
+      <h3>📥 過去データ一括取込</h3>
+      <p class="muted" style="font-size:11px;margin-bottom:8px;">新規ユーザーの過去日報をテキスト形式で一括登録。Geminiプロンプト形式対応。</p>
+      <label class="muted">対象ユーザーID</label>
+      <input class="input" id="bulkTargetUserId" placeholder="taro" pattern="^[a-z][a-z0-9_]*$" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <label class="muted" style="margin-top:8px;display:block;">日報テキスト（複数日連結可）</label>
+      <textarea id="bulkTextInput" rows="8" style="width:100%;padding:8px;font-family:monospace;font-size:11px;margin-top:4px;" placeholder="日付: 2024-11-08&#10;車種: premium&#10;出庫: 06:15&#10;帰庫: 21:15&#10;---&#10;No,乗車,降車,時間,迎,乗車地,降車地,営Km,男,女,合計&#10;1,06:42,07:15,0:33,迎,品川区東五反田2,千代田区丸の内1,8.4,1,,\"4,200\"&#10;&#10;日付: 2024-11-09&#10;..."></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="btn" id="bulkParseBtn" style="flex:1;">解析</button>
+        <button class="btn" id="bulkSaveBtn" style="flex:1;background:var(--primary);color:#fff;" disabled>保存</button>
+      </div>
+      <div id="bulkPreview" style="margin-top:8px;font-size:11px;"></div>
+      <div id="bulkStatus" style="margin-top:6px;font-size:12px;"></div>
+    </section>
+
+    <section class="admin-card">
       <h3>📋 使い方</h3>
       <ol style="font-size:12px;color:#666;padding-left:20px;margin:0;">
         <li>上のフォームに新規ユーザーのIDとパスワードを入力</li>
@@ -137,10 +170,12 @@ if ('serviceWorker' in navigator) {
 </main>
 
 <script type="module">
-import { loginWithUserId, logout, getCurrentUser } from './js/firebase-auth.js';
+import { loginWithUserId, logout, getCurrentUser, initAuth } from './js/firebase-auth.js';
 import { createUserWithCredentials } from './js/firebase-auth.js';
 import { getMyUserId } from './js/storage.js';
-import { getCompanyTemplates, saveCompanyTemplate } from './js/firebase-storage.js';
+import { getCompanyTemplates, saveCompanyTemplate, adminBatchSaveDrives } from './js/firebase-storage.js';
+import { DEFAULT_CONFIG } from './js/default-config.js';
+import { parseFormattedReport } from './js/parser.js';
 
 const loginSection = document.getElementById('loginSection');
 const adminContent = document.getElementById('adminContent');
@@ -171,12 +206,21 @@ function showLoginUI() {
   adminContent.style.display = 'none';
 }
 
-// 初期表示
-if (!checkAdmin()) {
-  showLoginUI();
-} else {
-  loadTemplates();
-}
+// 初期表示（auth初期化完了後に判定）
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    await initAuth();
+    if (!checkAdmin()) {
+      showLoginUI();
+    } else {
+      loadTemplates();
+      checkAndShowKeihoTemplateButton();
+    }
+  } catch (e) {
+    console.error('Auth initialization failed:', e);
+    showLoginUI();
+  }
+});
 
 // 管理者アカウント初期化（初回のみ）
 document.getElementById('initAdminBtn').onclick = async () => {
@@ -259,10 +303,52 @@ async function loadTemplates() {
       option.textContent = t.name;
       select.appendChild(option);
     });
+    return templates;
   } catch (e) {
     console.error('テンプレート読み込み失敗:', e);
+    return [];
   }
 }
+
+// けーほーテンプレート作成ボタンの表示判定
+async function checkAndShowKeihoTemplateButton() {
+  try {
+    const templates = await getCompanyTemplates();
+    const hasKeiho = templates.some(t => t.id === 'keiho' || t.name === 'けーほー');
+    document.getElementById('keihoTemplateSection').style.display = hasKeiho ? 'none' : '';
+  } catch (e) {
+    console.error('テンプレート確認失敗:', e);
+  }
+}
+
+// けーほーテンプレート作成
+document.getElementById('createKeihoTemplateBtn').onclick = async () => {
+  const btn = document.getElementById('createKeihoTemplateBtn');
+  btn.disabled = true;
+  btn.textContent = '作成中…';
+  
+  try {
+    const templateData = {
+      name: 'けーほー',
+      payrollMode: DEFAULT_CONFIG.payrollMode || 'step_rate',
+      fixedRate: DEFAULT_CONFIG.fixedRate || 0.55,
+      responsibilityShifts: DEFAULT_CONFIG.responsibilityShifts || 11,
+      extraRate: DEFAULT_CONFIG.extraRate || 0.62,
+      defaults: DEFAULT_CONFIG.defaults || { vehicleType: 'japantaxi', departureTime: '07:00' },
+      privacy: DEFAULT_CONFIG.privacy || { shareDataWithOthers: true },
+      rateTable: DEFAULT_CONFIG.rateTable || null
+    };
+    
+    await saveCompanyTemplate('keiho', templateData);
+    alert('けーほーテンプレートを作成しました');
+    document.getElementById('keihoTemplateSection').style.display = 'none';
+    loadTemplates();
+  } catch (e) {
+    alert('作成に失敗しました: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = 'けーほーテンプレートを作成';
+  }
+};
 
 // 計算方式切り替え
 document.getElementById('payrollModeSelect').onchange = (e) => {
@@ -282,7 +368,12 @@ document.getElementById('fixedRateInput').onchange = (e) => {
 // テンプレート選択時
 document.getElementById('templateSelect').onchange = async (e) => {
   const templateId = e.target.value;
-  if (!templateId) return;
+  const editActions = document.getElementById('templateEditActions');
+  
+  if (!templateId) {
+    editActions.style.display = 'none';
+    return;
+  }
   
   try {
     const templates = await getCompanyTemplates();
@@ -299,12 +390,55 @@ document.getElementById('templateSelect').onchange = async (e) => {
     document.getElementById('shareDataCheckbox').checked = template.privacy?.shareDataWithOthers !== false;
     
     document.getElementById('payrollModeSelect').dispatchEvent(new Event('change'));
+    
+    // 更新ボタンを表示
+    editActions.style.display = '';
   } catch (e) {
     console.error('テンプレート適用失敗:', e);
   }
 };
 
-// テンプレート保存
+// テンプレート更新（上書き保存）
+document.getElementById('updateTemplateBtn').onclick = async () => {
+  const templateId = document.getElementById('templateSelect').value;
+  if (!templateId) return;
+  
+  if (!confirm('選択中のテンプレートを上書き更新しますか？')) return;
+  
+  const btn = document.getElementById('updateTemplateBtn');
+  btn.disabled = true;
+  btn.textContent = '更新中…';
+  
+  try {
+    const templates = await getCompanyTemplates();
+    const existing = templates.find(t => t.id === templateId);
+    
+    const templateData = {
+      name: existing?.name || templateId,
+      payrollMode: document.getElementById('payrollModeSelect').value,
+      fixedRate: parseInt(document.getElementById('fixedRateInput').value) / 100,
+      responsibilityShifts: parseInt(document.getElementById('responsibilityShiftsInput').value),
+      extraRate: parseFloat(document.getElementById('extraRateInput').value),
+      defaults: {
+        vehicleType: document.getElementById('vehicleTypeSelect').value,
+        departureTime: document.getElementById('departureTimeInput').value
+      },
+      privacy: {
+        shareDataWithOthers: document.getElementById('shareDataCheckbox').checked
+      }
+    };
+    
+    await saveCompanyTemplate(templateId, templateData);
+    alert('テンプレートを更新しました');
+  } catch (e) {
+    alert('更新に失敗しました: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '選択中のテンプレートを更新';
+  }
+};
+
+// 新規テンプレート保存
 document.getElementById('saveTemplateBtn').onclick = async () => {
   const name = prompt('テンプレート名を入力してください:');
   if (!name) return;

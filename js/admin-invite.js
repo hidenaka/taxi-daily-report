@@ -75,24 +75,10 @@ export async function generateInvite({ userId, pat, ttlHours, repo }) {
     createdAt: new Date().toISOString()
   };
 
-  // GitHubにアップロード
-  const filepath = `data/invites/${code}.json`;
-  const content = btoa(JSON.stringify(inviteData, null, 2));
-
-  const res = await fetch(`${API_BASE}/repos/${targetRepo}/contents/${filepath}`, {
-    method: 'PUT',
-    headers: authHeaders(),
-    body: JSON.stringify({
-      message: `invite: create encrypted token for user ${userId}`,
-      content,
-      branch: 'main'
-    })
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`アップロード失敗: ${res.status} ${err.slice(0, 200)}`);
-  }
+  // GitHub版は廃止: Firebase版への移行が完了しました
+  // 招待コードの生成は Firebase 上で直接行う必要があります
+  console.warn('[admin-invite] GitHub版は廃止されました。Firebase Authentication で直接ユーザーを作成してください。');
+  throw new Error('GitHub版は廃止されました。管理画面(admin.html)からユーザーを作成してください。');
 
   // 招待URL生成
   const baseUrl = getBaseUrl();
