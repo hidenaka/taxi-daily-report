@@ -23,6 +23,10 @@ export function calcMonthlySales(drives) {
 }
 
 export function findRate(tiers, salesExclTax) {
+  if (!Array.isArray(tiers) || tiers.length === 0) {
+    console.warn('findRate: tiers is not a valid array, using fallback rate 0.6');
+    return 0.6;
+  }
   for (const tier of tiers) {
     if (salesExclTax >= tier.salesMin && salesExclTax < tier.salesMax) {
       return tier.rate;
@@ -32,12 +36,39 @@ export function findRate(tiers, salesExclTax) {
   return tiers[tiers.length - 1].rate;
 }
 
+function getRateTable(config) {
+  if (!config || typeof config !== 'object') return null;
+  if (config.rateTable && typeof config.rateTable === 'object') return config.rateTable;
+  return null;
+}
+
 export function calcBasePay(drives, config) {
   const shiftCount = drives.length;
 
+  // 固定歩率モード
+  if (config.payrollMode === 'fixed_rate') {
+    const monthly = calcMonthlySales(drives);
+    const rate = config.fixedRate || 0.55;
+    return { 
+      basePay: monthly.exclTax * rate, 
+      rate, 
+      shiftCount,
+      extraRate: null 
+    };
+  }
+
+  // 変動歩率モード（既存）
+  const rateTable = getRateTable(config);
+
+  if (!rateTable) {
+    console.warn('calcBasePay: rateTable missing, using fallback');
+    const monthly = calcMonthlySales(drives);
+    return { basePay: monthly.exclTax * 0.6, rate: 0.6, shiftCount };
+  }
+
   if (shiftCount <= 11) {
     const monthly = calcMonthlySales(drives);
-    const tiers = config.rateTable[String(shiftCount)] || config.rateTable["11"];
+    const tiers = rateTable[String(shiftCount)] || rateTable["11"];
     const rate = findRate(tiers, monthly.exclTax);
     return { basePay: monthly.exclTax * rate, rate, shiftCount };
   }
@@ -45,10 +76,10 @@ export function calcBasePay(drives, config) {
   // 12乗務以上: 11乗務目までで歩率算出 + 12乗務目以降は固定率
   const drives11 = drives.slice(0, 11);
   const monthly11 = calcMonthlySales(drives11);
-  const rate11 = findRate(config.rateTable["11"], monthly11.exclTax);
+  const rate11 = findRate(rateTable["11"], monthly11.exclTax);
   let basePay = monthly11.exclTax * rate11;
 
-  const extraRate = config.rateTable["12_13rate"];
+  const extraRate = rateTable["12_13rate"] || 0.62;
   for (const drive of drives.slice(11)) {
     const daily = calcDailySales(drive);
     basePay += daily.exclTax * extraRate;
