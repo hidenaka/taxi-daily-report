@@ -32,11 +32,10 @@ if ('serviceWorker' in navigator) {
   <!-- ログインセクション -->
   <section class="login-card" id="loginSection">
     <h3>🔐 管理者ログイン</h3>
-    <p class="muted" style="font-size:11px;margin-bottom:10px;">ID: admin / PW: admin123 でログイン</p>
     <label class="muted">ユーザーID</label>
-    <input class="input" id="loginUserId" placeholder="admin" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <input class="input" id="loginUserId" placeholder="userId を入力" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
     <label class="muted" style="margin-top:8px;display:block;">パスワード</label>
-    <input class="input" id="loginPassword" type="password" placeholder="admin123" autocomplete="off">
+    <input class="input" id="loginPassword" type="password" placeholder="パスワード を入力" autocomplete="off">
     <button class="btn" id="loginBtn" style="margin-top:12px;width:100%;">ログイン</button>
     <div id="loginStatus" style="margin-top:8px;font-size:12px;"></div>
     
