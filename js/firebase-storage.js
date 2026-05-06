@@ -336,7 +336,26 @@ export async function listActiveUserIds() {
       .map(d => d.data().userId)
       .filter(id => id && isValidUserId(id));
     // 同じuserIdが複数回登録されている場合がある（匿名認証の再ログインなど）
-    return [...new Set(ids)];
+    const uniqueIds = [...new Set(ids)];
+    
+    // 実際にデータを持っているユーザーのみを返す（古い匿名ユーザーを除外）
+    const activeIds = [];
+    for (const uid of uniqueIds) {
+      try {
+        // drives/{userId}/daily コレクションに1件でもデータがあるか確認
+        const drivesSnap = await getDocs(
+          query(collection(db, 'drives', uid, 'daily'), limit(1))
+        );
+        if (!drivesSnap.empty) {
+          activeIds.push(uid);
+        }
+      } catch (e) {
+        // drivesコレクションにアクセスできない場合はスキップ
+      }
+    }
+    
+    // activeIdsが空の場合（データ取得に失敗した場合）はuniqueIdsを返す
+    return activeIds.length > 0 ? activeIds : uniqueIds;
   } catch (e) {
     // 権限不足など: 自分のみ返す
     return [getUserId() || getMyUserId()];
