@@ -134,12 +134,10 @@ async function loadConfig() {
     if (myRole === 'admin') {
       document.getElementById('rateTableSection').style.display = '';
       document.getElementById('adminToolsSection').style.display = '';
-      document.getElementById('switchAccountBtn').style.display = '';
       renderRateTable(currentConfig.rateTable);
     } else {
       document.getElementById('rateTableSection').style.display = 'none';
       document.getElementById('adminToolsSection').style.display = 'none';
-      document.getElementById('switchAccountBtn').style.display = 'none';
     }
   } catch (e) {
     console.error('設定読み込みエラー:', e);
