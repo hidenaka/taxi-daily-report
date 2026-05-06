@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>管理者設定 — タクシー日報</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+.login-card { background: #fff3e0; border: 1px solid #ffcc80; border-radius: 8px; padding: 20px; margin-bottom: 10px; }
+.login-card h3 { margin: 0 0 12px; font-size: 16px; color: #e65100; }
+.admin-badge { display: inline-block; background: #e65100; color: #fff; font-size: 10px; padding: 2px 8px; border-radius: 3px; margin-left: 6px; }
+</style>
+</head>
+<body>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
+}
+// GitHub版廃止: 古いtoken/repoが残っていれば削除
+localStorage.removeItem('github_token');
+localStorage.removeItem('github_data_repo');
+
+// 開発環境バッジ
+if (location.hostname.includes('-dev')) {
+  document.addEventListener('DOMContentLoaded', () => {
+    const badge = document.createElement('div');
+    badge.textContent = '🚧 開発環境';
+    badge.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#ff9800;color:#fff;padding:4px 8px;font-size:11px;text-align:center;font-weight:600;z-index:9999;';
+    document.body.appendChild(badge);
+  });
+}
+</script>
+<main style="padding:14px;">
+  <h1>管理者設定<span class="admin-badge">ADMIN</span></h1>
+  <p class="muted" style="font-size:12px;margin-bottom:12px;">ログイン後、全設定機能が使用できます</p>
+
+  <!-- ログインセクション -->
+  <section class="login-card" id="loginSection">
+    <h3>🔐 管理者ログイン</h3>
+    <label class="muted">ユーザーID</label>
+    <input class="input" id="loginUserId" placeholder="userId を入力" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <label class="muted" style="margin-top:8px;display:block;">パスワード</label>
+    <input class="input" id="loginPassword" type="password" placeholder="パスワード を入力" autocomplete="off">
+    <button class="btn" id="loginBtn" style="margin-top:12px;width:100%;">ログイン</button>
+    <div id="loginStatus" style="margin-top:8px;font-size:12px;"></div>
+  </section>
+
+  <!-- 管理者コンテンツ（ログイン後に表示） -->
+  <div id="adminContent" style="display:none;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div style="font-size:12px;">ログイン中: <strong id="adminName">--</strong><span class="admin-badge">ADMIN</span></div>
+      <button class="btn" id="logoutBtn" style="font-size:12px;padding:6px 12px;background:var(--gray);color:#333;">ログアウト</button>
+    </div>
+
+    <section class="card">
+      <h3>アカウント</h3>
+      <div style="padding:12px;background:var(--bg);border-radius:8px;margin-bottom:10px;">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:2px;">現在のアカウント</div>
+        <div style="font-size:18px;font-weight:600;" id="currentUserIdDisplay">--</div>
+      </div>
+      <button class="btn" id="switchAccountBtn" style="width:100%;">🔄 アカウントを切り替え</button>
+      <div id="switchAccountStatus" class="muted" style="margin-top:4px;font-size:11px;"></div>
+      <label class="muted" style="margin-top:12px;display:block;">表示名(任意)</label>
+      <input class="input" id="displayNameInput" placeholder="自分">
+      <p class="muted" style="font-size:10px;margin-top:2px;">集計画面の表示用。</p>
+    </section>
+
+    <section class="card">
+      <h3>デフォルト</h3>
+      <label class="muted">乗務種別</label>
+      <select class="select" id="vehicleTypeSel">
+        <option value="japantaxi">ジャパンタクシー</option>
+        <option value="premium">プレミアム</option>
+      </select>
+      <label class="muted" style="margin-top:8px;display:block;">出庫時刻</label>
+      <input class="input" id="departureInput" type="time" value="07:00">
+      <label class="muted" style="margin-top:8px;display:block;">手取り率（控除後 / 総支給）</label>
+      <input class="input" id="takeHomeRateInput" type="number" step="0.01" min="0.5" max="1" value="0.75">
+      <p class="muted" style="font-size:10px;margin-top:2px;">通常月74〜75%、年末調整月（12月）は還付で約85%。実績ベースで調整可。</p>
+      <label class="muted" style="margin-top:8px;display:block;">手取り目標（円/月度）</label>
+      <input class="input" id="takeHomeTargetInput" type="number" step="10000" min="0" value="500000">
+      <p class="muted" style="font-size:10px;margin-top:2px;">ホームに目標達成可否と残り乗務あたり必要売上が表示されます。</p>
+      <label class="muted" style="margin-top:8px;display:block;">有給休暇 1日あたり金額（総支給ベース）</label>
+      <input class="input" id="paidLeaveAmountInput" type="number" step="100" min="0" value="39340">
+      <p class="muted" style="font-size:10px;margin-top:2px;">給与明細の「有給手当」÷有給日数。カレンダーで設定した有給日数×この金額を予測/実績に加算。</p>
+    </section>
+
+    <section class="card" id="rateTableSection">
+      <h3>レートテーブル <span class="muted" style="font-size:10px;font-weight:normal;">(管理者のみ)</span></h3>
+      <p class="muted">乗務数別の売上ティアと歩率。編集は慎重に。</p>
+      <div id="rateTableEditor"></div>
+    </section>
+
+    <section class="card">
+      <h3>天候地点</h3>
+      <input type="hidden" id="latInput" value="35.6938">
+      <input type="hidden" id="lonInput" value="139.7036">
+      <div id="locNameDisplay" style="font-size:13px;padding:8px;background:#f5f5f5;border-radius:4px;margin-bottom:8px;">千代田区</div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn" id="weatherGpsBtn" style="flex:1;background:#fff;color:var(--primary);border:1px solid var(--primary);">📍 現在地</button>
+        <button class="btn" id="weatherDefaultBtn" style="flex:1;background:var(--gray);color:#333;">デフォルトに戻す</button>
+      </div>
+      <div id="weatherGpsInfo" class="muted" style="font-size:10px;margin-top:4px;"></div>
+    </section>
+
+    <a href="admin.html" class="btn" style="display:block;text-align:center;text-decoration:none;width:100%;margin-bottom:10px;background:var(--primary);color:#fff;">🛠️ 管理者ツールを開く</a>
+    <a href="settings.html" style="display:block;text-align:center;padding:10px;color:var(--primary);text-decoration:none;font-size:14px;">← 通常設定ページに戻る</a>
+  </div>
+</main>
+<div id="navHost"></div>
+<div style="position:fixed;bottom:70px;left:0;right:0;background:#fff;border-top:1px solid #eee;padding:10px 14px;z-index:10;">
+  <button class="btn" id="saveConfigBtn" style="width:100%;">💾 設定を保存</button>
+</div>
+
+<script type="module">
+import { renderBottomNav } from './js/app.js';
+import { getConfig, saveConfig, getMyUserId, setMyUserId } from './js/storage.js';
+import { isValidUserId } from './js/userid.js';
+import { DEFAULT_CONFIG } from './js/default-config.js';
+import { isEmailAuth, logout, loginWithUserId, getCurrentUser, initAuth } from './js/firebase-auth.js';
+
+document.getElementById('navHost').innerHTML = renderBottomNav('settings');
+
+let currentConfig = null;
+let loggedInUserId = null;
+
+// userId 初期表示
+document.getElementById('currentUserIdDisplay').textContent = getMyUserId();
+
+// ログイン状態チェック
+async function checkLogin() {
+  try {
+    await initAuth();
+    const user = getCurrentUser();
+    if (user && !user.isAnonymous) {
+      const email = user.email || '';
+      const userId = email.split('@')[0];
+      if (userId) {
+        showAdminUI(userId);
+        return;
+      }
+    }
+    showLoginUI();
+  } catch (e) {
+    showLoginUI();
+  }
+}
+
+function showAdminUI(userId) {
+  loggedInUserId = userId;
+  document.getElementById('loginSection').style.display = 'none';
+  document.getElementById('adminContent').style.display = '';
+  document.getElementById('adminName').textContent = userId;
+  loadConfig();
+}
+
+function showLoginUI() {
+  document.getElementById('loginSection').style.display = '';
+  document.getElementById('adminContent').style.display = 'none';
+}
+
+// ログイン
+document.getElementById('loginBtn').onclick = async () => {
+  const userId = document.getElementById('loginUserId').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const status = document.getElementById('loginStatus');
+  
+  if (!userId || !password) {
+    status.textContent = '✗ IDとパスワードを入力してください';
+    status.style.color = '#d32f2f';
+    return;
+  }
+  
+  status.textContent = 'ログイン中…';
+  status.style.color = '';
+  
+  const res = await loginWithUserId(userId, password);
+  if (res.success) {
+    status.textContent = '✓ ログイン成功';
+    status.style.color = 'green';
+    showAdminUI(userId);
+  } else {
+    status.textContent = '✗ ' + res.error;
+    status.style.color = '#d32f2f';
+  }
+};
+
+// ログアウト
+document.getElementById('logoutBtn').onclick = async () => {
+  await logout();
+  showLoginUI();
+};
+
+async function loadConfig() {
+  try {
+    const config = await getConfig().catch(() => null);
+    currentConfig = config;
+    if (!currentConfig) {
+      currentConfig = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+    }
+    document.getElementById('vehicleTypeSel').value = currentConfig.defaults.vehicleType;
+    document.getElementById('departureInput').value = currentConfig.defaults.departureTime;
+    document.getElementById('takeHomeRateInput').value = currentConfig.takeHomeRate ?? 0.75;
+    document.getElementById('takeHomeTargetInput').value = currentConfig.takeHomeTarget ?? 500000;
+    document.getElementById('paidLeaveAmountInput').value = currentConfig.paidLeaveAmount ?? 39340;
+    document.getElementById('latInput').value = currentConfig.weatherLocation.lat;
+    document.getElementById('lonInput').value = currentConfig.weatherLocation.lon;
+    document.getElementById('locNameDisplay').textContent = currentConfig.weatherLocation.name || '千代田区';
+    document.getElementById('displayNameInput').value = currentConfig.displayName || '';
+    renderRateTable(currentConfig.rateTable);
+  } catch (e) {
+    console.error('設定読み込みエラー:', e);
+  }
+}
+
+function renderRateTable(rt) {
+  const host = document.getElementById('rateTableEditor');
+  host.innerHTML = '';
+  for (const shifts of ['11','10','9','8','7','6','5','4']) {
+    const tiers = rt[shifts] || [];
+    const div = document.createElement('div');
+    div.style.marginBottom = '12px';
+    div.innerHTML = `<strong>${shifts}乗務</strong>` +
+      tiers.map((t, i) =>
+        `<div style="display:flex;gap:4px;margin-top:4px;">
+          <input class="input" style="flex:1;" type="number" data-shifts="${shifts}" data-idx="${i}" data-key="salesMin" value="${t.salesMin}">
+          <input class="input" style="flex:1;" type="number" data-shifts="${shifts}" data-idx="${i}" data-key="salesMax" value="${t.salesMax}">
+          <input class="input" style="flex:1;" type="number" step="0.001" data-shifts="${shifts}" data-idx="${i}" data-key="rate" value="${t.rate}">
+        </div>`
+      ).join('');
+    host.appendChild(div);
+  }
+  const rateDiv = document.createElement('div');
+  rateDiv.innerHTML = `<strong>12-13乗務率</strong> <input class="input" id="rate1213" type="number" step="0.01" value="${rt['12_13rate']}" style="width:100px;">`;
+  host.appendChild(rateDiv);
+}
+
+document.getElementById('switchAccountBtn').onclick = async () => {
+  const status = document.getElementById('switchAccountStatus');
+  const currentId = getMyUserId();
+
+  const newUserId = prompt(`アカウント切り替え\n\n現在: ${currentId}\n\n切り替え先のuserIdを入力してください:`);
+
+  if (newUserId === null) { status.textContent = 'キャンセルしました'; return; }
+  const trimmed = newUserId.trim();
+
+  if (!trimmed) { status.textContent = '✗ userIdを入力してください'; return; }
+  if (!isValidUserId(trimmed)) { status.textContent = '✗ userIdの形式が不正です（英小文字始まり・英小文字/数字/アンダースコアのみ）'; return; }
+
+  if (trimmed === currentId) { status.textContent = '✓ 同じuserIdです'; return; }
+
+  if (!confirm(`アカウントを「${currentId}」から「${trimmed}」に切り替えますか？\nページが再読み込みされます。`)) return;
+
+  status.textContent = '切り替え中…';
+
+  if (isEmailAuth()) {
+    try {
+      await logout();
+    } catch (e) {
+      console.warn('Logout failed:', e);
+    }
+  }
+
+  setMyUserId(trimmed);
+  status.textContent = `✓ 「${trimmed}」に切り替えました。再読み込みします…`;
+  setTimeout(() => location.reload(), 400);
+};
+
+document.getElementById('saveConfigBtn').onclick = async () => {
+  if (!currentConfig) { alert('設定が読み込まれていません'); return; }
+  currentConfig.displayName = document.getElementById('displayNameInput').value;
+  currentConfig.defaults.vehicleType = document.getElementById('vehicleTypeSel').value;
+  currentConfig.defaults.departureTime = document.getElementById('departureInput').value;
+  currentConfig.takeHomeRate = parseFloat(document.getElementById('takeHomeRateInput').value);
+  currentConfig.takeHomeTarget = parseInt(document.getElementById('takeHomeTargetInput').value);
+  currentConfig.paidLeaveAmount = parseInt(document.getElementById('paidLeaveAmountInput').value);
+  currentConfig.weatherLocation = {
+    lat: parseFloat(document.getElementById('latInput').value),
+    lon: parseFloat(document.getElementById('lonInput').value),
+    name: document.getElementById('locNameDisplay').textContent
+  };
+  document.querySelectorAll('#rateTableEditor input[data-shifts]').forEach(inp => {
+    const s = inp.dataset.shifts; const i = parseInt(inp.dataset.idx); const k = inp.dataset.key;
+    if (!currentConfig.rateTable[s][i]) currentConfig.rateTable[s][i] = {};
+    currentConfig.rateTable[s][i][k] = parseFloat(inp.value);
+  });
+  currentConfig.rateTable['12_13rate'] = parseFloat(document.getElementById('rate1213').value);
+  currentConfig.lastUpdated = new Date().toISOString();
+  await saveConfig(currentConfig);
+  alert('保存しました');
+};
+
+document.getElementById('weatherGpsBtn').onclick = async () => {
+  const info = document.getElementById('weatherGpsInfo');
+  const btn = document.getElementById('weatherGpsBtn');
+  if (!navigator.geolocation) { info.textContent = 'このブラウザは位置情報非対応'; return; }
+  btn.disabled = true; btn.textContent = '📍 取得中…';
+  info.textContent = '位置情報取得中…';
+  try {
+    const pos = await new Promise((resolve, reject) =>
+      navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000, enableHighAccuracy: true })
+    );
+    const { latitude: lat, longitude: lon } = pos.coords;
+    info.textContent = `緯度${lat.toFixed(5)}, 経度${lon.toFixed(5)} → 住所取得中…`;
+    const res = await fetch(`https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress?lat=${lat}&lon=${lon}`);
+    const data = await res.json();
+    let name = '';
+    if (data.results) {
+      const muniCd = data.results.muniCd;
+      const lv01Nm = data.results.lv01Nm;
+      try {
+        const muniRes = await fetch(`https://maps.gsi.go.jp/js/muni.js`);
+        const muniText = await muniRes.text();
+        const match = muniText.match(new RegExp(`'${muniCd}',[^']*'([^']+)'`));
+        if (match) name = match[1].split(',').pop();
+      } catch (e) {}
+      if (!name) {
+        const fb = { '13101':'千代田区','13102':'中央区','13103':'港区','13104':'新宿区','13105':'文京区','13106':'台東区','13107':'墨田区','13108':'江東区','13109':'品川区','13110':'目黒区','13111':'大田区','13112':'世田谷区','13113':'渋谷区','13114':'中野区','13115':'杉並区','13116':'豊島区','13117':'北区','13118':'荒川区','13119':'板橋区','13120':'練馬区','13121':'足立区','13122':'葛飾区','13123':'江戸川区' };
+        name = fb[muniCd] || '';
+      }
+      if (lv01Nm) name += (name ? ' ' : '') + lv01Nm;
+    }
+    document.getElementById('latInput').value = lat.toFixed(4);
+    document.getElementById('lonInput').value = lon.toFixed(4);
+    document.getElementById('locNameDisplay').textContent = name || `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+    info.textContent = `📍 設定しました: ${name || '現在地'}`;
+  } catch (err) {
+    info.textContent = '位置情報取得エラー: ' + (err.message || err.code);
+  } finally {
+    btn.disabled = false; btn.textContent = '📍 現在地';
+  }
+};
+
+document.getElementById('weatherDefaultBtn').onclick = () => {
+  document.getElementById('latInput').value = '35.6938';
+  document.getElementById('lonInput').value = '139.7036';
+  document.getElementById('locNameDisplay').textContent = '千代田区';
+  document.getElementById('weatherGpsInfo').textContent = 'デフォルト（千代田区）に戻しました';
+};
+
+// 初期表示
+checkLogin();
+</script>
+</body>
+</html>
