@@ -78,7 +78,8 @@ if (location.hostname.includes('-dev')) {
   <section class="card" id="calCard" style="display:none;"></section>
   <section class="card" id="sumTableCard" style="display:none;"></section>
 </main>
-<button class="fab" onclick="location.href='input.html'">＋</button>
+<!-- FAB非表示: 入力はナビゲーションから行う -->
+<button class="fab" onclick="location.href='input.html'" style="display:none;">＋</button>
 <div id="navHost"></div>
 <script type="module">
 import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js';
