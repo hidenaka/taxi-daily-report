@@ -1,5 +1,4 @@
 name: Deploy to Production
-
 on:
   push:
     tags:
@@ -40,10 +39,10 @@ jobs:
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git add -A
-          git diff --cached --quiet || (
+          if ! git diff --cached --quiet; then
             git commit -m "deploy: sync from dev repo (${{ github.sha }})"
             git push origin main
-          )
+          fi
           
       - name: Deployment complete
         run: echo "Production deployment complete"
