@@ -9,6 +9,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
 <style>
+.fab { position: fixed; right: 18px; bottom: 76px; width: 56px; height: 56px; border-radius: 50%; background: var(--primary); color: #fff; border: none; font-size: 28px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
 .period-nav { display:flex;justify-content:space-between;align-items:center;margin-bottom:8px; }
 .period-nav button { background: var(--gray); color: #333; border: none; padding: 6px 10px; border-radius: 4px; font-size: 13px; }
 .kv { display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-top:4px; }
@@ -77,7 +78,7 @@ if (location.hostname.includes('-dev')) {
   <section class="card" id="calCard" style="display:none;"></section>
   <section class="card" id="sumTableCard" style="display:none;"></section>
 </main>
-
+<button class="fab" onclick="location.href='input.html'">＋</button>
 <div id="navHost"></div>
 <script type="module">
 import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js';
