@@ -1,18 +1,13 @@
 name: Deploy to Production
 
 on:
-  # 手動実行（推奨）
-  workflow_dispatch:
-    inputs:
-      confirm:
-        description: '本番にデプロイしますか？ (yes/no)'
-        required: true
-        default: 'no'
+  push:
+    tags:
+      - 'v*'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: github.event.inputs.confirm == 'yes'
     
     steps:
       - name: Checkout dev repo
@@ -29,7 +24,6 @@ jobs:
           
       - name: Copy files to prod
         run: |
-          # devリポジトリのファイルをprodにコピー（不要ファイル除外）
           rsync -av --delete \
             --exclude='.git/' \
             --exclude='.github/' \
@@ -52,4 +46,4 @@ jobs:
           )
           
       - name: Deployment complete
-        run: echo "✅ 本番デプロイ完了: https://hidenaka.github.io/taxi-daily-report/"
+        run: echo "Production deployment complete"
