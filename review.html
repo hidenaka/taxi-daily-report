@@ -169,14 +169,6 @@ if (location.hostname.includes('-dev')) {
     <div id="memoBody"></div>
   </section>
 
-  <!-- デバッグ情報（開発者用） -->
-  <section class="card" id="debugCard" style="background:#fff3e0;border-color:#ffcc80;">
-    <div class="section-h">
-      <strong>🔍 デバッグ情報</strong>
-      <span class="desc">データ確認用</span>
-    </div>
-    <div id="debugBody" style="font-family:monospace;font-size:11px;white-space:pre-wrap;"></div>
-  </section>
 </main>
 <div id="navHost"></div>
 <script type="module">
@@ -274,8 +266,6 @@ async function load() {
     buildMonthSummaries(periods, freshByMonth);
     renderAll(periods, '');
     
-    // デバッグ情報表示
-    showDebugInfo(periods, freshByMonth);
   } catch (e) {
     if (!cacheComplete) {
       document.getElementById('rangeInfo').textContent = `読み込み失敗: ${e.message}`;
@@ -283,57 +273,7 @@ async function load() {
   }
 }
 
-function showDebugInfo(periods, drivesByMonth) {
-  const userId = localStorage.getItem('taxi_user_id') || 'unknown';
-  let debug = `【ユーザーID】${userId}\n\n`;
-  
-  debug += `【月度ごとのデータ件数】\n`;
-  let totalDrives = 0;
-  const dateMap = new Map();
-  
-  periods.forEach((ym, i) => {
-    const drives = drivesByMonth[i] || [];
-    totalDrives += drives.length;
-    debug += `  ${ym}: ${drives.length}件\n`;
-    
-    // 重複チェック
-    drives.forEach(d => {
-      const date = d.date || 'no-date';
-      dateMap.set(date, (dateMap.get(date) || 0) + 1);
-    });
-  });
-  
-  debug += `\n【合計データ件数】${totalDrives}件\n`;
-  
-  // 重複データの検出
-  const duplicates = [];
-  dateMap.forEach((count, date) => {
-    if (count > 1) duplicates.push(`${date}: ${count}回`);
-  });
-  
-  if (duplicates.length > 0) {
-    debug += `\n【⚠️ 重複データ】\n  ${duplicates.join('\n  ')}\n`;
-  } else {
-    debug += `\n【重複データ】なし\n`;
-  }
-  
-  // データサンプル（最初の3件）
-  const allDrives = drivesByMonth.flat();
-  if (allDrives.length > 0) {
-    debug += `\n【データサンプル（最初の3件）】\n`;
-    allDrives.slice(0, 3).forEach((d, i) => {
-      debug += `  [${i+1}] date: ${d.date || 'undefined'}, trips: ${d.trips?.length || 0}\n`;
-    });
-  }
-  
-  // dateフィールドがないデータのカウント
-  const noDateCount = allDrives.filter(d => !d.date).length;
-  if (noDateCount > 0) {
-    debug += `\n【⚠️ dateフィールドなし】${noDateCount}件\n`;
-  }
-  
-  document.getElementById('debugBody').textContent = debug;
-}
+
 
 function renderDow() {
   const agg = dowAggregation(allDrives);

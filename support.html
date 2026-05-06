@@ -154,14 +154,6 @@ if (location.hostname.includes('-dev')) {
     <p class="muted" style="font-size:10px;margin-top:6px;">「単価」=降ろした次の乗車営収の中央値/平均、「待ち」=次乗車までの中央値/平均(中央値ベースで高単価営業の外れ値の影響を抑制)。タップでそのエリアの過去履歴を表示。最低5件以上のみ</p>
   </section>
 
-  <!-- デバッグ情報（開発者用） -->
-  <section class="card" id="debugCard" style="background:#fff3e0;border-color:#ffcc80;">
-    <div class="section-h">
-      <strong>🔍 デバッグ情報</strong>
-      <span class="desc">データ確認用</span>
-    </div>
-    <div id="debugBody" style="font-family:monospace;font-size:11px;white-space:pre-wrap;"></div>
-  </section>
 </main>
 <div id="navHost"></div>
 <script type="module">
@@ -375,37 +367,6 @@ function applyLoaded(periods, myParts, allParts, userIds, displayMap, roleMap, l
   renderHourEff();
   renderHighValue();
   renderArea();
-  showDebugInfo();
-}
-
-function showDebugInfo() {
-  const userId = localStorage.getItem('taxi_user_id') || 'unknown';
-  let debug = `【ユーザーID】${userId}\n`;
-  debug += `【myDrives】${myDrives.length}件\n`;
-  debug += `【allDrives】${allDrives.length}件\n`;
-  debug += `【activeUserIds】${activeUserIds.join(', ')}\n\n`;
-
-  // 重複チェック（日付+ユーザーID）
-  const dateUserMap = new Map();
-  let dupCount = 0;
-  for (const d of allDrives) {
-    const key = `${d.date || 'no-date'}_${d._userId || 'no-user'}`;
-    if (dateUserMap.has(key)) dupCount++;
-    dateUserMap.set(key, (dateUserMap.get(key) || 0) + 1);
-  }
-  debug += `【重複データ（同じ日付+同じユーザー）】${dupCount}件\n\n`;
-
-  // 高期待値エリアTOP5の乗車地サンプル
-  const sampleTrips = [];
-  for (const d of allDrives.slice(0, 10)) {
-    if (d.trips && d.trips.length > 0) {
-      const t = d.trips[0];
-      sampleTrips.push(`  ${d.date}: 乗車=${t.boardPlace}, 降車=${t.alightPlace}`);
-    }
-  }
-  debug += `【サンプルデータ（最初10件の最初のtrip）】\n${sampleTrips.join('\n')}\n`;
-
-  document.getElementById('debugBody').textContent = debug;
 }
 
 async function load() {
