@@ -135,11 +135,11 @@ async function checkLogin() {
   try {
     await initAuth();
     const user = getCurrentUser();
-    if (user && !user.isAnonymous) {
-      const email = user.email || '';
-      const userId = email.split('@')[0];
+    if (user) {
+      // メール認証または匿名認証の場合、localStorageのuserIdを表示
+      const userId = getMyUserId();
       if (userId) {
-        showAdminUI(userId);
+        showAdminUI(userId, user.isAnonymous);
         return;
       }
     }
@@ -149,11 +149,13 @@ async function checkLogin() {
   }
 }
 
-function showAdminUI(userId) {
+function showAdminUI(userId, isAnonymous = false) {
   loggedInUserId = userId;
   document.getElementById('loginSection').style.display = 'none';
   document.getElementById('adminContent').style.display = '';
-  document.getElementById('adminName').textContent = userId;
+  document.getElementById('adminName').textContent = userId + (isAnonymous ? ' (匿名)' : '');
+  // 匿名ユーザーの場合はログアウトボタン非表示（メール認証のみログアウト可能）
+  document.getElementById('logoutBtn').style.display = isAnonymous ? 'none' : '';
   loadConfig();
 }
 
