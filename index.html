@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>タクシー日報</title>
+<title>タクシー日報分析</title>
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -85,7 +85,7 @@ if (location.hostname.includes('-dev')) {
 import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js';
 import { getConfig, getDrivesForMonth, flushPendingQueue } from './js/storage.js';
 import { DEFAULT_CONFIG } from './js/default-config.js';
-import { calcTotalPay, calcDailySales, calcMonthlySales } from './js/payroll.js';
+import { calcTotalPay, calcDailySales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier } from './js/payroll.js';
 import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js';
 import { processInvite } from './js/invite-crypto.js';
 import { renderLegalFooter } from './js/legal-footer.js';
@@ -141,7 +141,10 @@ async function render() {
   const takeHomeRate = config.takeHomeRate ?? 0.75;
   const respShifts = config.responsibilityShifts;
 
-  const actualResult = calcTotalPay(rawDrives, config, range.start, range.end);
+  // 現在月度かつ責任出番未達の段階では、予定責任出番ベース(rateTable["11"]等)で歩率計算
+  // 過去月度・確定月度は実shiftCountベース(従来通り)
+  const useResponsibilityTier = isCurrent && rawDrives.length > 0 && rawDrives.length < respShifts;
+  const actualResult = calcTotalPay(rawDrives, config, range.start, range.end, { useResponsibilityTier });
   const actualTakeHome = actualResult.total * takeHomeRate;
 
   let predicted = null;
@@ -199,6 +202,91 @@ async function render() {
   } else {
     summaryHtml += `<p class="muted" style="font-size:11px;margin-top:4px;">未来の月度</p>`;
   }
+
+  // 歩率セクション(現状の歩率 + アップ/ダウン境界)
+  if (rawDrives.length > 0 && config.payrollMode !== 'fixed_rate') {
+    const rateTable = config.rateTable;
+    const tierKey = String(Math.min(respShifts, 11));
+    const projectionTiers = rateTable && (rateTable[tierKey] || rateTable["11"]);
+    if (projectionTiers && projectionTiers.length > 0) {
+      const currentSalesExclTax = monthly.exclTax;
+      const currentTierIdx = findTierIdx(projectionTiers, currentSalesExclTax);
+      if (currentTierIdx >= 0) {
+        const currentTier = projectionTiers[currentTierIdx];
+        const isLocked = rawDrives.length >= 11; // 11乗務以降は歩率確定
+        const remainingShifts = Math.max(0, respShifts - rawDrives.length);
+        // 確定後は actualResult.rate(実際の計算結果)を採用
+        const displayRate = isLocked ? actualResult.rate : currentTier.rate;
+        const badgeBg = isLocked ? '#c8e6c9' : '#fff3e0';
+        const badgeFg = isLocked ? '#2e7d32' : '#e65100';
+        const badgeLabel = isLocked ? '確定' : '暫定';
+
+        let buritsuHtml = `
+          <hr style="border:none;border-top:1px dashed #ddd;margin:6px 0;">
+          <div class="kv"><div>歩率<span class="badge" style="font-size:9px;background:${badgeBg};color:${badgeFg};margin-left:4px;">${badgeLabel}</span></div><div><strong>${(displayRate*100).toFixed(1)}%</strong></div></div>
+        `;
+
+        if (!isLocked && remainingShifts > 0) {
+          // インセンティブ・有給は到達 rate に依存しないので、予測値を流用
+          const incentivePart = predicted ? predicted.incentive : actualResult.incentive;
+          const paidLeavePart = actualResult.paidLeaveAmount;
+          const projectAtTier = (tier) => {
+            const basePay = tier.salesMin * tier.rate;
+            const total = basePay + incentivePart + paidLeavePart;
+            const takeHome = total * takeHomeRate;
+            return { total, takeHome };
+          };
+
+          const renderUpTierBlock = (tier, idx, isSecond) => {
+            const gapExcl = Math.max(0, tier.salesMin - currentSalesExclTax);
+            const perDayExcl = gapExcl / remainingShifts;
+            const perDayIncl = perDayExcl * 1.1;
+            const targetIncl = tier.salesMin * 1.1;
+            const proj = projectAtTier(tier);
+            const bg = isSecond ? '#dcedc8' : '#e8f5e9';
+            const accent = isSecond ? '#558b2f' : '#2e7d32';
+            const arrow = isSecond ? '▲▲' : '▲';
+            const suffix = isSecond ? ' (もう1段上)' : '';
+            return `
+              <div style="margin-top:6px;padding:6px 8px;background:${bg};border-left:3px solid ${accent};border-radius:4px;font-size:11px;">
+                <div style="color:${accent};font-weight:600;">${arrow} ${(tier.rate*100).toFixed(1)}% へ上げる${suffix}</div>
+                <div style="margin-top:4px;color:#333;">残り${remainingShifts}乗務で 1日 <strong>${formatYen(perDayIncl)}</strong>(税込) 以上 <span style="color:#666;">/ 税抜 ${formatYen(perDayExcl)}</span></div>
+                <div style="color:#666;font-size:10px;">月度合計 税込<strong>${formatYen(targetIncl)}</strong> (税抜${formatYen(tier.salesMin)}) で達成</div>
+                <div style="margin-top:4px;padding-top:4px;border-top:1px dashed rgba(0,0,0,0.12);font-size:10px;color:#444;">予想 総支給 <strong>${formatYen(proj.total)}</strong> / 手取り <strong style="color:var(--primary);">${formatYen(proj.takeHome)}</strong></div>
+              </div>
+            `;
+          };
+
+          const upTier = findNextHigherRateTier(projectionTiers, currentTierIdx);
+          const downTier = findNextLowerRateTier(projectionTiers, currentTierIdx);
+          if (upTier) {
+            buritsuHtml += renderUpTierBlock(upTier.tier, upTier.idx, false);
+            const upTier2 = findNextHigherRateTier(projectionTiers, upTier.idx);
+            if (upTier2) {
+              buritsuHtml += renderUpTierBlock(upTier2.tier, upTier2.idx, true);
+            }
+          }
+          if (downTier) {
+            const allowanceExcl = Math.max(0, downTier.tier.salesMin - currentSalesExclTax);
+            const perDayMaxExcl = allowanceExcl / remainingShifts;
+            const perDayMaxIncl = perDayMaxExcl * 1.1;
+            const thresholdIncl = downTier.tier.salesMin * 1.1;
+            const projDown = projectAtTier(downTier.tier);
+            buritsuHtml += `
+              <div style="margin-top:6px;padding:6px 8px;background:#fff3e0;border-left:3px solid #ff9800;border-radius:4px;font-size:11px;">
+                <div style="color:#e65100;font-weight:600;">▼ ${(downTier.tier.rate*100).toFixed(1)}% へ下がる境界</div>
+                <div style="margin-top:4px;color:#333;">残り${remainingShifts}乗務で 1日 <strong>${formatYen(perDayMaxIncl)}</strong>(税込) を超えると低下 <span style="color:#666;">/ 税抜 ${formatYen(perDayMaxExcl)}</span></div>
+                <div style="color:#666;font-size:10px;">月度合計 税込<strong>${formatYen(thresholdIncl)}</strong> (税抜${formatYen(downTier.tier.salesMin)}) 以上で低下</div>
+                <div style="margin-top:4px;padding-top:4px;border-top:1px dashed rgba(0,0,0,0.12);font-size:10px;color:#444;">下がった場合の予想 総支給 <strong>${formatYen(projDown.total)}</strong> / 手取り <strong style="color:#e65100;">${formatYen(projDown.takeHome)}</strong></div>
+              </div>
+            `;
+          }
+        }
+        summaryHtml += buritsuHtml;
+      }
+    }
+  }
+
   document.getElementById('summaryCard').innerHTML = summaryHtml;
   document.getElementById('prevBtn').onclick = () => { viewPeriod = shiftBillingPeriod(viewPeriod, -1); render(); };
   document.getElementById('nextBtn').onclick = () => { viewPeriod = shiftBillingPeriod(viewPeriod, 1); render(); };
