@@ -1,4 +1,4 @@
-const CACHE_NAME = 'taxi-daily-v100';
+const CACHE_NAME = 'taxi-daily-v93';
 const STATIC_FILES = [
   './',
   './index.html',
@@ -9,6 +9,7 @@ const STATIC_FILES = [
   './support.html',
   './settings.html',
   './bulk-input.html',
+  './subscribe.html',
   './tools.html',
   './tools/index.html',
   './tools/ic.html',
@@ -23,6 +24,8 @@ const STATIC_FILES = [
   './js/weather.js',
   './js/chart-helpers.js',
   './js/legal-footer.js',
+  './js/subscription-state.js',
+  './js/access-control.js',
   './legal/tokuteishou.html',
   './legal/terms.html',
   './legal/privacy.html',

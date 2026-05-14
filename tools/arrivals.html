@@ -114,8 +114,16 @@
     .empty { color: var(--sub); padding: 12px 0; text-align: center; }
     #arrivals-error { background: #4a1a1a; color: #ffb; padding: 8px; border-radius: 4px; margin: 8px 12px; }
   </style>
+<style>body{visibility:hidden;pointer-events:none;}</style>
 </head>
-<body>  <a href="../" style="display:block;padding:8px 14px;background:#0a0a0f;border-bottom:1px solid rgba(255,255,255,0.08);color:#8a8a92;text-decoration:none;font-size:13px;">← タクシー日報分析に戻る</a>
+<body>
+  <script type="module">
+    import { enforceAccess } from '../js/access-control.js';
+    if (!(await enforceAccess('core', { redirect: '../subscribe.html' }))) {
+      throw new Error('access-denied: redirected');
+    }
+  </script>
+  <a href="../" style="display:block;padding:8px 14px;background:#0a0a0f;border-bottom:1px solid rgba(255,255,255,0.08);color:#8a8a92;text-decoration:none;font-size:13px;">← タクシー日報に戻る</a>
   <nav class="app-tabs" role="tablist" aria-label="アプリ切替">
     <a href="./" class="app-tab">⏱ 乗務タイマー</a>
     <a href="ic.html" class="app-tab">🛣 IC判定</a>

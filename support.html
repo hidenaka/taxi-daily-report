@@ -38,6 +38,7 @@
 .detail-tip.show { display: block; }
 .loading { padding: 30px; text-align: center; color: var(--muted); }
 </style>
+<style>body{visibility:hidden;pointer-events:none;}</style>
 </head>
 <body>
 <script>
@@ -167,6 +168,11 @@ import {
 } from './js/vehicle-filter.js';
 import { hourlyDowEfficiency, dropoffAreaAnalysis, nextBoardBreakdown, dropoffHistoryAtArea, boardHistoryAtArea, buildNeighborMap, highValueAreas, highValueAreasByZone, boardHistoryAtAreaByZone, calcPaceAtElapsed, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin, dowOf, ZONE_PRESETS, getZoneAt, getZoneForElapsed } from './js/chart-helpers.js';
 import { renderLegalFooter } from './js/legal-footer.js';
+import { enforceAccess } from './js/access-control.js';
+
+if (!(await enforceAccess('analysis'))) {
+  throw new Error('access-denied: redirected');
+}
 
 document.getElementById('navHost').innerHTML = renderBottomNav('analytics');
 renderLegalFooter();

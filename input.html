@@ -12,6 +12,7 @@
 .preview-table tr.rest { color: var(--muted); background: #fafafa; }
 .preview-table input { width: 100%; border: none; padding: 2px; font-size: 12px; }
 </style>
+<style>body{visibility:hidden;pointer-events:none;}</style>
 </head>
 <body>
 <script>
@@ -103,6 +104,11 @@ import { parseReport, parseFormattedReport } from './js/parser.js';
 import { getConfig, getDrive, saveDriveSafe } from './js/storage.js';
 import { fetchWeatherForDate } from './js/weather.js';
 import { renderLegalFooter } from './js/legal-footer.js';
+import { enforceAccess } from './js/access-control.js';
+
+if (!(await enforceAccess('core'))) {
+  throw new Error('access-denied: redirected');
+}
 
 document.getElementById('navHost').innerHTML = renderBottomNav('input');
 renderLegalFooter();

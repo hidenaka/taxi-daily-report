@@ -372,8 +372,16 @@
     }
     #btn-undo-reset:active { background: rgba(240, 192, 96, 0.12); }
   </style>
+<style>body{visibility:hidden;pointer-events:none;}</style>
 </head>
-<body>  <a href="../" class="back-link">← タクシー日報分析に戻る</a>
+<body>
+  <script type="module">
+    import { enforceAccess } from '../js/access-control.js';
+    if (!(await enforceAccess('core', { redirect: '../subscribe.html' }))) {
+      throw new Error('access-denied: redirected');
+    }
+  </script>
+  <a href="../" class="back-link">← タクシー日報に戻る</a>
   <nav class="app-tabs" role="tablist" aria-label="アプリ切替">
     <a href="./" class="app-tab active" aria-current="page">⏱ 乗務タイマー</a>
     <a href="ic.html" class="app-tab">🛣 IC判定</a>
