@@ -32,6 +32,9 @@ export function isStale(generatedAt, now, maxMinutes) {
 }
 
 // 5分スロット配列を15分ビンに合算する。
+// 入力 slots は時系列順の配列（予測の発生順）。出力ビンもその順序を保つ
+// ＝ Map の挿入順をそのまま使う。時分だけでソートすると日跨ぎ（23時台→0時台）で
+// 0:00 が先頭に来てしまうため、ソートしない。
 // 出力ビン: { label: "H:MM-H:MM", stall1..stall4, total }（total は乗り場合計で再計算）
 export function aggregateTo15min(slots) {
   const bins = new Map();
@@ -44,7 +47,6 @@ export function aggregateTo15min(slots) {
     for (const k of STALL_KEYS) b[k] += s[k] || 0;
   }
   return [...bins.values()]
-    .sort((a, b) => a.binStart - b.binStart)
     .map(b => ({
       label: `${toHHMM(b.binStart)}-${toHHMM(b.binStart + 15)}`,
       stall1: b.stall1,
@@ -66,6 +68,17 @@ export async function loadEnsemble(fetchFn = fetch) {
   }
 }
 
+// 出庫実績 JSON を取得する。失敗は例外を投げず { data, error } で返す。
+export async function loadActuals(fetchFn = fetch) {
+  try {
+    const res = await fetchFn('data/stall-actuals.json', { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return { data: await res.json(), error: null };
+  } catch (e) {
+    return { data: null, error: e.message };
+  }
+}
+
 // 15分ビン配列を HTML テーブルに描画する。
 function renderTable(bins) {
   if (bins.length === 0) return '<p class="fc-empty">予測データなし</p>';
@@ -80,21 +93,52 @@ function renderTable(bins) {
   </table>`;
 }
 
-// 到着便ページの予測セクションを初期化・描画する。
-export async function initForecastSection() {
-  const metaEl = document.getElementById('forecast-meta');
-  const tableEl = document.getElementById('forecast-table-wrap');
-  if (!metaEl || !tableEl) return;
+// 出庫実績スロット配列を HTML テーブルに描画する（乗り場別＋合計）。
+export function renderActualsTable(slots) {
+  if (!slots || slots.length === 0) return '<p class="fc-empty">実績データなし</p>';
+  const rows = slots.map(s => `<tr>
+      <td class="fc-time">${s.slotStart}-${s.slotEnd}</td>
+      <td>${s.stall1 ?? 0}</td><td>${s.stall2 ?? 0}</td><td>${s.stall3 ?? 0}</td><td>${s.stall4 ?? 0}</td>
+      <td class="fc-total">${s.total ?? 0}</td>
+    </tr>`).join('');
+  return `<table class="fc-table">
+    <thead><tr><th>時間帯</th><th>乗1</th><th>乗2</th><th>乗3</th><th>乗4</th><th>計</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
 
+// 予測モードの localStorage キー。
+const MODE_STORAGE_KEY = 'arrivalsForecastMode';
+
+// 実績モードを描画する。
+async function renderActualsMode(metaEl, tableEl) {
+  const { data, error } = await loadActuals();
+  if (error) {
+    metaEl.textContent = `実績データを取得できていません（${error}）`;
+    tableEl.innerHTML = '';
+    return;
+  }
+  const ts = (data.generatedAt || '').slice(0, 16).replace('T', ' ');
+  if (isStale(data.generatedAt, new Date(), STALE_MINUTES)) {
+    metaEl.textContent = ts
+      ? `実績データを取得できていません（最終 ${ts}）`
+      : '実績データを取得できていません';
+    tableEl.innerHTML = '';
+    return;
+  }
+  metaEl.textContent = ts ? `実績 ${ts} 時点まで` : '';
+  tableEl.innerHTML = renderActualsTable(data.slots);
+}
+
+// 予測モードを描画する。
+async function renderForecastMode(metaEl, tableEl) {
   const { data, error } = await loadEnsemble();
   if (error) {
     metaEl.textContent = `予測データを取得できていません（${error}）`;
     tableEl.innerHTML = '';
     return;
   }
-
   const ts = (data.generatedAt || '').slice(0, 16).replace('T', ' ');
-  // 古いデータは表を出さない。停止中の予測を最新のように見せない。
   if (isStale(data.generatedAt, new Date(), STALE_MINUTES)) {
     metaEl.textContent = ts
       ? `予測データを取得できていません（最終 ${ts}）`
@@ -102,7 +146,42 @@ export async function initForecastSection() {
     tableEl.innerHTML = '';
     return;
   }
-
   metaEl.textContent = ts ? `予測時刻 ${ts} 時点` : '';
   tableEl.innerHTML = renderTable(aggregateTo15min(data.slots));
+}
+
+// 到着便ページの予測セクションを初期化・描画する。
+// プルダウンで実績（既定）／予測を切り替える。選択は localStorage に保存。
+// 戻り値: 再描画関数（更新ボタンから最新データを取り直すのに使う）。
+// 必要な要素が無いときは undefined。
+export async function initForecastSection() {
+  const metaEl = document.getElementById('forecast-meta');
+  const tableEl = document.getElementById('forecast-table-wrap');
+  const modeEl = document.getElementById('forecast-mode');
+  if (!metaEl || !tableEl || !modeEl) return;
+
+  let saved = null;
+  try { saved = localStorage.getItem(MODE_STORAGE_KEY); } catch { /* ignore */ }
+  modeEl.value = (saved === 'forecast') ? 'forecast' : 'actuals';
+
+  async function render() {
+    metaEl.textContent = '読み込み中...';
+    tableEl.innerHTML = '';
+    if (modeEl.value === 'forecast') {
+      await renderForecastMode(metaEl, tableEl);
+    } else {
+      await renderActualsMode(metaEl, tableEl);
+    }
+  }
+
+  modeEl.addEventListener('change', () => {
+    try { localStorage.setItem(MODE_STORAGE_KEY, modeEl.value); } catch { /* ignore */ }
+    render().catch(err => {
+      metaEl.textContent = '表示に失敗しました';
+      console.error(err);
+    });
+  });
+
+  await render();
+  return render;
 }
