@@ -99,6 +99,13 @@ if (location.hostname.includes('-dev')) {
         <li>「📍 現在地から自動入力」で GPS から降ろし場所を自動セット</li>
         <li>他のドライバーの匿名集計データも含みます（個人特定情報なし）</li>
       </ul>
+      <div style="background:#f0f9ff;border:1px solid #7dd3fc;border-radius:6px;padding:8px 10px;margin-top:8px;font-size:11px;line-height:1.5;color:#075985;">
+        🛡️ <strong>「📍 現在地から自動入力」ボタンの動き</strong><br>
+        ・<strong>このボタンを押した時だけ</strong>、今いる場所をスマホから1回受け取ります<br>
+        ・受け取った場所は<strong>「降ろした場所」欄を埋めるためだけ</strong>に使い、その場で捨てます<br>
+        ・キャビス側で<strong>あなたの場所を覚える・記録する・他の人に見せることは一切ありません</strong><br>
+        ・ボタンを押さない限り、場所は受け取りません
+      </div>
       <a href="guide.html#ch4" class="guide-link">使い方ガイドで詳しく →</a>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
@@ -194,6 +201,8 @@ if (location.hostname.includes('-dev')) {
 <div id="navHost"></div>
 <script type="module">
 import { renderBottomNav, formatYen, formatDateY, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, toLocalIso } from './js/app.js';
+import { showGpsPrivacyBanner } from './js/gps-privacy-banner.js';
+showGpsPrivacyBanner();
 import { getDrivesForMonth, getDrivesForMonthCached, getAllUsersDrivesForMonth, getAllUsersDrivesForMonthCached, listActiveUserIds, listActiveUserIdsCached, getMyUserId, getUserDisplayMap, getUserDisplayMapCached, getUserRoleMap, getUserRoleMapCached, getDrive, getConfig, getConfigCached, getMyAggregateAnalysisFlag, getMyConsecutiveShiftsCount } from './js/storage.js';
 import { ACCESS_LEVELS, getAccessLevel, getAccessLimits, getNextThreshold } from './js/aggregate-access.js';
 import {
