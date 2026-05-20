@@ -181,7 +181,7 @@ if (location.hostname.includes('-dev')) {
       <div style="font-size:13px;line-height:1.6;">
         <strong>営業サポートのベンチマーク統合分析に参加する</strong><br>
         <span class="muted" style="font-size:11px;">
-          ONの間は、あなたの日報から「いつ・どのエリアで降ろされたか」だけが匿名で集計されます。代わりに営業サポート画面で全ドライバーの傾向を見られます。<strong>ON期間中に保存・更新した日報の数（=出番数）</strong>で閲覧範囲が段階的に広がります（スタート→ライト→スタンダード→フル）。過去日付の日報を写真OCRや手入力で後から取り込んでも出番数に加算されます。OFFにするとデータは集計から外れ、出番数カウントはリセットされます。
+          ONの間は、あなたの日報から「いつ・どのエリアで降ろされたか」だけが匿名で集計されます。代わりに営業サポート画面で全ドライバーの傾向を見られます。<strong>ON期間中に営業登録した日数</strong>で閲覧範囲が段階的に広がります（スタート→ライト→スタンダード→フル）。過去日付の日報を写真OCRや手入力で後から取り込んでも営業登録日数に加算されます。OFFにするとデータは集計から外れ、営業登録日数のカウントはリセットされます。
         </span>
       </div>
     </label>
@@ -274,6 +274,13 @@ async function initCancelSection() {
       badge.style.color = '#991b1b';
       form.style.display = 'none';
       done.style.display = '';
+    } else if (sub && sub.cancelAtPeriodEnd) {
+      // Stripe側で期間末解約を予約済み(status はまだ trial/active)
+      badge.textContent = '退会手続き済み（現在のご利用期間の終了をもって退会）';
+      badge.style.color = '#991b1b';
+      form.style.display = 'none';
+      done.textContent = '退会手続きを受け付けました。現在のご利用期間の終了日まで、引き続きご利用いただけます。';
+      done.style.display = '';
     } else {
       badge.textContent = `現在の状態: ${formatStatus(sub.status)}`;
       badge.style.color = '#065f46';
@@ -285,16 +292,25 @@ async function initCancelSection() {
 
 document.getElementById('cancelSubBtn').addEventListener('click', async () => {
   const reason = document.getElementById('cancelReasonSel').value || null;
-  if (!confirm('本当に退会しますか?\n退会後はサービスをご利用いただけなくなります。')) return;
+  if (!confirm('退会の手続きをします。よろしいですか?')) return;
   const btn = document.getElementById('cancelSubBtn');
   btn.disabled = true;
   btn.textContent = '処理中...';
   try {
-    await cancelSubscription(reason);
+    const result = await cancelSubscription(reason);
+    const done = document.getElementById('cancelDoneMsg');
+    const badge = document.getElementById('cancelStatusBadge');
     document.getElementById('cancelForm').style.display = 'none';
-    document.getElementById('cancelDoneMsg').style.display = '';
-    document.getElementById('cancelStatusBadge').textContent = '退会済み';
-    document.getElementById('cancelStatusBadge').style.color = '#991b1b';
+    if (result && result.mode === 'stripe') {
+      // 期間末解約: 現在のご利用期間の終了まで利用継続
+      done.textContent = '退会手続きを受け付けました。現在のご利用期間の終了日まで、引き続きご利用いただけます。';
+      badge.textContent = '退会手続き済み（期間末で終了）';
+    } else {
+      done.textContent = '退会処理が完了しました。';
+      badge.textContent = '退会済み';
+    }
+    done.style.display = '';
+    badge.style.color = '#991b1b';
   } catch (e) {
     console.error('cancel error:', e);
     alert('退会処理に失敗しました: ' + (e.message || e));
@@ -462,10 +478,10 @@ document.getElementById('loginBtn').onclick = async () => {
   }
 };
 
-// ログアウト（メール認証 → 匿名）
+// ログアウト → ログイン画面へ（復帰しやすいよう login.html に誘導）
 document.getElementById('logoutBtn').onclick = async () => {
   await logout();
-  location.reload();
+  location.href = 'login.html';
 };
 
 document.getElementById('saveConfigBtn').onclick = async () => {
@@ -581,15 +597,17 @@ async function refreshAggregateAccessProgress() {
     const { nextLevel, shiftsRemaining } = getNextThreshold(count);
     document.getElementById('aggregateAccessLevelBadge').textContent = ACCESS_LEVELS[level].label;
     document.getElementById('aggregateAccessShifts').textContent =
-      `現在の連続出番数: ${count} 出番（${ACCESS_LEVELS[level].label}）`;
+      `現在の連続営業登録日数: ${count} 日（${ACCESS_LEVELS[level].label}）`;
     const next = document.getElementById('aggregateAccessNext');
     if (nextLevel) {
-      next.textContent = `次の段階「${ACCESS_LEVELS[nextLevel].label}」まであと ${shiftsRemaining} 出番`;
+      next.textContent = `次の段階「${ACCESS_LEVELS[nextLevel].label}」まであと ${shiftsRemaining} 日`;
     } else {
       next.textContent = '🎉 すべての段階を解放済みです（フル閲覧）';
     }
     progress.style.display = 'block';
-  } catch (e) { progress.style.display = 'none'; }
+  } catch (e) {
+    progress.style.display = 'none';
+  }
 }
 
 async function initAggregateAnalysisToggle() {
@@ -606,8 +624,11 @@ async function initAggregateAnalysisToggle() {
   toggle.addEventListener('change', async () => {
     const want = toggle.checked;
     if (!want) {
-      const ok = confirm('ベンチマーク統合分析への参加をOFFにしますか？\n\n・あなたの日報データは集計から外れます\n・「全員データ統合」機能（次の営業先推奨 / 高期待値エリア / 降車エリア別効率）が利用できなくなります\n・継続参加の出番数カウントがリセットされます（再ONで0からスタート）\n・いつでもONに戻せます');
+      const ok = confirm('ベンチマーク統合分析への参加をOFFにしますか？\n\n・あなたの日報データは集計から外れます\n・「全員データ統合」機能（次の営業先推奨 / 高期待値エリア / 降車エリア別効率）が利用できなくなります\n・継続参加の営業登録日数カウントがリセットされます（再ONで0日からスタート）\n・いつでもONに戻せます');
       if (!ok) { toggle.checked = true; return; }
+    } else {
+      // ONに戻すとき、過去にOFF経験があれば「0出番からのリスタート」を明示
+      // （初回ONはここを通らない＝混乱を避ける）
     }
     try {
       const next = await setMyAggregateAnalysisFlag(want);
