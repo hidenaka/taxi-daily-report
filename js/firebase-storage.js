@@ -113,16 +113,38 @@ export async function getConfig() {
   const userId = getUserId();
   const ref = doc(db, 'userConfigs', userId);
   const snap = await getDoc(ref);
+  let userConfig;
   if (!snap.exists()) {
     // 初回: DEFAULT_CONFIG をコピーして保存
-    const defaultConfig = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
-    defaultConfig.payrollMode = 'step_rate';
-    defaultConfig.fixedRate = 0.55;
-    defaultConfig.privacy = { shareDataWithOthers: true };
-    await setDoc(ref, defaultConfig);
-    return defaultConfig;
+    userConfig = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+    userConfig.payrollMode = 'step_rate';
+    userConfig.fixedRate = 0.55;
+    userConfig.privacy = { shareDataWithOthers: true };
+    await setDoc(ref, userConfig);
+  } else {
+    userConfig = snap.data();
   }
-  return snap.data();
+  // 会社プロファイルがあればマージ（会社レベル項目は会社優先）
+  const companyProfile = await loadCompanyProfile();
+  const { mergeCompanyConfig } = await import('./company-config.js');
+  return mergeCompanyConfig(companyProfile, userConfig);
+}
+
+// 現ユーザーの companyId から会社プロファイルを読む。無ければ null。
+async function loadCompanyProfile() {
+  try {
+    const uid = (typeof getCurrentUser === 'function' && getCurrentUser())
+      ? getCurrentUser().uid : null;
+    if (!uid) return null;
+    const userDoc = await getDoc(doc(db, 'users', uid));
+    const companyId = userDoc.exists() ? userDoc.data().companyId : null;
+    if (!companyId) return null;
+    const cSnap = await getDoc(doc(db, 'companies', companyId));
+    return cSnap.exists() ? cSnap.data() : null;
+  } catch (e) {
+    console.warn('loadCompanyProfile failed:', e);
+    return null; // 失敗時は会社マージ無し＝従来挙動
+  }
 }
 
 export async function saveConfig(config) {
@@ -151,6 +173,26 @@ export async function adminSaveConfigForUser(targetUserId, config) {
   const ref = doc(db, 'userConfigs', targetUserId);
   await setDoc(ref, {
     ...config,
+    updatedAt: new Date().toISOString()
+  });
+  return true;
+}
+
+// ========== COMPANIES (admin) ==========
+
+// Admin: 全会社プロファイルを取得（id 付き配列）。
+// 失敗時は例外を投げる（呼び出し側 UI が catch して読み込み失敗を表示するため、ここで握りつぶさない）。
+export async function adminListCompanies() {
+  await waitForAuth();
+  const snap = await getDocs(collection(db, 'companies'));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+// Admin: 会社プロファイルを保存（新規・更新どちらも）
+export async function adminSaveCompany(companyId, data) {
+  await waitForAuth();
+  await setDoc(doc(db, 'companies', companyId), {
+    ...data,
     updatedAt: new Date().toISOString()
   });
   return true;
@@ -358,11 +400,15 @@ export async function getMyAggregateAnalysisFlag() {
     const snap = await getDoc(doc(db, 'users', user.uid));
     if (!snap.exists()) return true;
     const v = snap.data().participatesInAggregateAnalysis;
-    return v !== false;
-  } catch (e) { return true; }
+    return v !== false; // undefined/null は true 扱い（マイグレ移行期間互換）
+  } catch (e) {
+    return true;
+  }
 }
 
-// 自分の users/{uid}.participatesInAggregateAnalysis を更新（E案: ON時に aggregateOnSince 記録）
+// 自分の users/{uid}.participatesInAggregateAnalysis を更新する
+// E案: ONにする時は aggregateOnSince を現在時刻に、OFFにする時は null にする
+//   → 連続ON期間中の出番数で閲覧レベル（onboarding/light/standard/full）が決まる
 export async function setMyAggregateAnalysisFlag(value) {
   await waitForAuth();
   const user = getCurrentUser();
@@ -373,6 +419,7 @@ export async function setMyAggregateAnalysisFlag(value) {
   return !!value;
 }
 
+// 自分の users/{uid}.aggregateOnSince を返す（OFF時または未設定なら null）
 export async function getMyAggregateOnSince() {
   await waitForAuth();
   const user = getCurrentUser();
@@ -381,11 +428,17 @@ export async function getMyAggregateOnSince() {
     const snap = await getDoc(doc(db, 'users', user.uid));
     if (!snap.exists()) return null;
     return snap.data().aggregateOnSince || null;
-  } catch (e) { return null; }
+  } catch (e) {
+    return null;
+  }
 }
 
-// E案: 連続ON期間中の出番数 = drives/{uid}/daily で updatedAt >= onSince の件数
-// 過去日付の日報を後から取り込んでも updatedAt は新しいのでカウントされる
+// 自分の「連続ON期間中の出番数」を返す
+// = drives/{uid}/daily のうち updatedAt が onSince 以降のドキュメント数
+// 「updatedAt」基準なので、過去日付の日報を写真OCRや手入力で後から取り込んでも
+// カウントに反映される（保存・更新した時点で1出番として加算）。
+// 1日報 = 1ドキュメント（date キー）なので、同じ日を何度更新しても1出番扱い。
+// onSince が null（OFF中）なら 0 を返す。
 export async function getMyConsecutiveShiftsCount() {
   await waitForAuth();
   const user = getCurrentUser();
@@ -401,27 +454,8 @@ export async function getMyConsecutiveShiftsCount() {
     );
     const snap = await getDocs(q);
     return snap.size;
-  } catch (e) { return 0; }
-}
-
-// C案: ベンチマーク統合分析に参加している（participatesInAggregateAnalysis≠false）
-// アクティブユーザーのIDだけを返す
-export async function listAggregateAnalysisUserIds() {
-  await waitForAuth();
-  try {
-    const snap = await getDocs(collection(db, 'users'));
-    const userDocs = snap.docs.map(d => d.data());
-    const eligibleIds = filterParticipatingUserIds(userDocs);
-    const activeIds = [];
-    for (const uid of eligibleIds) {
-      try {
-        const drivesSnap = await getDocs(collection(db, 'drives', uid, 'daily'));
-        if (!drivesSnap.empty) activeIds.push(uid);
-      } catch (e) { /* skip on permission error */ }
-    }
-    return activeIds.length > 0 ? activeIds : eligibleIds;
   } catch (e) {
-    return [getUserId()];
+    return 0;
   }
 }
 
@@ -494,6 +528,28 @@ export async function getUserRoleMap() {
     map[myId] = 'member';
   }
   return map;
+}
+
+// ベンチマーク統合分析に参加している（participatesInAggregateAnalysis≠false）
+// アクティブユーザーのIDだけを返す。C案の集計対象を絞るための関数。
+export async function listAggregateAnalysisUserIds() {
+  await waitForAuth();
+  try {
+    const snap = await getDocs(collection(db, 'users'));
+    const userDocs = snap.docs.map(d => d.data());
+    const eligibleIds = filterParticipatingUserIds(userDocs);
+    // 実際にデータを持っているかも検証（listActiveUserIds と同じロジック）
+    const activeIds = [];
+    for (const uid of eligibleIds) {
+      try {
+        const drivesSnap = await getDocs(collection(db, 'drives', uid, 'daily'));
+        if (!drivesSnap.empty) activeIds.push(uid);
+      } catch (e) { /* skip on permission error */ }
+    }
+    return activeIds.length > 0 ? activeIds : eligibleIds;
+  } catch (e) {
+    return [getUserId() || getMyUserId()];
+  }
 }
 
 export async function getAllUsersDrivesForMonth(yearMonth) {

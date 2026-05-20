@@ -9,7 +9,9 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { DEFAULT_CONFIG } from './default-config.js';
+import { buildNewUserDoc } from './user-doc.js';
 import { clearSubCache } from './sub-cache.js';
+import { loadInviteSlug } from './invite-url.js';
 
 let currentUser = null;
 let currentUserId = null;
@@ -127,11 +129,10 @@ export async function createUserWithCredentials(userId, password) {
     const result = await createUserWithEmailAndPassword(auth, email, password);
     // users/{uid} を先に作成（myUserId() が機能するために必須）
     // これがないと Firestore Rules で userConfigs/{userId} への書き込みが拒否される
-    await setDoc(doc(db, 'users', result.user.uid), {
+    await setDoc(doc(db, 'users', result.user.uid), buildNewUserDoc({
       userId,
-      createdAt: new Date().toISOString(),
-      isAnonymous: false
-    });
+      companyId: localStorage.getItem('taxi_pending_company') || null,
+    }));
     // userConfigsに初期設定を作成（DEFAULT_CONFIGをベースに）
     const defaultConfig = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
     await setDoc(doc(db, 'userConfigs', userId), defaultConfig);
@@ -139,6 +140,43 @@ export async function createUserWithCredentials(userId, password) {
   } catch (e) {
     return { success: false, error: e.message };
   }
+}
+
+// セルフサービス新規登録: ユーザーが選んだログインID＋パスワードで新規アカウントを作成する。
+// 成功するとそのアカウントでログイン状態になる。匿名で使っていた場合、匿名セッションは
+// 破棄される（匿名データ＝user_sample 等の共有デモは引き継がない＝まっさらな専用アカウント）。
+//
+// 完全招待制（decisions 6）: localStorage に有効な招待 slug (`taxi_pending_company`) が
+// 無い場合は signup を拒否する。UI 側 (login.html) でも事前にガードしているが、ここでも
+// 二重に防御（フォーム JS をバイパスして直接呼ばれるケース）。
+export async function signUp(userId, password) {
+  if (!loadInviteSlug(localStorage)) {
+    return { success: false, error: '新規登録には招待URLが必要です。会社/組合から配布された招待URL経由でアクセスしてください。' };
+  }
+  if (!/^[a-z][a-z0-9_]*$/.test(userId)) {
+    return { success: false, error: 'ログインIDは半角英小文字で始め、英小文字・数字・_ のみ使えます' };
+  }
+  if (userId.length < 3 || userId.length > 30) {
+    return { success: false, error: 'ログインIDは3〜30文字にしてください' };
+  }
+  if (!password || password.length < 8) {
+    return { success: false, error: 'パスワードは8文字以上にしてください' };
+  }
+  const result = await createUserWithCredentials(userId, password);
+  if (!result.success) {
+    let msg = result.error || '登録に失敗しました';
+    if (/email-already-in-use/.test(msg)) {
+      msg = 'このログインIDは既に使われています。別のIDをお試しください';
+    } else if (/weak-password/.test(msg)) {
+      msg = 'パスワードは8文字以上にしてください';
+    }
+    return { success: false, error: msg };
+  }
+  currentUser = result.user;
+  currentUserId = userId;
+  localStorage.setItem('taxi_user_id', userId);
+  clearSubCache();
+  return { success: true };
 }
 
 // ログアウト

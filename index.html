@@ -92,8 +92,9 @@ if (location.hostname.includes('-dev')) {
 </script>
 <div id="onboardBanner" style="display:none;padding:12px 14px;background:#fff7e6;border-bottom:1px solid #ffd591;color:#7c4a00;font-size:13px;">
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-    <span id="onboardBannerMsg" style="flex:1;min-width:200px;">サービスのご利用にはお申し込みが必要です。</span>
-    <a href="subscribe.html" id="onboardBannerCta" style="display:inline-block;padding:6px 14px;background:#d97706;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;font-size:12px;white-space:nowrap;">お申し込みへ →</a>
+    <span id="onboardBannerMsg" style="flex:1;min-width:180px;"></span>
+    <a href="subscribe.html" id="onboardCtaPrimary" style="display:none;padding:6px 14px;background:#d97706;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;font-size:12px;white-space:nowrap;"></a>
+    <a href="login.html" id="onboardCtaLogin" style="display:none;padding:6px 14px;background:#fff;color:#d97706;border:1px solid #d97706;text-decoration:none;border-radius:6px;font-weight:600;font-size:12px;white-space:nowrap;">ログイン</a>
   </div>
 </div>
 <main style="padding:14px;">
@@ -125,7 +126,9 @@ import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZ
 import { processInvite } from './js/invite-crypto.js';
 import { renderLegalFooter } from './js/legal-footer.js';
 import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js';
+import { isEmailAuth } from './js/firebase-auth.js';
 import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts } from './js/planned-shifts.js';
+import { checkInviteAndWarn, fetchCompanyExists } from './js/invite-url.js';
 
 // 暗号化招待リンク処理は GitHub 版専用のためスキップ（Firebase 版）
 const inviteProcessed = false;
@@ -133,6 +136,10 @@ const inviteProcessed = false;
 // URL パラメータによる自動設定（管理者配布リンク対応）
 const urlParams = new URLSearchParams(location.search);
 const paramUser = urlParams.get('user');
+
+// 招待URL `?company=<slug>` を捕捉・検証（完全招待制・decisions 6）。
+// 不正 slug は localStorage に保存せず、画面上部に警告 banner を表示。
+checkInviteAndWarn(urlParams, localStorage, fetchCompanyExists);
 let autoConfigured = false;
 if (paramUser) {
   const norm = paramUser.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9_]+/, '');
@@ -163,27 +170,30 @@ renderLegalFooter();
   } catch (e) {}
 })();
 
-// 申込誘導バナー: subscription state に応じて表示制御
+// 利用案内バナー: subscription state に応じて表示制御
 async function initOnboardBanner() {
   try {
     const sub = await getSubscription();
     const banner = document.getElementById('onboardBanner');
     const msg = document.getElementById('onboardBannerMsg');
-    const cta = document.getElementById('onboardBannerCta');
+    const ctaPrimary = document.getElementById('onboardCtaPrimary');
+    const ctaLogin = document.getElementById('onboardCtaLogin');
     if (!banner) return;
 
-    if (!sub) {
-      // 未申込
-      msg.textContent = 'サービスのご利用にはお申し込みが必要です。';
-      cta.textContent = 'お申し込みへ →';
-      banner.style.display = '';
-    } else if (sub.status === 'pending') {
-      msg.textContent = 'お申し込みありがとうございます。決済手続きをお進めください。';
-      cta.textContent = '続きへ →';
+    if (!sub || sub.status === 'pending') {
+      // 未申込 → 申込導線。匿名なら復帰用のログイン導線も出す
+      msg.textContent = (sub && sub.status === 'pending')
+        ? 'お申し込み手続きが途中です。続きから進められます。'
+        : 'キャビスの全機能は初月無料でお試しいただけます。';
+      ctaPrimary.textContent = '初月無料で申し込む →';
+      ctaPrimary.style.display = '';
+      if (!isEmailAuth()) ctaLogin.style.display = '';
       banner.style.display = '';
     } else if (isCanceledOrUnpaid(sub)) {
-      msg.textContent = `現在の状態: ${formatStatus(sub.status)}。再度のお申し込みはお問い合わせください。`;
-      cta.style.display = 'none';
+      // 退会・未払い → いつでも自己再開できる（Stripeで再申込）
+      msg.textContent = '現在ご利用が停止しています。いつでも再開できます。';
+      ctaPrimary.textContent = 'ご利用を再開する →';
+      ctaPrimary.style.display = '';
       banner.style.display = '';
     }
     // active / trial / past_due / grandfathered → バナー非表示(初期状態のまま)

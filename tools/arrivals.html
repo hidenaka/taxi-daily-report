@@ -73,6 +73,15 @@
     #topics .topic-terminal { color: var(--sub); font-size: 11px; }
     #detail-toggle { display: block; margin: 8px auto; padding: 6px 14px; background: #1a1a1d; color: var(--sub); border: 1px solid #333; border-radius: 6px; cursor: pointer; font-size: 12px; }
     #detail-toggle.is-active { background: var(--accent); color: #000; border-color: var(--accent); }
+    #origin-summary-section { padding: 0 12px 8px; }
+    #origin-summary { display: flex; flex-direction: column; gap: 4px; }
+    #origin-summary .origin-row { display: grid; grid-template-columns: 1fr auto auto;
+      gap: 8px; align-items: baseline; padding: 4px 0;
+      border-bottom: 1px solid #1a1a1d; font-size: 13px; }
+    #origin-summary .origin-name { color: var(--fg); font-weight: 600; }
+    #origin-summary .origin-count { color: var(--sub); font-variant-numeric: tabular-nums; }
+    #origin-summary .origin-pax { color: var(--accent); font-variant-numeric: tabular-nums; font-weight: 600; }
+    #origin-summary .empty { color: var(--sub); font-size: 12px; padding: 8px 0; }
     #flight-list .flight-row { padding: 11px 0; border-bottom: 1px solid #1a1a1d; }
     .flight-line1 { display: flex; gap: 8px; align-items: baseline; }
     .flight-line1 .time { font-weight: bold; min-width: 50px; }
@@ -93,6 +102,19 @@
     .flight-row.is-delayed { background: rgba(255, 184, 77, 0.08); }
     .flight-row.is-delayed .status { color: var(--warn); }
     .flight-row.is-unknown { opacity: 0.6; }
+    /* 航空会社色（左ボーダー）。色 hex は tools/js/airline-color.js と同期 */
+    .flight-row.airline-jal   { border-left: 3px solid #e60012; padding-left: 7px; }
+    .flight-row.airline-ana   { border-left: 3px solid #013193; padding-left: 7px; }
+    .flight-row.airline-jjp   { border-left: 3px solid #ff5e1f; padding-left: 7px; }
+    .flight-row.airline-sky   { border-left: 3px solid #00b6f0; padding-left: 7px; }
+    .flight-row.airline-ado   { border-left: 3px solid #4ea83a; padding-left: 7px; }
+    .flight-row.airline-sna   { border-left: 3px solid #f4cd00; padding-left: 7px; }
+    .flight-row.airline-sfj   { border-left: 3px solid #4a4a4a; padding-left: 7px; }
+    .flight-row.airline-other { border-left: 3px solid #777777; padding-left: 7px; }
+    /* ターミナル文字タグ。色は会社色と衝突しない単色グレー */
+    .terminal-tag { display: inline-block; padding: 1px 6px; border-radius: 3px;
+      background: rgba(255,255,255,0.08); color: var(--sub); font-size: 11px;
+      font-weight: 600; margin-left: 6px; letter-spacing: 0.5px; }
     footer { padding: 8px 12px; color: var(--sub); font-size: 11px; border-top: 1px solid #222; display: flex; flex-direction: column; gap: 2px; }
     footer.is-stale .updated { color: var(--warn); }
     .empty { color: var(--sub); padding: 12px 0; text-align: center; }
@@ -109,6 +131,23 @@
     .fc-table th:first-child, .fc-table td.fc-time { text-align: left; }
     .fc-table td.fc-time { font-weight: 600; }
     .fc-table td.fc-total { font-weight: 700; color: var(--accent); }
+
+    body { padding-bottom: 64px; }
+    nav.bottom {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      height: 56px; background: #16161c;
+      border-top: 1px solid #222;
+      display: flex;
+      padding-bottom: env(safe-area-inset-bottom);
+      z-index: 50;
+    }
+    nav.bottom a {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-decoration: none; color: var(--sub);
+      font-size: 11px;
+    }
+    nav.bottom a.active { color: var(--accent); }
   </style>
 <style>body{visibility:hidden;pointer-events:none;}</style>
 </head>
@@ -119,7 +158,6 @@
       throw new Error('access-denied: redirected');
     }
   </script>
-  <a href="../" style="display:block;padding:8px 14px;background:#0a0a0f;border-bottom:1px solid rgba(255,255,255,0.08);color:#8a8a92;text-decoration:none;font-size:13px;">← 日報に戻る</a>
   <nav class="app-tabs" role="tablist" aria-label="アプリ切替">
     <a href="./" class="app-tab">⏱ 乗務タイマー</a>
     <a href="ic.html" class="app-tab">🛣 IC判定</a>
@@ -162,6 +200,11 @@
     <div id="heatmap"></div>
   </section>
 
+  <section id="origin-summary-section">
+    <h2>🛫 出発地別（今日 全便）</h2>
+    <div id="origin-summary"></div>
+  </section>
+
   <section>
     <h2>便リスト（過去30分〜未来3時間）</h2>
     <div id="flight-list"></div>
@@ -170,5 +213,10 @@
   <footer id="arrivals-footer"></footer>
 
   <script type="module" src="./js/arrivals-app.js?v=20260507b"></script>
+  <div id="navHost"></div>
+  <script type="module">
+    import { renderBottomNav } from '../js/app.js';
+    document.getElementById('navHost').innerHTML = renderBottomNav('tools', '../');
+  </script>
 </body>
 </html>

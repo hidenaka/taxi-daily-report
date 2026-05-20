@@ -1,3 +1,7 @@
+import { airlineToColorKey } from './airline-color.js';
+
+const VALID_TERMINALS = new Set(['T1', 'T2', 'T3']);
+
 const TIER_INFO = {
   high: { label: '多い', emoji: '🟥' },
   mid:  { label: '普通', emoji: '🟧' },
@@ -175,7 +179,11 @@ export function renderFlightList(container, flights) {
     const row = document.createElement('div');
     const isDelayed = f.status === '遅延';
     const isUnknown = f.aircraftCode === null;
-    row.className = 'flight-row' + (isDelayed ? ' is-delayed' : '') + (isUnknown ? ' is-unknown' : '');
+    const colorKey = airlineToColorKey(f.airline);
+    row.className = 'flight-row'
+      + ` airline-${colorKey}`
+      + (isDelayed ? ' is-delayed' : '')
+      + (isUnknown ? ' is-unknown' : '');
     const time = f.estimatedTime ?? f.scheduledTime ?? '--:--';
     const aircraft = f.aircraftCode ?? '機材不明';
     const hasPax = f.estimatedPax !== null && f.estimatedPax !== undefined;
@@ -196,15 +204,38 @@ export function renderFlightList(container, flights) {
     const lightningBadge = (f.taxiLightningBoost && f.taxiLightningBoost > 1.0)
       ? ` <span class="lightning-boost">⚡ラッシュ</span>`
       : '';
+    const terminalTag = (f.terminal && VALID_TERMINALS.has(f.terminal))
+      ? `<span class="terminal-tag">${f.terminal}</span>` : '';
     row.innerHTML = `
       <div class="flight-line1">
         <span class="time">${time}</span>
         <span class="flight-no">${f.flightNumber}</span>
         <span class="from">${f.fromName}</span>
         <span class="reach">${reachIcon}</span>
+        ${terminalTag}
       </div>
       <div class="flight-line2">${paxLine}</div>
       <div class="flight-line3">機材 ${aircraft} ・ <span class="status">${f.status}${statusIcon}${delayBoostBadge}${lightningBadge}</span></div>
+    `;
+    container.appendChild(row);
+  }
+}
+
+// 出発地別集計の行リストを描画する。groups は totalEstimatedTaxiPax 降順前提。
+export function renderOriginSummary(container, groups) {
+  if (!container) return;
+  container.innerHTML = '';
+  if (!groups || groups.length === 0) {
+    container.innerHTML = '<div class="empty">表示可能な集計がありません</div>';
+    return;
+  }
+  for (const g of groups) {
+    const row = document.createElement('div');
+    row.className = 'origin-row';
+    row.innerHTML = `
+      <span class="origin-name">${g.fromName}</span>
+      <span class="origin-count">${g.flightCount}便</span>
+      <span class="origin-pax">推定タクシー客 ${g.totalEstimatedTaxiPax}人</span>
     `;
     container.appendChild(row);
   }

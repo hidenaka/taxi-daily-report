@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>Cabis ｜ 入力</title>
+<title>入力 — タクシー日報分析</title>
 <link rel="stylesheet" href="css/style.css">
 <style>
 /* プレビュー表: 内容幅にして横スクロール、各セルを編集可能な入力欄にする */
@@ -396,8 +396,8 @@ document.getElementById('parseBtn').onclick = () => {
   const text = document.getElementById('rawTextInput').value;
   if (!text.trim()) return;
   try {
-    // フォーマット済みテキスト(先頭4行ヘッダー)を自動判別。先頭の # 等の装飾も許容
-    const isFormatted = /^[#>*\s-]*(日付|車種|出庫|帰庫)\s*[::]/m.test(text.split('\n').slice(0, 8).join('\n'));
+    // フォーマット済みテキスト(先頭4行ヘッダー)を自動判別
+    const isFormatted = /^(日付|車種|出庫|帰庫)\s*[::]/m.test(text.split('\n').slice(0, 6).join('\n'));
     if (isFormatted) {
       parsed = parseFormattedReport(text);
       // ヘッダーから自動入力
