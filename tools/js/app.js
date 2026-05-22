@@ -4,7 +4,7 @@ import { haversineKm } from './util.js';
 import { createGeoWatcher, findNearestICs, entryGivesCompanyPayDeduction } from './geo.js';
 import { buildSearchEntries, buildValueToIcIdMap } from './search.js';
 import { getOuterRouteOptionsForIc } from './route-options.js';
-import { loadFavorites, addFavorite, removeFavorite, saveFavorites } from './exit-favorites.js';
+import { loadFavorites, addFavorite, removeFavorite, moveToIndex, saveFavorites } from './exit-favorites.js';
 import { buildAdjacency, shortestPathVia, kShortestPaths } from './shutoko-graph.js';
 
 let _routeDetailsAdj = null;
@@ -40,6 +40,7 @@ async function init() {
   updateShutokoRouteOptions();
   wireEvents();
   update();
+  answerFlashReady = true;   // 初期表示後は、選択変更で答えカードを光らせる
   renderSessionLog();
   initGeo();
 }
@@ -313,6 +314,9 @@ let icValueIndex = new Map();
 // ---- 出口お気に入りチップ（localStorage・編集可） ----
 let exitFavorites = [];   // ic_id 配列
 let exitEditMode = false;
+let exitDragId = null;        // 並べ替えドラッグ中の ic_id（null=非ドラッグ）
+let suppressNextClick = false; // ドラッグ終了直後のタップ(click)を1回抑止
+let exitFavExpanded = false;   // お気に入りを全件展開しているか（既定=上位3件のみ）
 
 function defaultExitFavoriteIds() {
   return (state.data.favorites.exit_favorites || []).map(f => f.ic_id);
@@ -325,8 +329,13 @@ function initExitFavorites() {
 
 function renderExitFavorites() {
   const wrap = document.getElementById('exit-fav-chips');
+  const oldRects = new Map();   // FLIP: 並べ替え前の各チップ位置を記録
+  wrap.querySelectorAll('.fav-chip[data-ic-id]').forEach(c => oldRects.set(c.dataset.icId, c.getBoundingClientRect()));
   wrap.innerHTML = '';
-  for (const icId of exitFavorites) {
+  const COLLAPSED = 3;
+  const showAll = exitEditMode || exitFavExpanded;   // 編集中・展開中は全件
+  const visible = showAll ? exitFavorites : exitFavorites.slice(0, COLLAPSED);
+  for (const icId of visible) {
     const ic = state.data.ics.find(x => x.id === icId);
     if (!ic) continue;
     const chip = document.createElement('button');
@@ -344,11 +353,22 @@ function renderExitFavorites() {
         renderExitFavorites();
       });
     }
+    if (icId === exitDragId) chip.classList.add('dragging');  // 並べ替え中のチップを再描画後も浮かせ続ける
+    attachChipDrag(chip, icId);  // 長押し→ドラッグで並べ替え
     chip.addEventListener('click', () => {
+      if (suppressNextClick) { suppressNextClick = false; return; }  // ドラッグ直後のタップ抑止
       if (exitEditMode) return;
       setExitIc(icId); update();
     });
     wrap.appendChild(chip);
+  }
+  if (!exitEditMode && exitFavorites.length > COLLAPSED) {
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'fav-chip fav-more';
+    toggle.textContent = exitFavExpanded ? '▴ 閉じる' : `▾ 他${exitFavorites.length - COLLAPSED}件`;
+    toggle.addEventListener('click', () => { exitFavExpanded = !exitFavExpanded; renderExitFavorites(); });
+    wrap.appendChild(toggle);
   }
   if (exitEditMode) {
     const add = document.createElement('button');
@@ -360,6 +380,82 @@ function renderExitFavorites() {
     });
     wrap.appendChild(add);
   }
+  flipExitChips(wrap, oldRects);   // 並べ替えで動いたチップをスライド表示
+}
+
+// FLIP: 旧位置→新位置の差分を transform で復元してから 0 へ遷移＝スライドして見える。
+// 持ち上げ中のチップ(exitDragId)は除外（浮いたまま指側に残す）。
+function flipExitChips(wrap, oldRects) {
+  wrap.querySelectorAll('.fav-chip[data-ic-id]').forEach((c) => {
+    if (c.dataset.icId === exitDragId) return;
+    const old = oldRects.get(c.dataset.icId);
+    if (!old) return;
+    const now = c.getBoundingClientRect();
+    const dx = old.left - now.left, dy = old.top - now.top;
+    if (!dx && !dy) return;
+    c.style.transition = 'none';
+    c.style.transform = `translate(${dx}px, ${dy}px)`;
+    requestAnimationFrame(() => {
+      c.style.transition = 'transform .18s ease';
+      c.style.transform = '';
+    });
+  });
+}
+
+// ---- 出口お気に入りの長押しドラッグ並べ替え ----
+// 長押し(約450ms)で持ち上げ→ドラッグ中に指の位置のチップへ並べ替え→離して保存。
+// 普通のタップは選択のまま（450ms未満 or 10px以上動いたら長押し不成立）。
+function attachChipDrag(chip, icId) {
+  let pressTimer = null;
+  let sx = 0, sy = 0;
+  const clearTimer = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
+  chip.addEventListener('pointerdown', (ev) => {
+    if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+    sx = ev.clientX; sy = ev.clientY;
+    clearTimer();
+    pressTimer = setTimeout(() => { pressTimer = null; beginExitDrag(icId); }, 450);
+  });
+  chip.addEventListener('pointermove', (ev) => {
+    if (pressTimer && (Math.abs(ev.clientX - sx) > 10 || Math.abs(ev.clientY - sy) > 10)) clearTimer();
+  });
+  chip.addEventListener('pointerup', clearTimer);
+  chip.addEventListener('pointercancel', clearTimer);
+  chip.addEventListener('contextmenu', (ev) => { if (exitDragId) ev.preventDefault(); });
+}
+
+function beginExitDrag(icId) {
+  exitDragId = icId;
+  document.addEventListener('pointermove', onExitDragMove, { passive: false });
+  document.addEventListener('pointerup', endExitDrag);
+  document.addEventListener('pointercancel', endExitDrag);
+  renderExitFavorites();   // 持ち上げ表示（dragging クラス）
+}
+
+function onExitDragMove(ev) {
+  if (!exitDragId) return;
+  ev.preventDefault();   // ドラッグ中のスクロールを止める
+  const overChip = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.fav-chip');
+  const overId = overChip?.dataset.icId;
+  if (!overId || overId === exitDragId) return;
+  const target = exitFavorites.indexOf(overId);
+  if (target < 0) return;
+  const next = moveToIndex(exitFavorites, exitDragId, target);
+  if (next.join('|') !== exitFavorites.join('|')) {
+    exitFavorites = next;
+    renderExitFavorites();   // ライブ並べ替え（move追跡は document 側なので再描画OK）
+  }
+}
+
+function endExitDrag() {
+  document.removeEventListener('pointermove', onExitDragMove);
+  document.removeEventListener('pointerup', endExitDrag);
+  document.removeEventListener('pointercancel', endExitDrag);
+  if (!exitDragId) return;
+  exitDragId = null;
+  suppressNextClick = true;
+  setTimeout(() => { suppressNextClick = false; }, 400);   // クリック未発火でも自動解除
+  saveFavorites(exitFavorites);
+  renderExitFavorites();
 }
 
 function renderIcSelected(elId, ic) {
@@ -380,6 +476,16 @@ function refreshAnswerVisibility() {
   const ready = !!(state.selected.entryIcId && state.selected.exitIcId);
   document.getElementById('answer-placeholder').hidden = ready;
   document.getElementById('answer-body').hidden = !ready;
+}
+
+let answerFlashReady = false;   // 初期表示では光らせない。最初のupdate後にtrue
+// 答えカードを一瞬光らせて「結果が更新された」と分かるようにする
+function flashAnswer() {
+  const card = document.getElementById('answer-body');
+  if (!card || card.hidden) return;
+  card.classList.remove('flash');
+  void card.offsetWidth;   // リフローでアニメ再起動
+  card.classList.add('flash');
 }
 
 function setEntryIc(icId) {
@@ -482,14 +588,20 @@ function wireEvents() {
   // ---- Entry IC: 検索入力のみ（チップはrefreshNearestSuggestionsが配線） ----
   const entryInput = document.getElementById('inp-entry-ic');
   function resolveEntryFromSearch() {
-    const icId = icValueIndex.get(entryInput.value);
+    const v = entryInput.value;
+    const hint = document.getElementById('entry-ic-hint');
+    if (!v) return;   // 空は何もしない（確定後の自動クリアで確認表示を消さないため）
+    const icId = icValueIndex.get(v);
     if (!icId) {
-      const hint = document.getElementById('entry-ic-hint');
-      hint.textContent = entryInput.value ? '候補から選択してください' : '';
-      hint.className = entryInput.value ? 'hint error' : 'hint';
+      hint.textContent = '候補から選択してください';
+      hint.className = 'hint error';
       return;
     }
     setEntryIc(icId); update();
+    const ic = state.data.ics.find(x => x.id === icId);
+    hint.textContent = '✓ ' + ic.name.replace(/（[^）]*）/g, '').trim() + ' を選択';
+    hint.className = 'hint confirm';
+    entryInput.value = '';   // 確定→検索欄をクリア（入力完了の合図）
   }
   entryInput.addEventListener('change', resolveEntryFromSearch);
   entryInput.addEventListener('input',  resolveEntryFromSearch);
@@ -497,22 +609,30 @@ function wireEvents() {
   // ---- Exit IC: 検索入力（編集モード中はお気に入りに追加） ----
   const exitInput = document.getElementById('inp-exit-ic');
   function resolveExitFromSearch() {
-    const icId = icValueIndex.get(exitInput.value);
+    const v = exitInput.value;
+    const hint = document.getElementById('exit-ic-hint');
+    if (!v) return;   // 空は何もしない（確定後の自動クリアで確認表示を消さないため）
+    const icId = icValueIndex.get(v);
     if (!icId) {
-      const hint = document.getElementById('exit-ic-hint');
-      hint.textContent = exitInput.value ? '候補から選択してください' : '';
-      hint.className = exitInput.value ? 'hint error' : 'hint';
+      hint.textContent = '候補から選択してください';
+      hint.className = 'hint error';
       return;
     }
+    const clean = (state.data.ics.find(x => x.id === icId)?.name || '').replace(/（[^）]*）/g, '').trim();
     if (exitEditMode) {
       // 編集モード中はお気に入りに追加するだけ（現在の選択は変えない）
       exitFavorites = addFavorite(exitFavorites, icId);
       saveFavorites(exitFavorites);
-      exitInput.value = '';
       renderExitFavorites();
+      hint.textContent = '✓ ' + clean + ' を追加';
+      hint.className = 'hint confirm';
+      exitInput.value = '';
       return;
     }
     setExitIc(icId); update();
+    hint.textContent = '✓ ' + clean + ' を選択';
+    hint.className = 'hint confirm';
+    exitInput.value = '';   // 確定→検索欄をクリア（入力完了の合図）
   }
   exitInput.addEventListener('change', resolveExitFromSearch);
   exitInput.addEventListener('input',  resolveExitFromSearch);
@@ -795,6 +915,7 @@ function update() {
   renderBreakdown(current.result);
   renderRoutePath(current.result);
   renderRouteComparison(allRoutes);
+  if (answerFlashReady) flashAnswer();   // 結果が更新されたことを一瞬の発光で知らせる
 }
 
 function renderRouteComparison(allRoutes) {

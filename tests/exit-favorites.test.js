@@ -1,6 +1,6 @@
 import { test, assert } from './run.js';
 import {
-  seedFavorites, loadFavorites, addFavorite, removeFavorite, saveFavorites, EXIT_FAVORITES_KEY,
+  seedFavorites, loadFavorites, addFavorite, removeFavorite, moveToIndex, saveFavorites, EXIT_FAVORITES_KEY,
 } from '../tools/js/exit-favorites.js';
 
 function fakeStorage(initial = {}) {
@@ -89,4 +89,27 @@ test('loadFavorites: getItem が例外を投げても defaults でseed', () => {
 test('saveFavorites: setItem が例外を投げても落ちず list を返す', () => {
   const s = { setItem: () => { throw new Error('QuotaExceeded'); } };
   assert.deepEqual(saveFavorites(['m'], s), ['m']);
+});
+
+test('moveToIndex: 先頭を末尾へ移動・元配列不変', () => {
+  const base = ['a', 'b', 'c'];
+  assert.deepEqual(moveToIndex(base, 'a', 2), ['b', 'c', 'a']);
+  assert.deepEqual(base, ['a', 'b', 'c']);
+});
+
+test('moveToIndex: 末尾を先頭へ移動', () => {
+  assert.deepEqual(moveToIndex(['a', 'b', 'c'], 'c', 0), ['c', 'a', 'b']);
+});
+
+test('moveToIndex: 中間へ移動', () => {
+  assert.deepEqual(moveToIndex(['a', 'b', 'c', 'd'], 'd', 1), ['a', 'd', 'b', 'c']);
+});
+
+test('moveToIndex: 範囲外indexはクランプ', () => {
+  assert.deepEqual(moveToIndex(['a', 'b', 'c'], 'a', 99), ['b', 'c', 'a']);
+  assert.deepEqual(moveToIndex(['a', 'b', 'c'], 'c', -5), ['c', 'a', 'b']);
+});
+
+test('moveToIndex: 未存在icIdは変更なし', () => {
+  assert.deepEqual(moveToIndex(['a', 'b'], 'z', 0), ['a', 'b']);
 });
