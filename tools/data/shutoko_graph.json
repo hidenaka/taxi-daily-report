@@ -1935,6 +1935,241 @@
    "routes": [
     "yokoyoko"
    ]
+  },
+  {
+   "id": "daishi",
+   "routes": [
+    "K1"
+   ]
+  },
+  {
+   "id": "hamakawasaki",
+   "routes": [
+    "K1"
+   ]
+  },
+  {
+   "id": "asada",
+   "routes": [
+    "K1"
+   ]
+  },
+  {
+   "id": "moriyacho",
+   "routes": [
+    "K1"
+   ]
+  },
+  {
+   "id": "koyasu",
+   "routes": [
+    "K1"
+   ]
+  },
+  {
+   "id": "higashi_kanagawa",
+   "routes": [
+    "K1"
+   ]
+  },
+  {
+   "id": "yokohamaeki_higashi",
+   "routes": [
+    "K1"
+   ]
+  },
+  {
+   "id": "minatomirai",
+   "routes": [
+    "K1"
+   ]
+  },
+  {
+   "id": "yokohama_koen",
+   "routes": [
+    "K1"
+   ]
+  },
+  {
+   "id": "yamashitacho",
+   "routes": [
+    "K1"
+   ]
+  },
+  {
+   "id": "shin_yamashita",
+   "routes": [
+    "K3"
+   ]
+  },
+  {
+   "id": "ishikawacho",
+   "routes": [
+    "K3"
+   ]
+  },
+  {
+   "id": "daikoku_futo",
+   "routes": [
+    "K5",
+    "B"
+   ]
+  },
+  {
+   "id": "chidoricho",
+   "routes": [
+    "B"
+   ]
+  },
+  {
+   "id": "urayasu",
+   "routes": [
+    "B"
+   ]
+  },
+  {
+   "id": "shinkiba",
+   "routes": [
+    "B"
+   ]
+  },
+  {
+   "id": "ariake",
+   "routes": [
+    "B"
+   ]
+  },
+  {
+   "id": "rinkai_fukutoshin",
+   "routes": [
+    "B"
+   ]
+  },
+  {
+   "id": "ukishima",
+   "routes": [
+    "B"
+   ]
+  },
+  {
+   "id": "higashi_ogishima",
+   "routes": [
+    "B"
+   ]
+  },
+  {
+   "id": "honmoku_futo",
+   "routes": [
+    "B"
+   ]
+  },
+  {
+   "id": "minami_honmoku_futo",
+   "routes": [
+    "B"
+   ]
+  },
+  {
+   "id": "takaracho",
+   "routes": [
+    "C1"
+   ]
+  },
+  {
+   "id": "shintomicho",
+   "routes": [
+    "C1"
+   ]
+  },
+  {
+   "id": "daikancho",
+   "routes": [
+    "C1"
+   ]
+  },
+  {
+   "id": "kitanomaru",
+   "routes": [
+    "C1"
+   ]
+  },
+  {
+   "id": "tengenji",
+   "routes": [
+    "2"
+   ]
+  },
+  {
+   "id": "takamatsu",
+   "routes": [
+    "C2"
+   ]
+  },
+  {
+   "id": "shin_itabashi",
+   "routes": [
+    "C2"
+   ]
+  },
+  {
+   "id": "takinogawa",
+   "routes": [
+    "C2"
+   ]
+  },
+  {
+   "id": "oji_minami",
+   "routes": [
+    "C2"
+   ]
+  },
+  {
+   "id": "oji_kita",
+   "routes": [
+    "C2"
+   ]
+  },
+  {
+   "id": "ogi_ohashi",
+   "routes": [
+    "C2"
+   ]
+  },
+  {
+   "id": "senju_shinbashi",
+   "routes": [
+    "C2"
+   ]
+  },
+  {
+   "id": "kosuge",
+   "routes": [
+    "C2"
+   ]
+  },
+  {
+   "id": "hirai_ohashi",
+   "routes": [
+    "C2"
+   ]
+  },
+  {
+   "id": "chukan_komatsugawa",
+   "routes": [
+    "C2"
+   ]
+  },
+  {
+   "id": "funaboribashi",
+   "routes": [
+    "C2"
+   ]
+  },
+  {
+   "id": "seishincho",
+   "routes": [
+    "C2"
+   ]
   }
  ],
  "edges": [
@@ -2133,13 +2368,13 @@
   {
    "from": "matsugaoka",
    "to": "omiya_togane",
-   "km": 5.0,
+   "km": 5,
    "route": "keiyo"
   },
   {
    "from": "boso_takada",
    "to": "homuda",
-   "km": 2.0,
+   "km": 2,
    "route": "keiyo"
   },
   {
@@ -2193,7 +2428,7 @@
   {
    "from": "kisarazu_kita",
    "to": "anegasaki_sodegaura",
-   "km": 7.0,
+   "km": 7,
    "route": "aqua"
   },
   {
@@ -2217,7 +2452,7 @@
   {
    "from": "soga",
    "to": "ichihara_aqua",
-   "km": 10.0,
+   "km": 10,
    "route": "aqua"
   },
   {
@@ -2235,7 +2470,7 @@
   {
    "from": "inagi",
    "to": "kunitachi_fuchu",
-   "km": 7.0,
+   "km": 7,
    "route": "chuo"
   },
   {
@@ -2301,7 +2536,7 @@
   {
    "from": "nirasaki",
    "to": "sutama",
-   "km": 7.0,
+   "km": 7,
    "route": "chuo"
   },
   {
@@ -2343,7 +2578,7 @@
   {
    "from": "akiruno",
    "to": "hinode",
-   "km": 2.0,
+   "km": 2,
    "route": "chuo"
   },
   {
@@ -2397,7 +2632,7 @@
   {
    "from": "higashimatsuyama",
    "to": "ranzan_ogawa",
-   "km": 8.0,
+   "km": 8,
    "route": "kanetsu"
   },
   {
@@ -2589,7 +2824,7 @@
   {
    "from": "ami_higashi",
    "to": "inashiki",
-   "km": 6.0,
+   "km": 6,
    "route": "joban"
   },
   {
@@ -2649,7 +2884,7 @@
   {
    "from": "sakura_tokan",
    "to": "shisui",
-   "km": 7.0,
+   "km": 7,
    "route": "tokan"
   },
   {
@@ -2685,7 +2920,7 @@
   {
    "from": "iwatsuki",
    "to": "kuki",
-   "km": 15.0,
+   "km": 15,
    "route": "tohoku"
   },
   {
@@ -2697,7 +2932,7 @@
   {
    "from": "kazo",
    "to": "hanyu",
-   "km": 6.0,
+   "km": 6,
    "route": "tohoku"
   },
   {
@@ -2709,7 +2944,7 @@
   {
    "from": "tatebayashi",
    "to": "sano_fujioka",
-   "km": 9.0,
+   "km": 9,
    "route": "tohoku"
   },
   {
@@ -2757,7 +2992,7 @@
   {
    "from": "kawaguchi_jct",
    "to": "soka_tohoku",
-   "km": 4.0,
+   "km": 4,
    "route": "tohoku"
   },
   {
@@ -2823,7 +3058,7 @@
   {
    "from": "hiratsuka",
    "to": "oiso",
-   "km": 6.0,
+   "km": 6,
    "route": "tomei"
   },
   {
@@ -2835,7 +3070,7 @@
   {
    "from": "ninomiya",
    "to": "odawara_higashi",
-   "km": 7.0,
+   "km": 7,
    "route": "tomei"
   },
   {
@@ -2859,7 +3094,7 @@
   {
    "from": "atsugi",
    "to": "chigasaki_chuo",
-   "km": 12.0,
+   "km": 12,
    "route": "tomei"
   },
   {
@@ -2937,13 +3172,13 @@
   {
    "from": "gaikan_urawa",
    "to": "kawaguchi_nishi",
-   "km": 2.0,
+   "km": 2,
    "route": "gaikan"
   },
   {
    "from": "anagawa",
    "to": "chiba_kita",
-   "km": 5.0,
+   "km": 5,
    "route": "keiyo"
   },
   {
@@ -2955,7 +3190,7 @@
   {
    "from": "okegawa_kitamoto",
    "to": "kuki_shiraoka_jct",
-   "km": 13.0,
+   "km": 13,
    "route": "C3"
   },
   {
@@ -2981,18 +3216,6 @@
    "to": "gaikan_misato_nishi",
    "km": 0.5,
    "route": "gaikan"
-  },
-  {
-   "from": "edobashi_jct",
-   "to": "kyobashi",
-   "km": 1.0,
-   "route": "C1"
-  },
-  {
-   "from": "kyobashi",
-   "to": "ginza",
-   "km": 1.0,
-   "route": "C1"
   },
   {
    "from": "ginza",
@@ -3043,15 +3266,9 @@
    "route": "C1"
   },
   {
-   "from": "miyakezaka_jct",
-   "to": "takebashi_jct",
-   "km": 2.1,
-   "route": "C1"
-  },
-  {
    "from": "takebashi_jct",
    "to": "kanda_bashi",
-   "km": 1.0,
+   "km": 1,
    "route": "C1"
   },
   {
@@ -3081,7 +3298,7 @@
   {
    "from": "ohashi_jct",
    "to": "tomigaya",
-   "km": 2.0,
+   "km": 2,
    "route": "C2"
   },
   {
@@ -3115,39 +3332,9 @@
    "route": "C2"
   },
   {
-   "from": "kumanocho_jct",
-   "to": "itabashi_jct",
-   "km": 1.2,
-   "route": "C2"
-  },
-  {
-   "from": "itabashi_jct",
-   "to": "kohoku_jct",
-   "km": 6.5,
-   "route": "C2"
-  },
-  {
-   "from": "kohoku_jct",
-   "to": "kosuge_jct",
-   "km": 5.7,
-   "route": "C2"
-  },
-  {
-   "from": "kosuge_jct",
-   "to": "horikiri_jct",
-   "km": 1.2,
-   "route": "C2"
-  },
-  {
    "from": "horikiri_jct",
    "to": "yotsugi",
    "km": 2.7,
-   "route": "C2"
-  },
-  {
-   "from": "yotsugi",
-   "to": "kasai_jct",
-   "km": 13.1,
    "route": "C2"
   },
   {
@@ -3211,12 +3398,6 @@
    "route": "1"
   },
   {
-   "from": "ichinohashi_jct",
-   "to": "meguro",
-   "km": 3.6,
-   "route": "2"
-  },
-  {
    "from": "meguro",
    "to": "ebara",
    "km": 2.2,
@@ -3237,7 +3418,7 @@
   {
    "from": "shibuya",
    "to": "tamagawa_dori",
-   "km": 1.0,
+   "km": 1,
    "route": "3"
   },
   {
@@ -3249,7 +3430,7 @@
   {
    "from": "ohashi_jct",
    "to": "ikejiri",
-   "km": 1.0,
+   "km": 1,
    "route": "3"
   },
   {
@@ -3379,12 +3560,6 @@
    "route": "5"
   },
   {
-   "from": "kumanocho_jct",
-   "to": "itabashi_jct",
-   "km": 1.1,
-   "route": "5"
-  },
-  {
    "from": "itabashi_jct",
    "to": "itabashi_honcho",
    "km": 1.8,
@@ -3417,7 +3592,7 @@
   {
    "from": "toda",
    "to": "bijogi_jct",
-   "km": 1.0,
+   "km": 1,
    "route": "5"
   },
   {
@@ -3471,7 +3646,7 @@
   {
    "from": "tsutsumidori",
    "to": "horikiri_jct",
-   "km": 2.0,
+   "km": 2,
    "route": "6"
   },
   {
@@ -3495,7 +3670,7 @@
   {
    "from": "komatsugawa",
    "to": "ichinoe",
-   "km": 2.0,
+   "km": 2,
    "route": "7"
   },
   {
@@ -3549,7 +3724,7 @@
   {
    "from": "ukishima_jct",
    "to": "kukou_chuou",
-   "km": 5.0,
+   "km": 5,
    "route": "B"
   },
   {
@@ -3577,18 +3752,6 @@
    "route": "B"
   },
   {
-   "from": "ohi_jct",
-   "to": "ariake_jct",
-   "km": 3.8,
-   "route": "B"
-  },
-  {
-   "from": "ariake_jct",
-   "to": "kasai_jct",
-   "km": 6.0,
-   "route": "B"
-  },
-  {
    "from": "kasai_jct",
    "to": "kasai",
    "km": 1.4,
@@ -3598,18 +3761,6 @@
    "from": "kasai",
    "to": "maihama",
    "km": 3.5,
-   "route": "B"
-  },
-  {
-   "from": "maihama",
-   "to": "takaya_jct",
-   "km": 9.9,
-   "route": "B"
-  },
-  {
-   "from": "daikoku_jct",
-   "to": "ukishima_jct",
-   "km": 12.1,
    "route": "B"
   },
   {
@@ -3649,12 +3800,6 @@
    "route": "6_mukojima"
   },
   {
-   "from": "daishi_jct",
-   "to": "shioiri",
-   "km": 7.6,
-   "route": "K1"
-  },
-  {
    "from": "shioiri",
    "to": "namamugi_jct",
    "km": 3.3,
@@ -3664,18 +3809,6 @@
    "from": "namamugi_jct",
    "to": "namamugi",
    "km": 0.9,
-   "route": "K1"
-  },
-  {
-   "from": "namamugi",
-   "to": "kinko_jct",
-   "km": 6.8,
-   "route": "K1"
-  },
-  {
-   "from": "kinko_jct",
-   "to": "ishikawacho_jct",
-   "km": 4.0,
    "route": "K1"
   },
   {
@@ -3695,12 +3828,6 @@
    "to": "mitsuzawa_jct",
    "km": 0.8,
    "route": "K2"
-  },
-  {
-   "from": "ishikawacho_jct",
-   "to": "bandobashi",
-   "km": 2.9,
-   "route": "K3"
   },
   {
    "from": "bandobashi",
@@ -3735,7 +3862,7 @@
   {
    "from": "tonomachi",
    "to": "daishi_jct",
-   "km": 2.0,
+   "km": 2,
    "route": "K6"
   },
   {
@@ -3825,7 +3952,7 @@
   {
    "from": "mitsuzawa_jct",
    "to": "hodogaya",
-   "km": 1.0,
+   "km": 1,
    "route": "third_keihin"
   },
   {
@@ -3885,7 +4012,7 @@
   {
    "from": "shinonome_jct",
    "to": "tatsumi_jct",
-   "km": 2.0,
+   "km": 2,
    "route": "10"
   },
   {
@@ -3910,12 +4037,6 @@
    "from": "isogo",
    "to": "sankeien",
    "km": 4.8,
-   "route": "B"
-  },
-  {
-   "from": "sankeien",
-   "to": "honmoku_jct",
-   "km": 3.4,
    "route": "B"
   },
   {
@@ -3949,16 +4070,358 @@
    "route": "yokoyoko"
   },
   {
-   "from": "honmoku_jct",
-   "to": "ishikawacho_jct",
-   "km": 2.5,
-   "route": "K3"
-  },
-  {
    "from": "shin_hodogaya_jct",
    "to": "kariba_jct",
    "km": 3.9,
    "route": "yokoyoko"
+  },
+  {
+   "from": "daishi_jct",
+   "to": "daishi",
+   "km": 0.3,
+   "route": "K1"
+  },
+  {
+   "from": "daishi",
+   "to": "hamakawasaki",
+   "km": 4.2,
+   "route": "K1"
+  },
+  {
+   "from": "hamakawasaki",
+   "to": "asada",
+   "km": 2.4,
+   "route": "K1"
+  },
+  {
+   "from": "asada",
+   "to": "shioiri",
+   "km": 2.1,
+   "route": "K1"
+  },
+  {
+   "from": "namamugi",
+   "to": "moriyacho",
+   "km": 2.5,
+   "route": "K1"
+  },
+  {
+   "from": "moriyacho",
+   "to": "koyasu",
+   "km": 0.9,
+   "route": "K1"
+  },
+  {
+   "from": "koyasu",
+   "to": "higashi_kanagawa",
+   "km": 2.5,
+   "route": "K1"
+  },
+  {
+   "from": "higashi_kanagawa",
+   "to": "kinko_jct",
+   "km": 1.2,
+   "route": "K1"
+  },
+  {
+   "from": "kinko_jct",
+   "to": "yokohamaeki_higashi",
+   "km": 0.9,
+   "route": "K1"
+  },
+  {
+   "from": "yokohamaeki_higashi",
+   "to": "minatomirai",
+   "km": 1,
+   "route": "K1"
+  },
+  {
+   "from": "minatomirai",
+   "to": "yokohama_koen",
+   "km": 1.7,
+   "route": "K1"
+  },
+  {
+   "from": "yokohama_koen",
+   "to": "yamashitacho",
+   "km": 1.7,
+   "route": "K1"
+  },
+  {
+   "from": "yamashitacho",
+   "to": "ishikawacho_jct",
+   "km": 0.8,
+   "route": "K1"
+  },
+  {
+   "from": "honmoku_jct",
+   "to": "shin_yamashita",
+   "km": 1.6,
+   "route": "K3"
+  },
+  {
+   "from": "shin_yamashita",
+   "to": "ishikawacho_jct",
+   "km": 1.2,
+   "route": "K3"
+  },
+  {
+   "from": "ishikawacho_jct",
+   "to": "ishikawacho",
+   "km": 0.3,
+   "route": "K3"
+  },
+  {
+   "from": "ishikawacho",
+   "to": "bandobashi",
+   "km": 3,
+   "route": "K3"
+  },
+  {
+   "from": "daikoku_jct",
+   "to": "daikoku_futo",
+   "km": 1,
+   "route": "K5"
+  },
+  {
+   "from": "takaya_jct",
+   "to": "chidoricho",
+   "km": 4.6,
+   "route": "B"
+  },
+  {
+   "from": "chidoricho",
+   "to": "urayasu",
+   "km": 6.2,
+   "route": "B"
+  },
+  {
+   "from": "urayasu",
+   "to": "maihama",
+   "km": 0.9,
+   "route": "B"
+  },
+  {
+   "from": "kasai_jct",
+   "to": "shinkiba",
+   "km": 3,
+   "route": "B"
+  },
+  {
+   "from": "shinkiba",
+   "to": "ariake",
+   "km": 3.2,
+   "route": "B"
+  },
+  {
+   "from": "ariake",
+   "to": "ariake_jct",
+   "km": 1.6,
+   "route": "B"
+  },
+  {
+   "from": "ohi_jct",
+   "to": "rinkai_fukutoshin",
+   "km": 2.1,
+   "route": "B"
+  },
+  {
+   "from": "rinkai_fukutoshin",
+   "to": "ariake_jct",
+   "km": 2.4,
+   "route": "B"
+  },
+  {
+   "from": "daikoku_jct",
+   "to": "higashi_ogishima",
+   "km": 8.1,
+   "route": "B"
+  },
+  {
+   "from": "higashi_ogishima",
+   "to": "ukishima",
+   "km": 6.2,
+   "route": "B"
+  },
+  {
+   "from": "ukishima",
+   "to": "ukishima_jct",
+   "km": 0.6,
+   "route": "B"
+  },
+  {
+   "from": "honmoku_jct",
+   "to": "honmoku_futo",
+   "km": 0.3,
+   "route": "B"
+  },
+  {
+   "from": "honmoku_futo",
+   "to": "minami_honmoku_futo",
+   "km": 3,
+   "route": "B"
+  },
+  {
+   "from": "minami_honmoku_futo",
+   "to": "sankeien",
+   "km": 0.5,
+   "route": "B"
+  },
+  {
+   "from": "edobashi_jct",
+   "to": "takaracho",
+   "km": 0.9,
+   "route": "C1"
+  },
+  {
+   "from": "takaracho",
+   "to": "kyobashi",
+   "km": 0.6,
+   "route": "C1"
+  },
+  {
+   "from": "kyobashi",
+   "to": "shintomicho",
+   "km": 0.8,
+   "route": "C1"
+  },
+  {
+   "from": "shintomicho",
+   "to": "ginza",
+   "km": 0.6,
+   "route": "C1"
+  },
+  {
+   "from": "miyakezaka_jct",
+   "to": "daikancho",
+   "km": 1.5,
+   "route": "C1"
+  },
+  {
+   "from": "daikancho",
+   "to": "kitanomaru",
+   "km": 0.8,
+   "route": "C1"
+  },
+  {
+   "from": "kitanomaru",
+   "to": "takebashi_jct",
+   "km": 0.3,
+   "route": "C1"
+  },
+  {
+   "from": "ichinohashi_jct",
+   "to": "tengenji",
+   "km": 1.7,
+   "route": "2"
+  },
+  {
+   "from": "tengenji",
+   "to": "meguro",
+   "km": 1.9,
+   "route": "2"
+  },
+  {
+   "from": "kumanocho_jct",
+   "to": "takamatsu",
+   "km": 3.1,
+   "route": "C2"
+  },
+  {
+   "from": "takamatsu",
+   "to": "itabashi_jct",
+   "km": 2,
+   "route": "C2"
+  },
+  {
+   "from": "itabashi_jct",
+   "to": "shin_itabashi",
+   "km": 0.8,
+   "route": "C2"
+  },
+  {
+   "from": "shin_itabashi",
+   "to": "takinogawa",
+   "km": 0.1,
+   "route": "C2"
+  },
+  {
+   "from": "takinogawa",
+   "to": "oji_minami",
+   "km": 2.8,
+   "route": "C2"
+  },
+  {
+   "from": "oji_minami",
+   "to": "oji_kita",
+   "km": 0.9,
+   "route": "C2"
+  },
+  {
+   "from": "oji_kita",
+   "to": "kohoku_jct",
+   "km": 2.2,
+   "route": "C2"
+  },
+  {
+   "from": "kohoku_jct",
+   "to": "ogi_ohashi",
+   "km": 0.6,
+   "route": "C2"
+  },
+  {
+   "from": "ogi_ohashi",
+   "to": "senju_shinbashi",
+   "km": 4.9,
+   "route": "C2"
+  },
+  {
+   "from": "senju_shinbashi",
+   "to": "kosuge_jct",
+   "km": 1.4,
+   "route": "C2"
+  },
+  {
+   "from": "kosuge_jct",
+   "to": "kosuge",
+   "km": 0.5,
+   "route": "C2"
+  },
+  {
+   "from": "kosuge",
+   "to": "horikiri_jct",
+   "km": 1,
+   "route": "C2"
+  },
+  {
+   "from": "yotsugi",
+   "to": "hirai_ohashi",
+   "km": 3.9,
+   "route": "C2"
+  },
+  {
+   "from": "hirai_ohashi",
+   "to": "chukan_komatsugawa",
+   "km": 2.9,
+   "route": "C2"
+  },
+  {
+   "from": "chukan_komatsugawa",
+   "to": "funaboribashi",
+   "km": 2.1,
+   "route": "C2"
+  },
+  {
+   "from": "funaboribashi",
+   "to": "seishincho",
+   "km": 2.2,
+   "route": "C2"
+  },
+  {
+   "from": "seishincho",
+   "to": "kasai_jct",
+   "km": 4.1,
+   "route": "C2"
   }
  ]
 }
