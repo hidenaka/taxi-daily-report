@@ -98,6 +98,11 @@ if (location.hostname.includes('-dev')) {
   </div>
 </div>
 <main style="padding:14px;">
+  <div style="text-align:center;margin-bottom:10px;">
+    <button class="help-video-btn" data-help-video="home" type="button">▶ ホーム画面の使い方（14秒）</button>
+  </div>
+  <div class="help-video" id="help-video-home"></div>
+
   <section class="card" id="guideOnboardBanner" style="display:none;background:#e3f2fd;border:1px solid #90caf9;padding:12px;">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
       <div style="font-size:13px;line-height:1.5;color:#1565c0;">
@@ -141,6 +146,7 @@ import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus }
 import { isEmailAuth } from './js/firebase-auth.js';
 import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts } from './js/planned-shifts.js';
 import { checkInviteAndWarn, fetchCompanyExists } from './js/invite-url.js';
+import './js/help-video.js';
 
 // 暗号化招待リンク処理は GitHub 版専用のためスキップ（Firebase 版）
 const inviteProcessed = false;
@@ -966,9 +972,9 @@ function renderCalendar(drives, range) {
   // 凡例
   html += `
     <div style="display:flex;gap:10px;margin-top:6px;font-size:10px;color:var(--muted);flex-wrap:wrap;">
-      <span><span style="display:inline-block;width:10px;height:10px;background:#e3f2fd;border:1px solid var(--primary);border-radius:2px;vertical-align:middle;"></span> 実績（バッジ <strong>J</strong>=JT / <strong>P</strong>=プレ）</span>
-      <span><span style="display:inline-block;width:10px;height:10px;background:#b2ebf2;border:1px dashed #00acc1;border-radius:2px;vertical-align:middle;"></span> JT予定（<strong>J</strong>）</span>
-      <span><span style="display:inline-block;width:10px;height:10px;background:#bbdefb;border:1px dashed #1976d2;border-radius:2px;vertical-align:middle;"></span> プレ予定（<strong>P</strong>）</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:#e3f2fd;border:1px solid var(--primary);border-radius:2px;vertical-align:middle;"></span> 実績（バッジ <strong>J</strong>=ジャパン${config.hidePremium ? '' : ' / <strong>P</strong>=プレ'}）</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:#b2ebf2;border:1px dashed #00acc1;border-radius:2px;vertical-align:middle;"></span> ジャパンタクシー予定（<strong>J</strong>）</span>
+      ${config.hidePremium ? '' : '<span><span style="display:inline-block;width:10px;height:10px;background:#bbdefb;border:1px dashed #1976d2;border-radius:2px;vertical-align:middle;"></span> プレ予定（<strong>P</strong>）</span>'}
       <span><span style="display:inline-block;width:10px;height:10px;background:#f3e5f5;border:1px solid #ce93d8;border-radius:2px;vertical-align:middle;"></span> 有給</span>
     </div>
   `;
