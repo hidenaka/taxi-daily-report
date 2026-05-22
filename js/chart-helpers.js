@@ -710,12 +710,55 @@ function withOfficeStart(drive) {
   }, ...trips];
 }
 
-// 配列の中央値
-function median(arr) {
+// 配列の中央値（export: peerMedianHourlyDow・テスト用）
+export function median(arr) {
   if (arr.length === 0) return 0;
   const sorted = [...arr].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+// 人ごと中央値ヒートマップ集計
+// drives: 各要素に _userId または userId が付いている前提（getAllUsersDrivesForMonth 付与済み）
+// 戻り値: 7×24 matrix。各セル = { hourlyA: number, days: number (=人数), peerValues: number[] }
+export function peerMedianHourlyDow(drives) {
+  // userId でグループ化
+  const userMap = new Map();
+  for (const d of drives) {
+    const uid = d._userId ?? d.userId;
+    if (!uid) continue;
+    if (!userMap.has(uid)) userMap.set(uid, []);
+    userMap.get(uid).push(d);
+  }
+
+  // 各セルに各ユーザーの hourlyA を積む
+  const peerValuesMatrix = Array.from({ length: 7 }, () =>
+    Array.from({ length: 24 }, () => [])
+  );
+
+  for (const [, userDrives] of userMap) {
+    const m = hourlyDowEfficiency(userDrives);
+    for (let dow = 0; dow < 7; dow++) {
+      for (let h = 0; h < 24; h++) {
+        if (m[dow][h].workingMin > 0 && m[dow][h].hourlyA > 0) {
+          peerValuesMatrix[dow][h].push(m[dow][h].hourlyA);
+        }
+      }
+    }
+  }
+
+  // 中央値 matrix 組み立て
+  const result = Array.from({ length: 7 }, (_, dow) =>
+    Array.from({ length: 24 }, (__, h) => {
+      const peerValues = peerValuesMatrix[dow][h];
+      return {
+        hourlyA: peerValues.length > 0 ? median(peerValues) : 0,
+        days: peerValues.length,
+        peerValues,
+      };
+    })
+  );
+  return result;
 }
 
 // エリア × 時刻(0-23時) 別の実労働時間効率マップ
@@ -1215,4 +1258,96 @@ export function dowAggregation(drives) {
     result[i].dates.sort((a, b) => b.date.localeCompare(a.date));
   }
   return result;
+}
+
+// ───────── 意味レイヤー: 安定度・相対ラベル ─────────
+
+// 変動係数 (母標準偏差 / 平均)。空 or 平均0 は 0。
+export function coefficientOfVariation(values) {
+  if (!values || values.length === 0) return 0;
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  if (mean === 0) return 0;
+  const variance = values.reduce((a, b) => a + (b - mean) * (b - mean), 0) / values.length;
+  return Math.sqrt(variance) / mean;
+}
+
+// 日別¥/h配列 → 安定度tier。3件未満は判定不可。
+// CV<=0.3:安定 / <=0.6:中 / >0.6:ムラ大
+export function stabilityTier(dailyValues) {
+  if (!dailyValues || dailyValues.length < 3) return 'insufficient';
+  const cv = coefficientOfVariation(dailyValues);
+  if (cv <= 0.3) return 'stable';
+  if (cv <= 0.6) return 'mid';
+  return 'volatile';
+}
+
+// 値を、有効セル値リスト(validValues)の相対順位で earn/normal/rest に分類。
+// 上位1/3=earn, 下位1/3=rest, 中間=normal。値0 or 有効値3件未満は none。
+export function classifyEarning(value, validValues) {
+  if (!(value > 0) || !validValues || validValues.length < 3) return 'none';
+  const n = validValues.length;
+  const rankBelow = validValues.filter(x => x < value).length;
+  const pct = rankBelow / n;
+  if (pct >= 2 / 3) return 'earn';
+  if (pct < 1 / 3) return 'rest';
+  return 'normal';
+}
+
+// drives を日付ごとにグループ化（内部用）
+function groupDrivesByDate(drives) {
+  const m = new Map();
+  for (const d of (drives || [])) {
+    if (!d || !d.date) continue;
+    if (!m.has(d.date)) m.set(d.date, []);
+    m.get(d.date).push(d);
+  }
+  return m;
+}
+
+// 7×24 の各セルに「その日の実稼働がある時間帯の ¥/h」を日別配列で返す。
+// 既存 hourlyDowEfficiency を日付グループ単位で呼び直して再利用。
+export function hourlyDowDailyValues(drives) {
+  const result = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => []));
+  for (const [, dayDrives] of groupDrivesByDate(drives)) {
+    const m = hourlyDowEfficiency(dayDrives);
+    for (let dow = 0; dow < 7; dow++) {
+      for (let h = 0; h < 24; h++) {
+        if (m[dow][h].workingMin > 0 && m[dow][h].hourlyA > 0) result[dow][h].push(m[dow][h].hourlyA);
+      }
+    }
+  }
+  return result;
+}
+
+// 7×ゾーンキー の各セルに日別 ¥/h を配列で返す（review用）。
+export function zoneDailyValues(drives, zones) {
+  const keys = zones.map(z => z.key);
+  const result = Array.from({ length: 7 }, () => {
+    const o = {};
+    for (const k of keys) o[k] = [];
+    return o;
+  });
+  for (const [, dayDrives] of groupDrivesByDate(drives)) {
+    const { matrix } = dowZoneEfficiency(dayDrives, zones);
+    for (let dow = 0; dow < 7; dow++) {
+      for (const k of keys) {
+        if (matrix[dow][k] > 0) result[dow][k].push(matrix[dow][k]);
+      }
+    }
+  }
+  return result;
+}
+
+// ヒートマップ凡例＋使い方1行。scope: 'self' | 'all'
+export function heatmapLegendHtml(scope) {
+  if (scope === 'all') {
+    return `<div class="heat-legend" style="font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:8px;">
+      <b>みんなの傾向（各ドライバーの中央値）</b>。数字＝時給（1時間あたりの稼ぎ）。時給が高い時間ほど<b>稼ぎ時</b>、低い時間は<b>休憩向き</b>。<b>◎</b>=みんな揃って稼げる / <b>△</b>=人によって差が大きい / 薄いセル=人数がまだ少ない。<br>
+      👉 休憩は「休憩向き」の時間に取ると、稼ぎ時を逃しません。
+    </div>`;
+  }
+  return `<div class="heat-legend" style="font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:8px;">
+    数字＝時給（1時間あたりの稼ぎ）。時給が高い時間ほど<b>稼ぎ時</b>、低い時間は<b>休憩向き</b>。<b>◎</b>=安定して稼げる / <b>△</b>=日によってムラが大きい / 薄いセル=記録がまだ少ない。<br>
+    👉 休憩は「休憩向き」の時間に取ると、稼ぎ時を逃しません。
+  </div>`;
 }
