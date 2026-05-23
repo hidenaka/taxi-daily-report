@@ -50,8 +50,8 @@ if (location.hostname.includes('-dev')) {
 </script>
 <main style="padding:14px;max-width:520px;margin:0 auto;">
   <a href="index.html" class="back-link">← ホームに戻る</a>
-  <h1>有料プランのお申し込み</h1>
-  <p class="muted" style="margin-bottom:14px;font-size:13px;">
+  <h1 id="pageTitle">有料プランのお申し込み</h1>
+  <p class="muted" id="leadText" style="margin-bottom:14px;font-size:13px;">
     キャビスの全機能（日報・乗務タイマー・IC判定・需要予測）を、初月無料でお試しいただけます。
   </p>
 
@@ -84,7 +84,7 @@ if (location.hostname.includes('-dev')) {
   </section>
 
   <!-- プラン選択 -->
-  <section class="card">
+  <section class="card" id="planSelectCard">
     <h3>プランを選ぶ</h3>
     <label class="plan-opt">
       <input type="radio" name="plan" value="full" checked>
@@ -159,14 +159,19 @@ if (location.hostname.includes('-dev')) {
   <section class="card" id="alreadySection" style="display:none;">
     <h3>お申し込み状況</h3>
     <div id="alreadyMsg" class="status-msg info"></div>
+    <div id="switchFreeBox" style="display:none;margin:12px 0;padding:12px;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;">
+      <p style="font-size:13px;line-height:1.7;margin-bottom:10px;">お勤め先がキャビスを導入したため、<strong>無料アカウントに切り替えられます</strong>。切り替えると現在の月額課金は次回更新で停止します（以後ずっと無料・記録はそのまま引き継がれます）。</p>
+      <button class="submit-btn" id="switchFreeBtn" style="margin-top:0;">無料アカウントに切り替える</button>
+      <div id="switchFreeMsg" style="font-size:12px;margin-top:8px;"></div>
+    </div>
     <a href="index.html" class="btn" style="display:block;text-align:center;text-decoration:none;background:var(--primary);color:#fff;">ホームへ戻る</a>
   </section>
 </main>
 <script type="module">
 import { renderLegalFooter } from './js/legal-footer.js';
-import { getSubscription, startCheckout, isPaying, formatStatus } from './js/subscription-state.js';
+import { getSubscription, startCheckout, startFree, isPaying, formatStatus } from './js/subscription-state.js';
 import { isEmailAuth } from './js/firebase-auth.js';
-import { checkInviteAndWarn, fetchCompanyExists } from './js/invite-url.js';
+import { checkInviteAndWarn, fetchCompanyExists, fetchCompanyProfile } from './js/invite-url.js';
 
 renderLegalFooter();
 
@@ -191,6 +196,8 @@ const PLAN_PROVIDE = {
   simple: 'キャビス シンプルプラン（日報・給与計算・カレンダー・IC判定・需要予測。営業サポートは対象外）',
 };
 let selectedPlan = 'full';
+// 無償会社（招待者は課金不要）。fetchCompanyProfile で判定して true になる。
+let isFreeCompany = false;
 
 function fmtDate(d) {
   return d.getFullYear() + '/' + String(d.getMonth() + 1).padStart(2, '0')
@@ -243,6 +250,20 @@ submitBtn.addEventListener('click', async () => {
     return;
   }
   submitBtn.disabled = true;
+  if (isFreeCompany) {
+    // 無償会社：Stripe 非経由で /start-free へ（同意チェックは上で通過済み）
+    showStatus('利用開始の手続き中です…', 'info');
+    try {
+      await startFree(AGREEMENT_VERSIONS);
+      showStatus('利用開始が完了しました。ホームへ移動します…', 'info');
+      location.href = 'index.html';
+    } catch (e) {
+      console.error('start-free error:', e);
+      showStatus('エラーが発生しました。通信環境を確認のうえ、時間をおいて再度お試しください。', 'error');
+      submitBtn.disabled = false;
+    }
+    return;
+  }
   showStatus('決済ページを準備しています…', 'info');
   try {
     const url = await startCheckout(AGREEMENT_VERSIONS, selectedPlan);
@@ -263,9 +284,78 @@ function showOnly(keepId) {
   });
 }
 
+// Phase 2: 個人課金中で、自分の会社が freeForInvited なら「無料に切り替える」を出す。
+async function maybeOfferSwitchToFree(sub) {
+  try {
+    if (!sub || sub.free === true || sub.planId === 'comp_company') return; // 既に無償
+    if (sub.planId !== 'paid_v1') return; // Stripe課金中のみ対象
+    let companyId = sub.companyId;
+    if (!companyId) {
+      const { getMyCompanyId } = await import('./js/firebase-storage.js');
+      companyId = await getMyCompanyId();
+    }
+    if (!companyId) return;
+    const profile = await fetchCompanyProfile(companyId);
+    if (!(profile && profile.freeForInvited === true)) return;
+    const box = document.getElementById('switchFreeBox');
+    if (box) box.style.display = '';
+  } catch (e) {
+    console.warn('maybeOfferSwitchToFree failed:', e);
+  }
+}
+
+document.getElementById('switchFreeBtn')?.addEventListener('click', async () => {
+  const btn = document.getElementById('switchFreeBtn');
+  const msg = document.getElementById('switchFreeMsg');
+  btn.disabled = true;
+  msg.textContent = '切り替え中です…';
+  try {
+    await startFree(AGREEMENT_VERSIONS);
+    msg.textContent = '無料アカウントに切り替わりました。ホームへ移動します…';
+    location.href = 'index.html';
+  } catch (e) {
+    console.error('switch-to-free error:', e);
+    msg.textContent = 'エラーが発生しました。時間をおいて再度お試しください。';
+    btn.disabled = false;
+  }
+});
+
 async function init() {
   renderPrice();
   renderDates();
+
+  // 無償会社フラグ判定（招待 slug の freeForInvited を確認）
+  try {
+    const slug = localStorage.getItem('taxi_pending_company')
+      || new URLSearchParams(location.search).get('company');
+    if (slug) {
+      const profile = await fetchCompanyProfile(slug);
+      if (profile && profile.freeForInvited === true) {
+        isFreeCompany = true;
+        // 申込ボタンのテキストを変更
+        submitBtn.textContent = '無償で利用を開始';
+        // 課金関連UI（プラン選択・お申込み内容の確認）を隠し、料金を無償表示にする
+        const planCard = document.getElementById('planSelectCard');
+        if (planCard) planCard.style.display = 'none';
+        const confirmCard = document.getElementById('confirmCard');
+        if (confirmCard) confirmCard.style.display = 'none';
+        const pa = document.getElementById('priceAmount');
+        if (pa) pa.textContent = '0';
+        const pl = document.getElementById('planLabel');
+        if (pl) pl.textContent = '無償（この会社の招待者は課金なし）';
+        // 見出し・導入文も「有料プラン」表現をやめて無償向けにする
+        const pt = document.getElementById('pageTitle');
+        if (pt) pt.textContent = 'ご利用のお申し込み（無償）';
+        const lt = document.getElementById('leadText');
+        if (lt) lt.textContent = 'この会社の招待を受けた方は、キャビスを無償でご利用いただけます。アカウント登録のうえ、ご利用を開始してください。';
+      }
+    }
+  } catch (e) {
+    // フォールバック：取得失敗時は通常の Stripe フロー
+    console.warn('fetchCompanyProfile failed, falling back to Stripe flow:', e);
+    isFreeCompany = false;
+  }
+
   try {
     const sub = await getSubscription();
     if (sub && isPaying(sub)) {
@@ -273,6 +363,8 @@ async function init() {
       showOnly('alreadySection');
       document.getElementById('alreadyMsg').textContent =
         `すでにご利用中です（状態：${formatStatus(sub.status)}）。`;
+      // Phase 2: 有料(Stripe)契約中で、自分の会社が無償対象なら「無料に切り替える」を提案
+      maybeOfferSwitchToFree(sub);
     } else if (!isEmailAuth()) {
       // 未登録(匿名) → Step 1 アカウント登録だけ表示（申込フォームは出さない）
       showOnly('registerStep');
