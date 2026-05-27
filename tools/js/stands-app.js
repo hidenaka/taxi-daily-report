@@ -2,17 +2,121 @@
 import { createStandsMap, renderPins, drawRoute, clearLayer } from './stands-map.js';
 import { loadStands, getMyCompanyId, getIsAdmin } from './stands-data.js';
 import { createGeoWatcher } from './geo.js';
+import { findNearestStands } from './stands-geo.js';
+import { waitForAuth } from '../../js/firebase-auth.js';
 
 const sheet = document.getElementById('stand-sheet');
 const sheetName = document.getElementById('sheet-name');
 const sheetNotes = document.getElementById('sheet-notes');
+const sheetImages = document.getElementById('sheet-images');
+const imgOverlay = document.getElementById('img-overlay');
+const imgOverlayImg = document.getElementById('img-overlay-img');
 document.getElementById('sheet-close').addEventListener('click', () => sheet.classList.remove('open'));
+document.getElementById('img-overlay-close').addEventListener('click', () => imgOverlay.classList.remove('open'));
+imgOverlay.addEventListener('click', (e) => { if (e.target === imgOverlay) imgOverlay.classList.remove('open'); });
+
+function openImage(src) {
+  imgOverlayImg.src = src;
+  imgOverlay.classList.add('open');
+  imgOverlay.scrollTop = 0;
+}
 
 let map, routeLayer = null;
+let allStands = [];
+let myPos = null;
+
+const CAT_LABEL = { office: 'オフィス', hotel: 'ホテル', hospital: '病院', commercial: '商業', other: 'その他' };
+const searchInput = document.getElementById('search-input');
+const searchNear = document.getElementById('search-near');
+const searchResults = document.getElementById('search-results');
+
+function selectStand(stand) {
+  if (stand.pin) map.setView([stand.pin.lat, stand.pin.lng], 18);
+  showStand(stand);
+  searchResults.classList.remove('open');
+  searchInput.blur();
+}
+
+function renderResults(items) {
+  if (!items.length) {
+    searchResults.innerHTML = '<div class="empty">該当する施設がありません</div>';
+    searchResults.classList.add('open');
+    return;
+  }
+  searchResults.innerHTML = '';
+  items.forEach(({ stand, distKm }) => {
+    const d = document.createElement('div');
+    d.className = 'r';
+    const dist = (distKm != null) ? `<span class="dist">${distKm.toFixed(1)}km</span>` : '';
+    d.innerHTML = `${dist}${stand.name}<span class="cat">${CAT_LABEL[stand.category] || ''}</span>`;
+    d.addEventListener('click', () => selectStand(stand));
+    searchResults.appendChild(d);
+  });
+  searchResults.classList.add('open');
+}
+
+function doTextSearch(q) {
+  const query = (q || '').trim().toLowerCase();
+  if (!query) { searchResults.classList.remove('open'); return; }
+  const items = allStands
+    .filter((s) => `${s.name} ${CAT_LABEL[s.category] || ''}`.toLowerCase().includes(query))
+    .slice(0, 30)
+    .map((s) => ({ stand: s }));
+  renderResults(items);
+}
+
+if (searchInput) searchInput.addEventListener('input', () => doTextSearch(searchInput.value));
+if (searchNear) searchNear.addEventListener('click', () => {
+  if (!myPos) { alert('現在地が取得できていません。GPSを許可して少し待ってからお試しください。'); return; }
+  if (searchInput) searchInput.value = '';
+  renderResults(findNearestStands(myPos, allStands, 10));
+});
+
+const TURN_BADGE = { 'left-only': '左折のみ', 'right-ok': '右折可', either: '' };
+function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+function buildApproachCard(stand) {
+  const approaches = stand.approaches || [];
+  const cautions = stand.cautions || [];
+  if (!approaches.length && !cautions.length) return '';
+  let html = '<div class="entry-card">';
+  if (approaches.length) {
+    html += '<div class="entry-card-h">入口ガイド</div><ul class="entry-list">';
+    approaches.forEach((a) => {
+      const badge = TURN_BADGE[a.turn] ? `<span class="turn-badge t-${a.turn}">${TURN_BADGE[a.turn]}</span>` : '';
+      const road = a.road ? `<span class="road">${escapeHtml(a.road)}</span> ` : '';
+      const hint = a.hint ? `<div class="hint">${escapeHtml(a.hint)}</div>` : '';
+      html += `<li>${badge}${road}<b>${escapeHtml(a.label || '')}</b>${hint}</li>`;
+    });
+    html += '</ul>';
+  }
+  if (cautions.length) {
+    html += '<div class="entry-card-h sub">注意事項</div><ul class="cautions">';
+    cautions.forEach((c) => { html += `<li>${escapeHtml(c)}</li>`; });
+    html += '</ul>';
+  }
+  html += '</div>';
+  return html;
+}
 
 function showStand(stand) {
+  window.__activeStand = stand; // 編集モードで「タップした施設」を編集対象に引き継ぐため
   sheetName.textContent = stand.name;
-  sheetNotes.textContent = stand.notes || '（注意事項は未登録）';
+  const card = buildApproachCard(stand);
+  if (card) {
+    sheetNotes.innerHTML = card + (stand.notes ? `<div class="raw-notes">${escapeHtml(stand.notes)}</div>` : '');
+  } else {
+    sheetNotes.textContent = stand.notes || '（注意事項は未登録）';
+  }
+  // 組合の道順図（PDF画像）を表示。タップで全画面拡大。
+  sheetImages.innerHTML = '';
+  (stand.images || []).forEach((file) => {
+    const img = document.createElement('img');
+    img.src = `data/stands-ref/${file}`;
+    img.alt = `${stand.name} 道順図`;
+    img.loading = 'lazy';
+    img.addEventListener('click', () => openImage(img.src));
+    sheetImages.appendChild(img);
+  });
   sheet.classList.add('open');
   clearLayer(map, routeLayer);
   routeLayer = drawRoute(map, stand);
@@ -20,11 +124,21 @@ function showStand(stand) {
 
 async function main() {
   map = createStandsMap('stands-map');
+  window.__standsMap = map; // 作図補助フック（座標取得・参照用）
 
-  const companyId = await getMyCompanyId();
+  // Firebase auth は非同期復元。currentUser が確定するまで待ってから会社を解決する。
+  await waitForAuth();
+  const isAdmin = await getIsAdmin();
+  let companyId = await getMyCompanyId();
+  // 管理者は ?company=<slug> で対象会社を指定できる（自分が会社未所属でも閲覧/編集可。rulesでadminは全社read/write）。
+  const override = new URLSearchParams(location.search).get('company');
+  if (isAdmin && override) companyId = override;
+
   if (!companyId) {
     sheetName.textContent = '利用できません';
-    sheetNotes.textContent = 'この機能は所属会社が登録されたユーザー向けです。';
+    sheetNotes.textContent = isAdmin
+      ? '管理者として開くには URL に ?company=<会社slug> を付けてください（例: ?company=co-7q7ros）。'
+      : 'この機能は所属会社が登録されたユーザー向けです。';
     sheet.classList.add('open');
     return;
   }
@@ -40,11 +154,14 @@ async function main() {
     return;
   }
   window.__standsCount = stands.length; // smoke 検証用
+  allStands = stands;
   renderPins(map, stands, showStand);
+  map.on('click', () => searchResults.classList.remove('open'));
 
   // GPS 現在地（任意・既存パターン）
   const watcher = createGeoWatcher({
     onUpdate: (pos) => {
+      myPos = pos;
       if (window.__meMarker) map.removeLayer(window.__meMarker);
       window.__meMarker = L.circleMarker([pos.lat, pos.lng], { radius: 6, color: '#3498db', fillOpacity: 0.9 }).addTo(map);
     },
@@ -52,7 +169,7 @@ async function main() {
   watcher.start();
 
   // 管理者なら編集モードを動的ロード
-  if (await getIsAdmin()) {
+  if (isAdmin) {
     document.getElementById('stands-editbar').classList.add('show');
     const { initEditor } = await import('./stands-editor.js');
     initEditor({ map, companyId, stands });
