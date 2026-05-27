@@ -125,6 +125,40 @@ export function isStale(generatedAt, nowMs, maxMinutes = STALE_MINUTES) {
   return (nowMs - t) > maxMinutes * 60 * 1000;
 }
 
+const COLLAPSE_KEY = 'forecast-section-collapsed';
+
+/** 折りたたみ状態を localStorage から読む。"1" なら true、他は false。例外時も false。 */
+export function getCollapsed(storage = (typeof localStorage !== 'undefined' ? localStorage : null)) {
+  if (!storage) return false;
+  try { return storage.getItem(COLLAPSE_KEY) === '1'; }
+  catch { return false; }
+}
+
+/** 折りたたみ状態を localStorage へ書く。true→"1"/false→"0"。例外は無視。 */
+export function setCollapsed(value, storage = (typeof localStorage !== 'undefined' ? localStorage : null)) {
+  if (!storage) return;
+  try { storage.setItem(COLLAPSE_KEY, value ? '1' : '0'); }
+  catch { /* ストレージ無効時は無視 */ }
+}
+
+/** トグルボタンを初期化。クリックで forecast-body の hidden 属性と localStorage を更新。 */
+export function initForecastSectionToggle() {
+  const btn = document.getElementById('forecast-section-toggle');
+  const body = document.getElementById('forecast-body');
+  if (!btn || !body) return;
+  const apply = (collapsed) => {
+    body.hidden = collapsed;
+    btn.setAttribute('aria-expanded', String(!collapsed));
+    btn.textContent = collapsed ? '▶ 展開' : '▼ 折りたたみ';
+  };
+  apply(getCollapsed());
+  btn.addEventListener('click', () => {
+    const next = !getCollapsed();
+    setCollapsed(next);
+    apply(next);
+  });
+}
+
 export async function loadPoolStatus(fetchFn = fetch) {
   try {
     const res = await fetchFn('data/pool-status.json', { cache: 'no-store' });
