@@ -706,6 +706,7 @@ export async function listAllUsersWithStats() {
           userId: data.userId,
           isAnonymous: data.isAnonymous || false,
           createdAt: data.createdAt || null,
+          active: data.active !== false,
           role: 'member'
         };
       }
@@ -783,6 +784,14 @@ export async function adminSaveSubscription(targetUserId, subscription) {
   const ref = doc(db, 'subscriptions', targetUserId);
   await setDoc(ref, subscription);
   return true;
+}
+
+// ========== 自己退会 ==========
+
+/** 自分のアカウントを無効化する（自己退会）。users/{uid}.active = false。 */
+export async function selfWithdraw(uid) {
+  if (!uid) throw new Error('selfWithdraw: uid required');
+  await updateDoc(doc(db, 'users', uid), { active: false });
 }
 
 // ========== companySetupRequests (admin only; rules gate read) ==========
