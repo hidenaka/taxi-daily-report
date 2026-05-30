@@ -64,8 +64,6 @@ const STATIC_FILES = [
   './js/firebase-auth.js',
   './js/firebase-storage.js',
   './js/drive-cache.js',
-  './js/company-config.js',
-  './js/admin-companies.js',
   './js/sub-cache.js',
   './js/crypto-utils.js',
   './js/invite-crypto.js',
