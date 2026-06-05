@@ -1,5 +1,19 @@
 import { test, assert } from './run.js';
-import { normalizeArrivals, detectTopics, BIG_DELAY_MIN, listOriginOptions } from '../tools/js/arrivals-data.js';
+import { normalizeArrivals, detectTopics, BIG_DELAY_MIN, listOriginOptions, filterByLane } from '../tools/js/arrivals-data.js';
+
+test('filterByLane: 0/未指定は全便、1-4はpoolLane一致のみ', () => {
+  const flights = [
+    { flightNumber: 'JL1', poolLane: 1 },
+    { flightNumber: 'NH2', poolLane: 3 },
+    { flightNumber: 'JL3', poolLane: 1 },
+    { flightNumber: 'XX4' }, // poolLane 未確定
+  ];
+  assert.equal(filterByLane(flights, 0).length, 4);
+  assert.equal(filterByLane(flights, 1).length, 2);
+  assert.deepEqual(filterByLane(flights, 3).map(f => f.flightNumber), ['NH2']);
+  assert.equal(filterByLane(flights, 4).length, 0);
+  assert.deepEqual(filterByLane(null, 1), []);
+});
 
 test('normalizeArrivals: "to be determined" estimatedTime を null にする', () => {
   const data = {
@@ -134,6 +148,16 @@ test(`detectTopics: ${BIG_DELAY_MIN}分以上の遅延便だけ拾う`, () => {
   const topics = detectTopics(flights);
   assert.deepEqual(topics.map(t => t.flightNumber), ['NH1', 'NH3']);
   assert.equal(topics[0].delayMin, 45);
+});
+
+test('detectTopics: poolLane(号)を topic に持たせる(未確定は null)', () => {
+  const flights = [
+    { flightNumber: 'JL9', scheduledTime: '10:00', estimatedTime: '10:45', terminal: 'T2', poolLane: 4 },
+    { flightNumber: 'JL8', scheduledTime: '11:00', estimatedTime: '11:50' }, // poolLane 未確定
+  ];
+  const topics = detectTopics(flights);
+  assert.equal(topics.find(t => t.flightNumber === 'JL9').poolLane, 4);
+  assert.equal(topics.find(t => t.flightNumber === 'JL8').poolLane, null);
 });
 
 test('detectTopics: 到着済みの便は除外する', () => {
