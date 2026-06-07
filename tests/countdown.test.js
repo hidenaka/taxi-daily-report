@@ -7,6 +7,8 @@ import {
   normalizeTimerState,
   fmtClockShort,
   overtimeNote,
+  distanceMeters,
+  normalizeCountdownPresets,
 } from '../tools/js/countdown.js';
 
 test('computeRemainingMs: 目標分 - 実経過ms', () => {
@@ -83,4 +85,78 @@ test('overtimeNote: 超過<1分は「到達」、以降は「＋ 超過N分」�
 
 test('overtimeNote: まだ目標未到達（超過<0）は空文字', () => {
   assert.equal(overtimeNote(10 * 60 * 1000, 27), '');
+});
+
+test('distanceMeters: 同一点は0', () => {
+  assert.equal(distanceMeters({ lat: 35.6, lon: 139.7 }, { lat: 35.6, lon: 139.7 }), 0);
+});
+
+test('distanceMeters: 既知の距離（東京駅→品川駅 ≈ 6.8km、誤差5%以内）', () => {
+  const tokyo = { lat: 35.681236, lon: 139.767125 };
+  const shinagawa = { lat: 35.628471, lon: 139.738760 };
+  const d = distanceMeters(tokyo, shinagawa);
+  assert.ok(d > 6400 && d < 7200, `期待6.8km前後, 実測${Math.round(d)}m`);
+});
+
+test('distanceMeters: 緯度0.001度差 ≈ 111m（誤差2%以内）', () => {
+  const d = distanceMeters({ lat: 35.0, lon: 139.0 }, { lat: 35.001, lon: 139.0 });
+  assert.ok(d > 108 && d < 114, `期待~111m, 実測${Math.round(d)}m`);
+});
+
+test('distanceMeters: 対称性', () => {
+  const a = { lat: 35.6, lon: 139.7 }, b = { lat: 35.65, lon: 139.75 };
+  assert.equal(Math.round(distanceMeters(a, b)), Math.round(distanceMeters(b, a)));
+});
+
+test('normalizeTimerState: 新設定の既定値（alertDurationSec=5, moveDetectOn=true, moveThresholdM=500）', () => {
+  const s = normalizeTimerState(null);
+  assert.equal(s.alertDurationSec, 5);
+  assert.equal(s.moveDetectOn, true);
+  assert.equal(s.moveThresholdM, 500);
+});
+
+test('normalizeTimerState: alertDurationSecは>=0で保持、不正は5、0(止めるまで)も許容', () => {
+  assert.equal(normalizeTimerState({ alertDurationSec: 10 }).alertDurationSec, 10);
+  assert.equal(normalizeTimerState({ alertDurationSec: 0 }).alertDurationSec, 0);
+  assert.equal(normalizeTimerState({ alertDurationSec: -3 }).alertDurationSec, 5);
+  assert.equal(normalizeTimerState({ alertDurationSec: Infinity }).alertDurationSec, 5);
+});
+
+test('normalizeTimerState: moveThresholdMは>=100で保持、不正/小さすぎは500', () => {
+  assert.equal(normalizeTimerState({ moveThresholdM: 300 }).moveThresholdM, 300);
+  assert.equal(normalizeTimerState({ moveThresholdM: 50 }).moveThresholdM, 500);
+  assert.equal(normalizeTimerState({ moveThresholdM: Infinity }).moveThresholdM, 500);
+});
+
+test('normalizeTimerState: moveDetectOnはboolean保持、無ければtrue', () => {
+  assert.equal(normalizeTimerState({ moveDetectOn: false }).moveDetectOn, false);
+  assert.equal(normalizeTimerState({}).moveDetectOn, true);
+});
+
+test('normalizeCountdownPresets: 既定は[11,15,27,30,45,60]', () => {
+  assert.deepEqual(normalizeCountdownPresets(null), [11, 15, 27, 30, 45, 60]);
+  assert.deepEqual(normalizeCountdownPresets(undefined), [11, 15, 27, 30, 45, 60]);
+  assert.deepEqual(normalizeCountdownPresets('x'), [11, 15, 27, 30, 45, 60]);
+});
+
+test('normalizeCountdownPresets: 妥当な6個はそのまま（floor）', () => {
+  assert.deepEqual(normalizeCountdownPresets([25, 40, 5, 60, 90, 120]), [25, 40, 5, 60, 90, 120]);
+  assert.deepEqual(normalizeCountdownPresets([25.7, 40.2, 5, 60, 90, 120]), [25, 40, 5, 60, 90, 120]);
+});
+
+test('normalizeCountdownPresets: 不正な要素は同位置の既定にフォールバック', () => {
+  assert.deepEqual(
+    normalizeCountdownPresets([25, 'x', -3, Infinity, 0, 45]),
+    [25, 15, 27, 30, 45, 45]
+  );
+});
+
+test('normalizeCountdownPresets: 短い配列は不足分を既定で埋める / 上限600', () => {
+  assert.deepEqual(normalizeCountdownPresets([20]), [20, 15, 27, 30, 45, 60]);
+  assert.deepEqual(normalizeCountdownPresets([700, 15, 27, 30, 45, 60]), [11, 15, 27, 30, 45, 60]);
+});
+
+test('normalizeTimerState: countdownPresets を含む（既定6個）', () => {
+  assert.deepEqual(normalizeTimerState(null).countdownPresets, [11, 15, 27, 30, 45, 60]);
+  assert.deepEqual(normalizeTimerState({ countdownPresets: [25, 40, 5, 60, 90, 120] }).countdownPresets, [25, 40, 5, 60, 90, 120]);
 });
