@@ -150,19 +150,19 @@ if (location.hostname.includes('-dev')) {
 <button class="fab" onclick="location.href='input.html'" style="display:none;">＋</button>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=5698794b01ee';
-import { getConfig, getDrivesForMonth, flushPendingQueue } from './js/storage.js?b=5698794b01ee';
-import { DEFAULT_CONFIG } from './js/default-config.js?b=5698794b01ee';
-import { calcTotalPay, calcDailySales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales } from './js/payroll.js?b=5698794b01ee';
-import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=5698794b01ee';
-import { processInvite } from './js/invite-crypto.js?b=5698794b01ee';
-import { renderLegalFooter } from './js/legal-footer.js?b=5698794b01ee';
-import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=5698794b01ee';
-import { isEmailAuth } from './js/firebase-auth.js?b=5698794b01ee';
-import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts } from './js/planned-shifts.js?b=5698794b01ee';
-import { checkInviteAndWarn, fetchCompanyExists } from './js/invite-url.js?b=5698794b01ee';
-import { shouldShowFirstRunCard } from './js/first-run.js?b=5698794b01ee';
-import './js/help-video.js?b=5698794b01ee';
+import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=998bb40b5d17';
+import { getConfig, getDrivesForMonth, flushPendingQueue } from './js/storage.js?b=998bb40b5d17';
+import { DEFAULT_CONFIG } from './js/default-config.js?b=998bb40b5d17';
+import { calcTotalPay, calcDailySales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales } from './js/payroll.js?b=998bb40b5d17';
+import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=998bb40b5d17';
+import { processInvite } from './js/invite-crypto.js?b=998bb40b5d17';
+import { renderLegalFooter } from './js/legal-footer.js?b=998bb40b5d17';
+import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=998bb40b5d17';
+import { isEmailAuth } from './js/firebase-auth.js?b=998bb40b5d17';
+import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts } from './js/planned-shifts.js?b=998bb40b5d17';
+import { checkInviteAndWarn, fetchCompanyExists } from './js/invite-url.js?b=998bb40b5d17';
+import { shouldShowFirstRunCard } from './js/first-run.js?b=998bb40b5d17';
+import './js/help-video.js?b=998bb40b5d17';
 
 // 暗号化招待リンク処理は GitHub 版専用のためスキップ（Firebase 版）
 const inviteProcessed = false;
@@ -527,12 +527,30 @@ async function render() {
           const incentivePart = predicted ? predicted.incentive : actualResult.incentive;
           const paidLeavePart = actualResult.paidLeaveAmount;
           // 着地予測の総支給・手取り
-          const projectedTotal = projectedSalesExcl * currentTier.rate + incentivePart + paidLeavePart;
+          // predicted(predictMonthly=段階歩率の正式計算)があればそれを使う。
+          // 旧概算 projectedSalesExcl×単一rate は projectedSalesExcl が
+          // 「平均×tierShiftCount(=最大11)」のため、責任出番が12以上だと12乗務目以降を
+          // 丸ごと落とし着地額を過小評価する(ヒーローの月度予想総支給=predicted.total と乖離)。
+          // よって predicted があれば predicted.total に統一し、ヒーローと一致させる。
+          // predicted が無い経路(過去月度等)のみ従来概算へフォールバック。
+          const projectedTotal = predicted
+            ? predicted.total
+            : (projectedSalesExcl * currentTier.rate + incentivePart + paidLeavePart);
           const projectedTakeHome = projectedTotal * takeHomeRate;
 
           // 残出番のシム (vehicleType 補完用)
+          // 着地予測(predictMonthly)と同じ前提で残出番の車種を見込む(現状のプレミアム比率を踏襲)。
+          // これにより achieve-line(requiredUniformSales)の incentive 見積もりが
+          // 着地総支給(predicted.total)と同じ前提になり、両者の不整合(残出番を一般車固定で
+          // プレミアム手当を過小に見ていた)を解消する。
+          const _premiumCount = rawDrives.filter(d => d.vehicleType === 'premium').length;
+          const _premiumRemaining = rawDrives.length > 0
+            ? Math.round(remainingShifts * (_premiumCount / rawDrives.length))
+            : 0;
           const remainingShiftList = [];
-          for (let i = 0; i < remainingShifts; i++) remainingShiftList.push({ vehicleType: 'japantaxi' });
+          for (let i = 0; i < remainingShifts; i++) {
+            remainingShiftList.push({ vehicleType: i < _premiumRemaining ? 'premium' : 'japantaxi' });
+          }
 
           // 目標達成ライン計算 (target種別ごと)
           const calcAchieveLine = (target, targetType) => {
@@ -1282,7 +1300,7 @@ function pickWeatherIcon(w) {
 load();
 </script>
 <script type="module">
-import { isCoachEnabled } from './js/coach/coach-flag.js?b=5698794b01ee';
+import { isCoachEnabled } from './js/coach/coach-flag.js?b=998bb40b5d17';
 const _ce = document.getElementById('coachEntryCard');
 if (_ce && isCoachEnabled()) _ce.style.display = '';
 </script>
