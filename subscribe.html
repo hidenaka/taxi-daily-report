@@ -168,10 +168,10 @@ if (location.hostname.includes('-dev')) {
   </section>
 </main>
 <script type="module">
-import { renderLegalFooter } from './js/legal-footer.js?b=d7b03aafcfb8';
-import { getSubscription, startCheckout, startFree, isPaying, formatStatus } from './js/subscription-state.js?b=d7b03aafcfb8';
-import { isEmailAuth } from './js/firebase-auth.js?b=d7b03aafcfb8';
-import { checkInviteAndWarn, fetchCompanyExists, fetchCompanyProfile } from './js/invite-url.js?b=d7b03aafcfb8';
+import { renderLegalFooter } from './js/legal-footer.js';
+import { getSubscription, startCheckout, startFree, isPaying, formatStatus } from './js/subscription-state.js';
+import { isEmailAuth } from './js/firebase-auth.js';
+import { checkInviteAndWarn, fetchCompanyExists, fetchCompanyProfile } from './js/invite-url.js';
 
 renderLegalFooter();
 

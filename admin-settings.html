@@ -113,14 +113,14 @@ if (location.hostname.includes('-dev')) {
 </div>
 
 <script type="module">
-import { renderBottomNav } from './js/app.js?b=d7b03aafcfb8';
-import { showGpsPrivacyBanner } from './js/gps-privacy-banner.js?b=d7b03aafcfb8';
+import { renderBottomNav } from './js/app.js';
+import { showGpsPrivacyBanner } from './js/gps-privacy-banner.js';
 showGpsPrivacyBanner();
-import { getConfig, saveConfig, getMyUserId, setMyUserId } from './js/storage.js?b=d7b03aafcfb8';
-import { isValidUserId } from './js/userid.js?b=d7b03aafcfb8';
-import { DEFAULT_CONFIG } from './js/default-config.js?b=d7b03aafcfb8';
-import { isEmailAuth, logout, loginWithUserId, getCurrentUser, initAuth } from './js/firebase-auth.js?b=d7b03aafcfb8';
-import { renderLegalFooter } from './js/legal-footer.js?b=d7b03aafcfb8';
+import { getConfig, saveConfig, getMyUserId, setMyUserId } from './js/storage.js';
+import { isValidUserId } from './js/userid.js';
+import { DEFAULT_CONFIG } from './js/default-config.js';
+import { isEmailAuth, logout, loginWithUserId, getCurrentUser, initAuth } from './js/firebase-auth.js';
+import { renderLegalFooter } from './js/legal-footer.js';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('settings');
 renderLegalFooter();
