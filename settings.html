@@ -313,27 +313,27 @@ if (location.hostname.includes('-dev')) {
   <button class="btn" id="saveConfigBtn" style="width:100%;">💾 設定を保存</button>
 </div>
 <script type="module">
-import { renderBottomNav } from './js/app.js';
-import { showGpsPrivacyBanner } from './js/gps-privacy-banner.js';
+import { renderBottomNav } from './js/app.js?b=5698794b01ee';
+import { showGpsPrivacyBanner } from './js/gps-privacy-banner.js?b=5698794b01ee';
 showGpsPrivacyBanner();
-import { getConfig, saveConfig, getDrivesForMonth, getMyUserId, setMyUserId, getUserRoleMap, getMyAggregateAnalysisFlag, setMyAggregateAnalysisFlag, getMyConsecutiveShiftsCount } from './js/storage.js';
-import { ACCESS_LEVELS, getAccessLevel, getNextThreshold } from './js/aggregate-access.js';
-import { buildReferralUrl } from './js/admin-companies.js';
-import { getMyCompanyId } from './js/storage.js';
-import { renderQrSvg, downloadQrPng } from './js/qr-code.js';
-import { isValidUserId } from './js/userid.js';
-import { DEFAULT_CONFIG } from './js/default-config.js';
-import { calcTotalPay } from './js/payroll.js';
-import { isEmailAuth, logout, loginWithUserId, getCurrentUser, initAuth, waitForAuth } from './js/firebase-auth.js';
-import { renderLegalFooter } from './js/legal-footer.js';
-import './js/help-toggle.js';
+import { getConfig, saveConfig, getDrivesForMonth, getMyUserId, setMyUserId, getUserRoleMap, getMyAggregateAnalysisFlag, setMyAggregateAnalysisFlag, getMyConsecutiveShiftsCount } from './js/storage.js?b=5698794b01ee';
+import { ACCESS_LEVELS, getAccessLevel, getNextThreshold } from './js/aggregate-access.js?b=5698794b01ee';
+import { buildReferralUrl } from './js/admin-companies.js?b=5698794b01ee';
+import { getMyCompanyId } from './js/storage.js?b=5698794b01ee';
+import { renderQrSvg, downloadQrPng } from './js/qr-code.js?b=5698794b01ee';
+import { isValidUserId } from './js/userid.js?b=5698794b01ee';
+import { DEFAULT_CONFIG } from './js/default-config.js?b=5698794b01ee';
+import { calcTotalPay } from './js/payroll.js?b=5698794b01ee';
+import { isEmailAuth, logout, loginWithUserId, getCurrentUser, initAuth, waitForAuth } from './js/firebase-auth.js?b=5698794b01ee';
+import { renderLegalFooter } from './js/legal-footer.js?b=5698794b01ee';
+import './js/help-toggle.js?b=5698794b01ee';
 import {
   getSubscription,
   cancelSubscription,
   requiresOnboarding,
   isCanceledOrUnpaid,
   formatStatus,
-} from './js/subscription-state.js';
+} from './js/subscription-state.js?b=5698794b01ee';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('settings');
 renderLegalFooter();

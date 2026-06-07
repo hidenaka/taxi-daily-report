@@ -150,19 +150,19 @@ if (location.hostname.includes('-dev')) {
 <button class="fab" onclick="location.href='input.html'" style="display:none;">＋</button>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js';
-import { getConfig, getDrivesForMonth, flushPendingQueue } from './js/storage.js';
-import { DEFAULT_CONFIG } from './js/default-config.js';
-import { calcTotalPay, calcDailySales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales } from './js/payroll.js';
-import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js';
-import { processInvite } from './js/invite-crypto.js';
-import { renderLegalFooter } from './js/legal-footer.js';
-import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js';
-import { isEmailAuth } from './js/firebase-auth.js';
-import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts } from './js/planned-shifts.js';
-import { checkInviteAndWarn, fetchCompanyExists } from './js/invite-url.js';
-import { shouldShowFirstRunCard } from './js/first-run.js';
-import './js/help-video.js';
+import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=5698794b01ee';
+import { getConfig, getDrivesForMonth, flushPendingQueue } from './js/storage.js?b=5698794b01ee';
+import { DEFAULT_CONFIG } from './js/default-config.js?b=5698794b01ee';
+import { calcTotalPay, calcDailySales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales } from './js/payroll.js?b=5698794b01ee';
+import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=5698794b01ee';
+import { processInvite } from './js/invite-crypto.js?b=5698794b01ee';
+import { renderLegalFooter } from './js/legal-footer.js?b=5698794b01ee';
+import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=5698794b01ee';
+import { isEmailAuth } from './js/firebase-auth.js?b=5698794b01ee';
+import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts } from './js/planned-shifts.js?b=5698794b01ee';
+import { checkInviteAndWarn, fetchCompanyExists } from './js/invite-url.js?b=5698794b01ee';
+import { shouldShowFirstRunCard } from './js/first-run.js?b=5698794b01ee';
+import './js/help-video.js?b=5698794b01ee';
 
 // 暗号化招待リンク処理は GitHub 版専用のためスキップ（Firebase 版）
 const inviteProcessed = false;
@@ -1282,7 +1282,7 @@ function pickWeatherIcon(w) {
 load();
 </script>
 <script type="module">
-import { isCoachEnabled } from './js/coach/coach-flag.js';
+import { isCoachEnabled } from './js/coach/coach-flag.js?b=5698794b01ee';
 const _ce = document.getElementById('coachEntryCard');
 if (_ce && isCoachEnabled()) _ce.style.display = '';
 </script>
