@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>Cabis（キャビス）｜ タクシードライバー支援アプリ</title>
+<title>Cabis（キャビス）｜ タクシー乗務員のための業務支援アプリ</title>
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -150,19 +150,19 @@ if (location.hostname.includes('-dev')) {
 <button class="fab" onclick="location.href='input.html'" style="display:none;">＋</button>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js';
-import { getConfig, getDrivesForMonth, flushPendingQueue } from './js/storage.js';
-import { DEFAULT_CONFIG } from './js/default-config.js';
-import { calcTotalPay, calcDailySales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales } from './js/payroll.js';
-import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js';
-import { processInvite } from './js/invite-crypto.js';
-import { renderLegalFooter } from './js/legal-footer.js';
-import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js';
-import { isEmailAuth } from './js/firebase-auth.js';
-import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts } from './js/planned-shifts.js';
-import { checkInviteAndWarn, fetchCompanyExists } from './js/invite-url.js';
-import { shouldShowFirstRunCard } from './js/first-run.js';
-import './js/help-video.js';
+import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=d7b03aafcfb8';
+import { getConfig, getDrivesForMonth, flushPendingQueue } from './js/storage.js?b=d7b03aafcfb8';
+import { DEFAULT_CONFIG } from './js/default-config.js?b=d7b03aafcfb8';
+import { calcTotalPay, calcDailySales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales } from './js/payroll.js?b=d7b03aafcfb8';
+import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=d7b03aafcfb8';
+import { processInvite } from './js/invite-crypto.js?b=d7b03aafcfb8';
+import { renderLegalFooter } from './js/legal-footer.js?b=d7b03aafcfb8';
+import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=d7b03aafcfb8';
+import { isEmailAuth } from './js/firebase-auth.js?b=d7b03aafcfb8';
+import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts } from './js/planned-shifts.js?b=d7b03aafcfb8';
+import { checkInviteAndWarn, fetchCompanyExists } from './js/invite-url.js?b=d7b03aafcfb8';
+import { shouldShowFirstRunCard } from './js/first-run.js?b=d7b03aafcfb8';
+import './js/help-video.js?b=d7b03aafcfb8';
 
 // 暗号化招待リンク処理は GitHub 版専用のためスキップ（Firebase 版）
 const inviteProcessed = false;
@@ -1282,7 +1282,7 @@ function pickWeatherIcon(w) {
 load();
 </script>
 <script type="module">
-import { isCoachEnabled } from './js/coach/coach-flag.js';
+import { isCoachEnabled } from './js/coach/coach-flag.js?b=d7b03aafcfb8';
 const _ce = document.getElementById('coachEntryCard');
 if (_ce && isCoachEnabled()) _ce.style.display = '';
 </script>

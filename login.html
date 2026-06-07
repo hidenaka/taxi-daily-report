@@ -170,12 +170,12 @@ if (location.hostname.includes('-dev')) {
   </div>
 </main>
 <script type="module">
-import { renderLegalFooter } from './js/legal-footer.js';
-import { waitForAuth, isEmailAuth, loginWithUserId, signUp } from './js/firebase-auth.js';
-import { loadInviteSlug, validateInviteSlug, fetchCompanyExists, checkInviteAndWarn } from './js/invite-url.js';
-import { generateSlug } from './js/slug-gen.js';
-import { validateSignupFields, buildNotifyPayload, postSignupNotify } from './js/signup-notify.js';
-import { billingApiBase } from './js/subscription-state.js';
+import { renderLegalFooter } from './js/legal-footer.js?b=d7b03aafcfb8';
+import { waitForAuth, isEmailAuth, loginWithUserId, signUp } from './js/firebase-auth.js?b=d7b03aafcfb8';
+import { loadInviteSlug, validateInviteSlug, fetchCompanyExists, checkInviteAndWarn } from './js/invite-url.js?b=d7b03aafcfb8';
+import { generateSlug } from './js/slug-gen.js?b=d7b03aafcfb8';
+import { validateSignupFields, buildNotifyPayload, postSignupNotify } from './js/signup-notify.js?b=d7b03aafcfb8';
+import { billingApiBase } from './js/subscription-state.js?b=d7b03aafcfb8';
 renderLegalFooter();
 
 // 招待URL `?company=<slug>` を捕捉・検証（完全招待制・decisions 6）。
