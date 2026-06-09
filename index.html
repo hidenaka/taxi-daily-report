@@ -142,6 +142,17 @@ if (location.hostname.includes('-dev')) {
     </a>
   </section>
   <section class="card" id="summaryCard">読み込み中…</section>
+  <div id="myMetricsCard" class="card" style="display:none;"></div>
+  <div id="metricsPicker" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:50;">
+    <div style="background:#fff;max-width:520px;margin:5vh auto;max-height:88vh;overflow:auto;border-radius:12px;padding:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <strong>数値を選ぶ</strong>
+        <button id="metricsPickerClose" style="border:none;background:none;font-size:18px;cursor:pointer;">×</button>
+      </div>
+      <div id="metricsPickerBody" style="margin-top:10px;"></div>
+      <button id="metricsPickerSave" class="btn" style="width:100%;margin-top:12px;">保存</button>
+    </div>
+  </div>
   <section class="card" id="targetCard" style="display:none;"></section>
   <section class="card" id="calCard" style="display:none;"></section>
   <section class="card" id="sumTableCard" style="display:none;"></section>
@@ -150,19 +161,20 @@ if (location.hostname.includes('-dev')) {
 <button class="fab" onclick="location.href='input.html'" style="display:none;">＋</button>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=998bb40b5d17';
-import { getConfig, getDrivesForMonth, flushPendingQueue } from './js/storage.js?b=998bb40b5d17';
-import { DEFAULT_CONFIG } from './js/default-config.js?b=998bb40b5d17';
-import { calcTotalPay, calcDailySales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales } from './js/payroll.js?b=998bb40b5d17';
-import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=998bb40b5d17';
-import { processInvite } from './js/invite-crypto.js?b=998bb40b5d17';
-import { renderLegalFooter } from './js/legal-footer.js?b=998bb40b5d17';
-import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=998bb40b5d17';
-import { isEmailAuth } from './js/firebase-auth.js?b=998bb40b5d17';
-import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts } from './js/planned-shifts.js?b=998bb40b5d17';
-import { checkInviteAndWarn, fetchCompanyExists } from './js/invite-url.js?b=998bb40b5d17';
-import { shouldShowFirstRunCard } from './js/first-run.js?b=998bb40b5d17';
-import './js/help-video.js?b=998bb40b5d17';
+import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=9af09ab568ab';
+import { getConfig, getDrivesForMonth, flushPendingQueue, saveConfig } from './js/storage.js?b=9af09ab568ab';
+import { DEFAULT_CONFIG } from './js/default-config.js?b=9af09ab568ab';
+import { calcTotalPay, calcDailySales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales, predictMonthly } from './js/payroll.js?b=9af09ab568ab';
+import { METRIC_CATALOG, METRIC_GROUPS, resolveMetrics } from './js/home-metrics.js?b=9af09ab568ab';
+import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=9af09ab568ab';
+import { processInvite } from './js/invite-crypto.js?b=9af09ab568ab';
+import { renderLegalFooter } from './js/legal-footer.js?b=9af09ab568ab';
+import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=9af09ab568ab';
+import { isEmailAuth } from './js/firebase-auth.js?b=9af09ab568ab';
+import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts } from './js/planned-shifts.js?b=9af09ab568ab';
+import { checkInviteAndWarn, fetchCompanyExists } from './js/invite-url.js?b=9af09ab568ab';
+import { shouldShowFirstRunCard } from './js/first-run.js?b=9af09ab568ab';
+import './js/help-video.js?b=9af09ab568ab';
 
 // 暗号化招待リンク処理は GitHub 版専用のためスキップ（Firebase 版）
 const inviteProcessed = false;
@@ -202,6 +214,12 @@ renderLegalFooter();
       banner.style.display = 'none';
     });
   } catch (e) {}
+})();
+
+// 数値ピッカー(⚙) のモーダル開閉ボタンを一度だけ配線
+(function initMetricsPickerButtons() {
+  document.getElementById('metricsPickerClose')?.addEventListener('click', closeMetricsPicker);
+  document.getElementById('metricsPickerSave')?.addEventListener('click', saveMetricsSelection);
 })();
 
 // PWA インストール促しバナー: standalone 起動でない時のみ表示・閉じたら覚える
@@ -752,6 +770,18 @@ async function render() {
     targetCard.style.display = 'none';
   }
 
+  // 「あなたの数値」カード
+  const myCard = document.getElementById('myMetricsCard');
+  if (myCard && config.payrollMode !== 'fixed_rate') {
+    const mvals = resolveMetrics(rawDrives, config, range.start, range.end, respShifts);
+    myCard.style.display = '';
+    myCard.innerHTML = renderMyMetricsCard(mvals, selectedMetricIds());
+    const editBtn = document.getElementById('editMetricsBtn');
+    if (editBtn) editBtn.addEventListener('click', openMetricsPicker);
+  } else if (myCard) {
+    myCard.style.display = 'none';
+  }
+
   // 折りたたみの開閉状態を復元・記憶
   wireFolds();
 
@@ -760,6 +790,97 @@ async function render() {
 
   // 月度日別サマリー表(各日の4時間枠売上含む)
   renderSummaryTable(drives);
+}
+
+// 表示する数値id配列。config.homeMetrics 未設定(既存ユーザー)は既定選択にフォールバック。
+// ただしユーザーが明示的に空[]にした場合(homeMetrics存在)はその意思を尊重して空のまま。
+function selectedMetricIds() {
+  return config.homeMetrics
+    ? (config.homeMetrics.selected || [])
+    : ((DEFAULT_CONFIG.homeMetrics && DEFAULT_CONFIG.homeMetrics.selected) || []);
+}
+
+// 「あなたの数値」カード: 選択された数値をグループ見出し付きで並べる。
+// values = resolveMetrics(...) の返り値。selectedIds = config.homeMetrics.selected。
+function renderMyMetricsCard(values, selectedIds) {
+  const selected = new Set(selectedIds || []);
+  let body = '';
+  for (const g of METRIC_GROUPS) {
+    const inGroup = METRIC_CATALOG.filter(m => m.group === g.key && selected.has(m.id));
+    if (inGroup.length === 0) continue;
+    const rendered = new Set();
+    let rows = '';
+    for (const m of inGroup) {
+      if (rendered.has(m.id)) continue;
+      const v = values[m.id];
+      if (!v) continue;
+      if (m.targetField && v.hasTarget) {
+        const sign = v.diff >= 0 ? '+' : '−';
+        rows += `<div style="margin:6px 0;">
+          <div style="font-size:11px;color:#666;">${m.label}
+            <span style="color:${v.willHit ? g.accent : '#ff9800'};font-weight:700;">${v.willHit ? '✓達成見込' : '未達見込'}</span></div>
+          <div style="font-size:12px;color:#666;">目標 ${formatYen(v.target)} / 着地 ${formatYen(v.value)} /
+            <strong style="color:${v.willHit ? g.accent : '#ff9800'};">${sign}${formatYen(Math.abs(v.diff))}</strong></div>
+        </div>`;
+        rendered.add(m.id);
+        continue;
+      }
+      if (m.pair) {
+        const incl = inGroup.find(x => x.pair === m.pair && x.tax === 'incl');
+        const excl = inGroup.find(x => x.pair === m.pair && x.tax === 'excl');
+        const inclV = incl && values[incl.id]; const exclV = excl && values[excl.id];
+        let num = '';
+        if (inclV && exclV) num = `${formatYen(inclV.value)} <span style="color:#888;font-size:12px;">/ ${formatYen(exclV.value)}(税抜)</span>`;
+        else if (inclV) num = formatYen(inclV.value);
+        else if (exclV) num = `${formatYen(exclV.value)}(税抜)`;
+        rows += `<div style="margin:6px 0;"><div style="font-size:11px;color:#666;">${m.label}</div>
+          <div style="font-size:18px;font-weight:800;">${num}</div></div>`;
+        if (incl) rendered.add(incl.id);
+        if (excl) rendered.add(excl.id);
+        continue;
+      }
+      rows += `<div style="margin:6px 0;"><div style="font-size:11px;color:#666;">${m.label}</div>
+        <div style="font-size:18px;font-weight:800;">${m.id === 'month.rate' ? (v.value * 100).toFixed(1) + '%' : formatYen(v.value)}</div></div>`;
+      rendered.add(m.id);
+    }
+    if (rows) {
+      body += `<div style="margin-top:8px;padding:8px 10px;background:${g.bg};border-radius:6px;">
+        <div style="font-size:10px;font-weight:700;color:${g.accent};">${g.label}</div>${rows}</div>`;
+    }
+  }
+  return `<div style="display:flex;justify-content:space-between;align-items:center;">
+      <strong>📌 あなたの数値</strong>
+      <button id="editMetricsBtn" style="font-size:12px;color:#1565c0;background:none;border:none;cursor:pointer;">⚙ 数値を選ぶ</button>
+    </div>${body || '<p class="muted" style="font-size:12px;">「⚙ 数値を選ぶ」から表示する数値を選んでください</p>'}`;
+}
+
+function openMetricsPicker() {
+  const selected = new Set(selectedMetricIds());
+  const bodyEl = document.getElementById('metricsPickerBody');
+  let html = '';
+  for (const g of METRIC_GROUPS) {
+    const items = METRIC_CATALOG.filter(m => m.group === g.key);
+    html += `<div style="margin-top:10px;"><div style="font-size:11px;font-weight:700;color:${g.accent};">${g.label}</div>`;
+    for (const m of items) {
+      const taxLabel = m.tax === 'incl' ? '（税込）' : m.tax === 'excl' ? '（税抜）' : '';
+      html += `<label style="display:block;font-size:13px;margin:3px 0;">
+        <input type="checkbox" data-mid="${m.id}" ${selected.has(m.id) ? 'checked' : ''}> ${m.label}${taxLabel}</label>`;
+    }
+    html += `</div>`;
+  }
+  bodyEl.innerHTML = html;
+  document.getElementById('metricsPicker').style.display = '';
+}
+
+function closeMetricsPicker() { document.getElementById('metricsPicker').style.display = 'none'; }
+
+async function saveMetricsSelection() {
+  const checks = document.querySelectorAll('#metricsPickerBody input[data-mid]:checked');
+  const ids = Array.from(checks).map(c => c.getAttribute('data-mid'));
+  config.homeMetrics = { selected: ids };
+  await saveConfig(config);
+  closeMetricsPicker();
+  render();
 }
 
 // 任意の追加目標カード (総支給、11乗務目までの手取り)
@@ -1269,23 +1390,6 @@ async function renderTodayHint() {
 }
 
 
-function predictMonthly(drives, config, periodStart, periodEnd, targetShifts) {
-  const monthly = calcMonthlySales(drives);
-  const avgDailyInclTax = monthly.inclTax / drives.length;
-  const target = targetShifts ?? config.responsibilityShifts;
-  const remaining = target - drives.length;
-  if (remaining <= 0) return calcTotalPay(drives, config, periodStart, periodEnd);
-  // 現在の premium 比率を残乗務に反映 (incentive 予測用)
-  const premiumCount = drives.filter(d => d.vehicleType === 'premium').length;
-  const premiumRemaining = Math.round(remaining * (premiumCount / drives.length));
-  const simulated = [...drives];
-  for (let i = 0; i < remaining; i++) {
-    const vt = i < premiumRemaining ? 'premium' : 'japantaxi';
-    simulated.push({ trips: [{ amount: avgDailyInclTax, isCancel: false }], vehicleType: vt, date: '_p_' + i });
-  }
-  return calcTotalPay(simulated, config, periodStart, periodEnd);
-}
-
 function pickWeatherIcon(w) {
   if (!w) return '';
   for (const p of [w.morning, w.noon, w.evening]) {
@@ -1300,7 +1404,7 @@ function pickWeatherIcon(w) {
 load();
 </script>
 <script type="module">
-import { isCoachEnabled } from './js/coach/coach-flag.js?b=998bb40b5d17';
+import { isCoachEnabled } from './js/coach/coach-flag.js?b=9af09ab568ab';
 const _ce = document.getElementById('coachEntryCard');
 if (_ce && isCoachEnabled()) _ce.style.display = '';
 </script>

@@ -167,12 +167,12 @@ No,乗車,降車,時間,迎,乗車地,降車地,営Km,男,女,合計
 </main>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav } from './js/app.js?b=998bb40b5d17';
-import { parseFormattedReport } from './js/parser.js?b=998bb40b5d17';
-import { getFile, putFile } from './js/storage.js?b=998bb40b5d17';
-import { isValidUserId } from './js/userid.js?b=998bb40b5d17';
-import { renderLegalFooter } from './js/legal-footer.js?b=998bb40b5d17';
-import { enforceAccess } from './js/access-control.js?b=998bb40b5d17';
+import { renderBottomNav } from './js/app.js?b=9af09ab568ab';
+import { parseFormattedReport } from './js/parser.js?b=9af09ab568ab';
+import { getFile, putFile } from './js/storage.js?b=9af09ab568ab';
+import { isValidUserId } from './js/userid.js?b=9af09ab568ab';
+import { renderLegalFooter } from './js/legal-footer.js?b=9af09ab568ab';
+import { enforceAccess } from './js/access-control.js?b=9af09ab568ab';
 
 if (!(await enforceAccess('core'))) {
   throw new Error('access-denied: redirected');
