@@ -175,6 +175,11 @@
     footer.is-stale .updated { color: var(--warn); }
     .empty { color: var(--sub); padding: 12px 0; text-align: center; }
     #arrivals-error { background: #4a1a1a; color: #ffb; padding: 8px; border-radius: 4px; margin: 8px 12px; }
+    .pool-notice { margin: 8px 12px; display: flex; flex-direction: column; gap: 8px; }
+    .pool-notice .pn-tail { background: #4a3a1a; color: #ffe; padding: 8px 10px; border-radius: 6px; font-size: 14px; }
+    .pool-notice .pn-flight { background: #1a3a2a; color: #eafff0; padding: 8px 10px; border-radius: 6px; }
+    .pool-notice .pn-h { font-weight: 700; margin-bottom: 4px; }
+    .pool-notice .pn-text { margin: 0; white-space: pre-wrap; font-family: inherit; font-size: 13px; line-height: 1.5; }
     /* 使い方動画ボタン（help-video-btn / help-video コンテナ） */
     .help-video-btn {
       display: inline-flex; align-items: center; gap: 5px; margin-left: 8px;
@@ -261,7 +266,7 @@
 </head>
 <body>
   <script type="module">
-    import { enforceAccess } from '../js/access-control.js?b=9af09ab568ab';
+    import { enforceAccess } from '../js/access-control.js?b=d735caa03640';
     if (!(await enforceAccess('core', { redirect: '../subscribe.html' }))) {
       throw new Error('access-denied: redirected');
     }
@@ -272,7 +277,7 @@
     <a href="arrivals.html" class="app-tab active" aria-current="page">✈ 空港ツール</a>
     <a href="stands.html" id="tab-stands" class="app-tab" style="display:none">📍 乗り場</a>
   </nav>
-  <script type="module" src="js/stands-tab.js?b=9af09ab568ab"></script>
+  <script type="module" src="js/stands-tab.js?b=d735caa03640"></script>
 
   <div class="terminal-tabs">
     <!-- T1/T2 の個別タブは非表示（合計のみ表示）。T3(国際)は実績・予測の仕組みが整ったら表示する -->
@@ -285,6 +290,8 @@
   <div id="arrivals-error" hidden></div>
 
   <div id="weather-banner" hidden></div>
+
+  <div id="pool-notice-banner" class="pool-notice" hidden></div>
 
   <section id="noriba-cards-section" class="noriba-section"></section>
 
@@ -375,9 +382,9 @@
   <script type="module" src="./js/arrivals-app.js?v=20260507b"></script>
   <div id="navHost"></div>
   <script type="module">
-    import { renderBottomNav } from '../js/app.js?b=9af09ab568ab';
-    import { showGpsPrivacyBanner } from '../js/gps-privacy-banner.js?b=9af09ab568ab';
-    import '../js/help-video.js?b=9af09ab568ab';
+    import { renderBottomNav } from '../js/app.js?b=d735caa03640';
+    import { showGpsPrivacyBanner } from '../js/gps-privacy-banner.js?b=d735caa03640';
+    import '../js/help-video.js?b=d735caa03640';
     document.getElementById('navHost').innerHTML = renderBottomNav('tools', '../');
     showGpsPrivacyBanner();
   </script>
