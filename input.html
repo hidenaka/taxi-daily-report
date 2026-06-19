@@ -159,14 +159,14 @@ if (location.hostname.includes('-dev')) {
 </main>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, todayIso } from './js/app.js?b=01a9789affca';
-import { parseReport, parseFormattedReport } from './js/parser.js?b=01a9789affca';
-import { getConfig, getDrive, saveDriveSafe } from './js/storage.js?b=01a9789affca';
-import { fetchWeatherForDate } from './js/weather.js?b=01a9789affca';
-import { renderLegalFooter } from './js/legal-footer.js?b=01a9789affca';
-import { enforceAccess } from './js/access-control.js?b=01a9789affca';
-import './js/help-toggle.js?b=01a9789affca';
-import './js/help-video.js?b=01a9789affca';
+import { renderBottomNav, todayIso } from './js/app.js?b=c72b0e8fda48';
+import { parseReport, parseFormattedReport } from './js/parser.js?b=c72b0e8fda48';
+import { getConfig, getDrive, saveDriveSafe } from './js/storage.js?b=c72b0e8fda48';
+import { fetchWeatherForDate } from './js/weather.js?b=c72b0e8fda48';
+import { renderLegalFooter } from './js/legal-footer.js?b=c72b0e8fda48';
+import { enforceAccess } from './js/access-control.js?b=c72b0e8fda48';
+import './js/help-toggle.js?b=c72b0e8fda48';
+import './js/help-video.js?b=c72b0e8fda48';
 
 if (!(await enforceAccess('core'))) {
   throw new Error('access-denied: redirected');
