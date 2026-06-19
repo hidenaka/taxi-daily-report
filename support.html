@@ -197,25 +197,25 @@ if (location.hostname.includes('-dev')) {
 </main>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDateY, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, toLocalIso } from './js/app.js?b=458980207fbc';
-import { showGpsPrivacyBanner } from './js/gps-privacy-banner.js?b=458980207fbc';
+import { renderBottomNav, formatYen, formatDateY, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, toLocalIso } from './js/app.js?b=fe1ac6bfab31';
+import { showGpsPrivacyBanner } from './js/gps-privacy-banner.js?b=fe1ac6bfab31';
 showGpsPrivacyBanner();
-import { getDrivesForMonth, getDrivesForMonthCached, getAllUsersDrivesForMonth, getAllUsersDrivesForMonthCached, listActiveUserIds, listActiveUserIdsCached, getMyUserId, getUserRoleMap, getUserRoleMapCached, getDrive, getConfig, getConfigCached, getMyAggregateAnalysisFlag, getMyConsecutiveShiftsCount } from './js/storage.js?b=458980207fbc';
-import { ACCESS_LEVELS, getAccessLevel, getAccessLimits, getNextThreshold } from './js/aggregate-access.js?b=458980207fbc';
+import { getDrivesForMonth, getDrivesForMonthCached, getAllUsersDrivesForMonth, getAllUsersDrivesForMonthCached, listActiveUserIds, listActiveUserIdsCached, getMyUserId, getUserRoleMap, getUserRoleMapCached, getDrive, getConfig, getConfigCached, getMyAggregateAnalysisFlag, getMyConsecutiveShiftsCount } from './js/storage.js?b=fe1ac6bfab31';
+import { ACCESS_LEVELS, getAccessLevel, getAccessLimits, getNextThreshold } from './js/aggregate-access.js?b=fe1ac6bfab31';
 import {
   ensureActiveVehicleType,
   getActiveVehicleType,
   filterDrivesByVehicle,
   renderTodayVehicleToggle,
-} from './js/vehicle-filter.js?b=458980207fbc';
-import { hourlyDowEfficiency, peerMedianHourlyDow, dropoffAreaAnalysis, nextBoardBreakdown, dropoffHistoryAtArea, boardHistoryAtArea, buildNeighborMap, highValueAreas, highValueAreasByZone, boardHistoryAtAreaByZone, calcPaceAtElapsed, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin, dowOf, ZONE_PRESETS, getZoneAt, getZoneForElapsed, OFFICE_AREA, hourlyDowDailyValues, classifyEarning, stabilityTier, heatmapLegendHtml, heatmapFromCells } from './js/chart-helpers.js?b=458980207fbc';
-import { auth, db } from './js/firebase-init.js?b=458980207fbc';
-import { resolveWorkerBase, refreshPool, listMyGroups } from './js/group-client.js?b=458980207fbc';
-import { chooseInitialRecArea, filterRecAreaCandidates } from './js/rec-area.js?b=458980207fbc';
-import { renderLegalFooter } from './js/legal-footer.js?b=458980207fbc';
-import { enforceAccess } from './js/access-control.js?b=458980207fbc';
-import './js/help-toggle.js?b=458980207fbc';
-import './js/help-video.js?b=458980207fbc'; // ▶使い方動画のインライン展開プレイヤー
+} from './js/vehicle-filter.js?b=fe1ac6bfab31';
+import { hourlyDowEfficiency, peerMedianHourlyDow, dropoffAreaAnalysis, nextBoardBreakdown, dropoffHistoryAtArea, boardHistoryAtArea, buildNeighborMap, highValueAreas, highValueAreasByZone, boardHistoryAtAreaByZone, calcPaceAtElapsed, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin, dowOf, ZONE_PRESETS, getZoneAt, getZoneForElapsed, OFFICE_AREA, hourlyDowDailyValues, classifyEarning, stabilityTier, heatmapLegendHtml, heatmapFromCells } from './js/chart-helpers.js?b=fe1ac6bfab31';
+import { auth, db } from './js/firebase-init.js?b=fe1ac6bfab31';
+import { resolveWorkerBase, refreshPool, listMyGroups } from './js/group-client.js?b=fe1ac6bfab31';
+import { chooseInitialRecArea, filterRecAreaCandidates } from './js/rec-area.js?b=fe1ac6bfab31';
+import { renderLegalFooter } from './js/legal-footer.js?b=fe1ac6bfab31';
+import { enforceAccess } from './js/access-control.js?b=fe1ac6bfab31';
+import './js/help-toggle.js?b=fe1ac6bfab31';
+import './js/help-video.js?b=fe1ac6bfab31'; // ▶使い方動画のインライン展開プレイヤー
 
 const REC_AREA_LS_KEY = 'cabis_rec_area_last';
 const REC_AREA_FALLBACK = '千代田区丸の内';

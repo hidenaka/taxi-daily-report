@@ -216,6 +216,15 @@
     .ns-curve { background: rgba(0,0,0,.25); border-radius: 6px; padding: 6px 7px; margin-top: 6px; }
     .ns-curve svg { width: 100%; height: auto; display: block; }
     .ns-clab { font-size: 9.5px; color: #7f837c; }
+    .ns-clegend { display: flex; gap: 12px; font-size: 9.5px; color: #9b9a94; margin-bottom: 3px; }
+    .ns-clegend i { display: inline-block; width: 14px; height: 0; vertical-align: middle; margin-right: 3px; }
+    .ns-clegend .lg-today { border-top: 2px solid #9fc0cf; }
+    .ns-clegend .lg-fc { border-top: 2px dashed #9fc0cf; }
+    .ns-clegend .lg-norm { border-top: 1px dashed #6f736f; }
+    .ns-axis { position: relative; height: 13px; margin-top: 2px; font-size: 8.5px; color: #7f837c; }
+    .ns-axis span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+    .ns-axis .now { color: #cfccc4; font-weight: 700; }
+    .ns-chint { font-size: 9.5px; color: #7f837c; margin-top: 4px; line-height: 1.4; }
     /* 使い方動画ボタン（help-video-btn / help-video コンテナ） */
     .help-video-btn {
       display: inline-flex; align-items: center; gap: 5px; margin-left: 8px;
@@ -302,7 +311,7 @@
 </head>
 <body>
   <script type="module">
-    import { enforceAccess } from '../js/access-control.js?b=458980207fbc';
+    import { enforceAccess } from '../js/access-control.js?b=fe1ac6bfab31';
     if (!(await enforceAccess('core', { redirect: '../subscribe.html' }))) {
       throw new Error('access-denied: redirected');
     }
@@ -313,7 +322,7 @@
     <a href="arrivals.html" class="app-tab active" aria-current="page">✈ 空港ツール</a>
     <a href="stands.html" id="tab-stands" class="app-tab" style="display:none">📍 乗り場</a>
   </nav>
-  <script type="module" src="js/stands-tab.js?b=458980207fbc"></script>
+  <script type="module" src="js/stands-tab.js?b=fe1ac6bfab31"></script>
 
   <div class="terminal-tabs">
     <!-- T1/T2 の個別タブは非表示（合計のみ表示）。T3(国際)は実績・予測の仕組みが整ったら表示する -->
@@ -418,9 +427,9 @@
   <script type="module" src="./js/arrivals-app.js?v=20260507b"></script>
   <div id="navHost"></div>
   <script type="module">
-    import { renderBottomNav } from '../js/app.js?b=458980207fbc';
-    import { showGpsPrivacyBanner } from '../js/gps-privacy-banner.js?b=458980207fbc';
-    import '../js/help-video.js?b=458980207fbc';
+    import { renderBottomNav } from '../js/app.js?b=fe1ac6bfab31';
+    import { showGpsPrivacyBanner } from '../js/gps-privacy-banner.js?b=fe1ac6bfab31';
+    import '../js/help-video.js?b=fe1ac6bfab31';
     document.getElementById('navHost').innerHTML = renderBottomNav('tools', '../');
     showGpsPrivacyBanner();
   </script>
