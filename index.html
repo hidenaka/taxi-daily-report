@@ -161,20 +161,20 @@ if (location.hostname.includes('-dev')) {
 <button class="fab" onclick="location.href='input.html'" style="display:none;">＋</button>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=89257e03bc9e';
-import { getConfig, getDrivesForMonth, flushPendingQueue, saveConfig } from './js/storage.js?b=89257e03bc9e';
-import { DEFAULT_CONFIG } from './js/default-config.js?b=89257e03bc9e';
-import { calcTotalPay, calcDailySales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales, predictMonthly } from './js/payroll.js?b=89257e03bc9e';
-import { METRIC_CATALOG, METRIC_GROUPS, resolveMetrics } from './js/home-metrics.js?b=89257e03bc9e';
-import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=89257e03bc9e';
-import { processInvite } from './js/invite-crypto.js?b=89257e03bc9e';
-import { renderLegalFooter } from './js/legal-footer.js?b=89257e03bc9e';
-import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=89257e03bc9e';
-import { isEmailAuth } from './js/firebase-auth.js?b=89257e03bc9e';
-import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts } from './js/planned-shifts.js?b=89257e03bc9e';
-import { checkInviteAndWarn, fetchCompanyExists } from './js/invite-url.js?b=89257e03bc9e';
-import { shouldShowFirstRunCard } from './js/first-run.js?b=89257e03bc9e';
-import './js/help-video.js?b=89257e03bc9e';
+import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=476e263c49ed';
+import { getConfig, getDrivesForMonth, flushPendingQueue, saveConfig } from './js/storage.js?b=476e263c49ed';
+import { DEFAULT_CONFIG } from './js/default-config.js?b=476e263c49ed';
+import { calcTotalPay, calcDailySales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales, predictMonthly } from './js/payroll.js?b=476e263c49ed';
+import { METRIC_CATALOG, METRIC_GROUPS, resolveMetrics } from './js/home-metrics.js?b=476e263c49ed';
+import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=476e263c49ed';
+import { processInvite } from './js/invite-crypto.js?b=476e263c49ed';
+import { renderLegalFooter } from './js/legal-footer.js?b=476e263c49ed';
+import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=476e263c49ed';
+import { isEmailAuth, waitForAuth } from './js/firebase-auth.js?b=476e263c49ed';
+import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts } from './js/planned-shifts.js?b=476e263c49ed';
+import { checkInviteAndWarn, fetchCompanyExists, loadInviteSlug, loadReferrer, shouldRedirectInviteToSignup, buildSignupRedirectUrl } from './js/invite-url.js?b=476e263c49ed';
+import { shouldShowFirstRunCard } from './js/first-run.js?b=476e263c49ed';
+import './js/help-video.js?b=476e263c49ed';
 
 // 暗号化招待リンク処理は GitHub 版専用のためスキップ（Firebase 版）
 const inviteProcessed = false;
@@ -186,6 +186,24 @@ const paramUser = urlParams.get('user');
 // 招待URL `?company=<slug>` を捕捉・検証（完全招待制・decisions 6）。
 // 不正 slug は localStorage に保存せず、画面上部に警告 banner を表示。
 checkInviteAndWarn(urlParams, localStorage, fetchCompanyExists);
+
+// 招待リンク（?company=<slug>）で来た未登録の見込み客は、ホームでなく
+// 登録ページ（login.html の新規登録タブ）へ直行させる。
+// company/ref は checkInviteAndWarn が同期捕捉済み。形式不正 slug は loadInviteSlug が
+// null を返すため直行せず、index 側の警告バナーに委ねる（存在検証は login.html が担う）。
+// 既にメール登録済みのユーザーはホーム維持（認証確定を待ってから判定）。
+(async function redirectInviteToSignup() {
+  try {
+    const slug = loadInviteSlug(localStorage);
+    if (!slug) return;
+    await waitForAuth();
+    if (!shouldRedirectInviteToSignup(true, isEmailAuth())) return;
+    location.replace(buildSignupRedirectUrl(slug, loadReferrer(localStorage)));
+  } catch (e) {
+    console.warn('invite redirect skipped:', e);
+  }
+})();
+
 let autoConfigured = false;
 if (paramUser) {
   const norm = paramUser.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9_]+/, '');
@@ -1404,7 +1422,7 @@ function pickWeatherIcon(w) {
 load();
 </script>
 <script type="module">
-import { isCoachEnabled } from './js/coach/coach-flag.js?b=89257e03bc9e';
+import { isCoachEnabled } from './js/coach/coach-flag.js?b=476e263c49ed';
 const _ce = document.getElementById('coachEntryCard');
 if (_ce && isCoachEnabled()) _ce.style.display = '';
 </script>

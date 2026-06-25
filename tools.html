@@ -71,9 +71,9 @@ if (location.hostname.includes('-dev')) {
 </main>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav } from './js/app.js?b=89257e03bc9e';
-import { renderLegalFooter } from './js/legal-footer.js?b=89257e03bc9e';
-import { enforceAccess } from './js/access-control.js?b=89257e03bc9e';
+import { renderBottomNav } from './js/app.js?b=476e263c49ed';
+import { renderLegalFooter } from './js/legal-footer.js?b=476e263c49ed';
+import { enforceAccess } from './js/access-control.js?b=476e263c49ed';
 
 if (!(await enforceAccess('core'))) {
   throw new Error('access-denied: redirected');
@@ -83,7 +83,7 @@ document.getElementById('navHost').innerHTML = renderBottomNav('tools');
 renderLegalFooter();
 </script>
   <script type="module">
-    import { loadCompanyProfile } from './js/firebase-storage.js?b=89257e03bc9e';
+    import { loadCompanyProfile } from './js/firebase-storage.js?b=476e263c49ed';
     try {
       const c = await loadCompanyProfile();
       if (c && c.standsMapEnabled === true) {
@@ -93,7 +93,7 @@ renderLegalFooter();
     } catch (e) { /* 未ログイン等は出さないままで良い */ }
   </script>
   <script type="module">
-import { isCoachEnabled } from './js/coach/coach-flag.js?b=89257e03bc9e';
+import { isCoachEnabled } from './js/coach/coach-flag.js?b=476e263c49ed';
 const _ct = document.getElementById('coachToolCard');
 if (_ct && isCoachEnabled()) _ct.style.display = '';
   </script>
