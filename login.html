@@ -114,14 +114,10 @@ if (location.hostname.includes('-dev')) {
         <input type="text" id="suName" autocomplete="name" maxlength="50" placeholder="例: 山田太郎">
         <div class="hint">本人確認・連絡のため運営に通知します（後述）。</div>
       </div>
-      <div class="field">
-        <label for="suPhone">電話番号</label>
-        <input type="tel" id="suPhone" autocomplete="tel" maxlength="30" placeholder="例: 090-1234-5678">
-      </div>
       <div class="field" style="background:#f7f9fc;border:1px solid #d8d2bf;border-radius:8px;padding:10px 12px;">
-        <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-size:13px;">
-          <input type="checkbox" id="suConsent" style="margin-top:3px;">
-          <span>氏名・電話を、本人確認・連絡・会社照合のために運営へ<strong>メール通知</strong>することに同意します。これらは<strong>サービスのデータベースには保存しません</strong>（メール送信に Resend〈米国〉を利用）。詳細は<a href="./legal/privacy.html" target="_blank" rel="noopener">プライバシーポリシー</a>。</span>
+        <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-size:13px;line-height:1.6;">
+          <input type="checkbox" id="suConsent" style="margin-top:3px;width:auto;flex:0 0 auto;">
+          <span>氏名を、本人確認・連絡・会社照合のために運営へ<strong>メール通知</strong>することに同意します。これらは<strong>サービスのデータベースには保存しません</strong>（メール送信に Resend〈米国〉を利用）。詳細は<a href="./legal/privacy.html" target="_blank" rel="noopener">プライバシーポリシー</a>。</span>
         </label>
       </div>
       <div class="turnstile-row">
@@ -170,12 +166,12 @@ if (location.hostname.includes('-dev')) {
   </div>
 </main>
 <script type="module">
-import { renderLegalFooter } from './js/legal-footer.js?b=476e263c49ed';
-import { waitForAuth, isEmailAuth, loginWithUserId, signUp } from './js/firebase-auth.js?b=476e263c49ed';
-import { loadInviteSlug, validateInviteSlug, fetchCompanyExists, checkInviteAndWarn } from './js/invite-url.js?b=476e263c49ed';
-import { generateSlug } from './js/slug-gen.js?b=476e263c49ed';
-import { validateSignupFields, buildNotifyPayload, postSignupNotify } from './js/signup-notify.js?b=476e263c49ed';
-import { billingApiBase } from './js/subscription-state.js?b=476e263c49ed';
+import { renderLegalFooter } from './js/legal-footer.js?b=12d9e791e771';
+import { waitForAuth, isEmailAuth, loginWithUserId, signUp } from './js/firebase-auth.js?b=12d9e791e771';
+import { loadInviteSlug, validateInviteSlug, fetchCompanyExists, checkInviteAndWarn } from './js/invite-url.js?b=12d9e791e771';
+import { generateSlug } from './js/slug-gen.js?b=12d9e791e771';
+import { validateSignupFields, buildNotifyPayload, postSignupNotify } from './js/signup-notify.js?b=12d9e791e771';
+import { billingApiBase } from './js/subscription-state.js?b=12d9e791e771';
 renderLegalFooter();
 
 // 招待URL `?company=<slug>` を捕捉・検証（完全招待制・decisions 6）。
@@ -378,9 +374,8 @@ signupBtn.addEventListener('click', async () => {
     return;
   }
   const name = document.getElementById('suName').value;
-  const phone = document.getElementById('suPhone').value;
   const consent = document.getElementById('suConsent').checked;
-  const v = validateSignupFields({ name, phone, consent });
+  const v = validateSignupFields({ name, consent });
   if (!v.ok) {
     showMsg('signupMsg', v.errors.join(' / '), 'error');
     return;
@@ -404,7 +399,7 @@ signupBtn.addEventListener('click', async () => {
   if (r.success) {
     try {
       const idToken = await r.user.getIdToken();
-      await postSignupNotify(billingApiBase(), buildNotifyPayload({ idToken, userId: id, name, phone }));
+      await postSignupNotify(billingApiBase(), buildNotifyPayload({ idToken, userId: id, name }));
     } catch (e) {
       console.warn('signup notify skipped (registration still OK)');
     }
