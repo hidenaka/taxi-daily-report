@@ -161,20 +161,20 @@ if (location.hostname.includes('-dev')) {
 <button class="fab" onclick="location.href='input.html'" style="display:none;">＋</button>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=241227f559dc';
-import { getConfig, getDrivesForMonth, flushPendingQueue, saveConfig } from './js/storage.js?b=241227f559dc';
-import { DEFAULT_CONFIG } from './js/default-config.js?b=241227f559dc';
-import { calcTotalPay, calcDailySales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales, predictMonthly } from './js/payroll.js?b=241227f559dc';
-import { METRIC_CATALOG, METRIC_GROUPS, resolveMetrics } from './js/home-metrics.js?b=241227f559dc';
-import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=241227f559dc';
-import { processInvite } from './js/invite-crypto.js?b=241227f559dc';
-import { renderLegalFooter } from './js/legal-footer.js?b=241227f559dc';
-import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=241227f559dc';
-import { isEmailAuth, waitForAuth } from './js/firebase-auth.js?b=241227f559dc';
-import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts } from './js/planned-shifts.js?b=241227f559dc';
-import { checkInviteAndWarn, fetchCompanyExists, loadInviteSlug, loadReferrer, shouldRedirectInviteToSignup, buildSignupRedirectUrl } from './js/invite-url.js?b=241227f559dc';
-import { shouldShowFirstRunCard } from './js/first-run.js?b=241227f559dc';
-import './js/help-video.js?b=241227f559dc';
+import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=251e9c1751f6';
+import { getConfig, getDrivesForMonth, flushPendingQueue, saveConfig } from './js/storage.js?b=251e9c1751f6';
+import { DEFAULT_CONFIG } from './js/default-config.js?b=251e9c1751f6';
+import { calcTotalPay, calcDailySales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales, predictMonthly } from './js/payroll.js?b=251e9c1751f6';
+import { METRIC_CATALOG, METRIC_GROUPS, resolveMetrics } from './js/home-metrics.js?b=251e9c1751f6';
+import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=251e9c1751f6';
+import { processInvite } from './js/invite-crypto.js?b=251e9c1751f6';
+import { renderLegalFooter } from './js/legal-footer.js?b=251e9c1751f6';
+import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=251e9c1751f6';
+import { isEmailAuth, waitForAuth } from './js/firebase-auth.js?b=251e9c1751f6';
+import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts } from './js/planned-shifts.js?b=251e9c1751f6';
+import { checkInviteAndWarn, fetchCompanyExists, loadInviteSlug, loadReferrer, shouldRedirectInviteToSignup, buildSignupRedirectUrl } from './js/invite-url.js?b=251e9c1751f6';
+import { shouldShowFirstRunCard } from './js/first-run.js?b=251e9c1751f6';
+import './js/help-video.js?b=251e9c1751f6';
 
 // 暗号化招待リンク処理は GitHub 版専用のためスキップ（Firebase 版）
 const inviteProcessed = false;
@@ -1429,7 +1429,7 @@ function pickWeatherIcon(w) {
 load();
 </script>
 <script type="module">
-import { isCoachEnabled } from './js/coach/coach-flag.js?b=241227f559dc';
+import { isCoachEnabled } from './js/coach/coach-flag.js?b=251e9c1751f6';
 const _ce = document.getElementById('coachEntryCard');
 if (_ce && isCoachEnabled()) _ce.style.display = '';
 </script>
