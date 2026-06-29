@@ -113,14 +113,14 @@ if (location.hostname.includes('-dev')) {
 </div>
 
 <script type="module">
-import { renderBottomNav } from './js/app.js?b=0994d87fe992';
-import { showGpsPrivacyBanner } from './js/gps-privacy-banner.js?b=0994d87fe992';
+import { renderBottomNav } from './js/app.js?b=e496fb2885fe';
+import { showGpsPrivacyBanner } from './js/gps-privacy-banner.js?b=e496fb2885fe';
 showGpsPrivacyBanner();
-import { getConfig, saveConfig, getMyUserId, setMyUserId } from './js/storage.js?b=0994d87fe992';
-import { isValidUserId } from './js/userid.js?b=0994d87fe992';
-import { DEFAULT_CONFIG } from './js/default-config.js?b=0994d87fe992';
-import { isEmailAuth, logout, loginWithUserId, getCurrentUser, initAuth } from './js/firebase-auth.js?b=0994d87fe992';
-import { renderLegalFooter } from './js/legal-footer.js?b=0994d87fe992';
+import { getConfig, saveConfig, getMyUserId, setMyUserId } from './js/storage.js?b=e496fb2885fe';
+import { isValidUserId } from './js/userid.js?b=e496fb2885fe';
+import { DEFAULT_CONFIG } from './js/default-config.js?b=e496fb2885fe';
+import { isEmailAuth, logout, loginWithUserId, getCurrentUser, initAuth } from './js/firebase-auth.js?b=e496fb2885fe';
+import { renderLegalFooter } from './js/legal-footer.js?b=e496fb2885fe';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('settings');
 renderLegalFooter();
