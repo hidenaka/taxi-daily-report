@@ -161,22 +161,22 @@ if (location.hostname.includes('-dev')) {
 <button class="fab" onclick="location.href='input.html'" style="display:none;">＋</button>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=34617a0be8bd';
-import { getConfig, getDrivesForMonth, flushPendingQueue, saveConfig } from './js/storage.js?b=34617a0be8bd';
-import { DEFAULT_CONFIG } from './js/default-config.js?b=34617a0be8bd';
-import { calcTotalPay, calcDailySales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales, predictMonthly } from './js/payroll.js?b=34617a0be8bd';
-import { METRIC_CATALOG, METRIC_GROUPS, resolveMetrics } from './js/home-metrics.js?b=34617a0be8bd';
-import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=34617a0be8bd';
-import { processInvite } from './js/invite-crypto.js?b=34617a0be8bd';
-import { renderLegalFooter } from './js/legal-footer.js?b=34617a0be8bd';
-import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=34617a0be8bd';
-import { isEmailAuth, waitForAuth } from './js/firebase-auth.js?b=34617a0be8bd';
-import { auth } from './js/firebase-init.js?b=34617a0be8bd';
+import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=0994d87fe992';
+import { getConfig, getDrivesForMonth, flushPendingQueue, saveConfig } from './js/storage.js?b=0994d87fe992';
+import { DEFAULT_CONFIG } from './js/default-config.js?b=0994d87fe992';
+import { calcTotalPay, calcDailySales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales, predictMonthly } from './js/payroll.js?b=0994d87fe992';
+import { METRIC_CATALOG, METRIC_GROUPS, resolveMetrics } from './js/home-metrics.js?b=0994d87fe992';
+import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=0994d87fe992';
+import { processInvite } from './js/invite-crypto.js?b=0994d87fe992';
+import { renderLegalFooter } from './js/legal-footer.js?b=0994d87fe992';
+import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=0994d87fe992';
+import { isEmailAuth, waitForAuth } from './js/firebase-auth.js?b=0994d87fe992';
+import { auth } from './js/firebase-init.js?b=0994d87fe992';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
-import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts } from './js/planned-shifts.js?b=34617a0be8bd';
-import { checkInviteAndWarn, fetchCompanyExists, loadInviteSlug, loadReferrer, shouldRedirectInviteToSignup, buildSignupRedirectUrl } from './js/invite-url.js?b=34617a0be8bd';
-import { shouldShowFirstRunCard } from './js/first-run.js?b=34617a0be8bd';
-import './js/help-video.js?b=34617a0be8bd';
+import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts } from './js/planned-shifts.js?b=0994d87fe992';
+import { checkInviteAndWarn, fetchCompanyExists, loadInviteSlug, loadReferrer, shouldRedirectInviteToSignup, buildSignupRedirectUrl } from './js/invite-url.js?b=0994d87fe992';
+import { shouldShowFirstRunCard } from './js/first-run.js?b=0994d87fe992';
+import './js/help-video.js?b=0994d87fe992';
 
 // 暗号化招待リンク処理は GitHub 版専用のためスキップ（Firebase 版）
 const inviteProcessed = false;
@@ -1444,7 +1444,7 @@ function pickWeatherIcon(w) {
 load();
 </script>
 <script type="module">
-import { isCoachEnabled } from './js/coach/coach-flag.js?b=34617a0be8bd';
+import { isCoachEnabled } from './js/coach/coach-flag.js?b=0994d87fe992';
 const _ce = document.getElementById('coachEntryCard');
 if (_ce && isCoachEnabled()) _ce.style.display = '';
 </script>
