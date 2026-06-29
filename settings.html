@@ -313,27 +313,28 @@ if (location.hostname.includes('-dev')) {
   <button class="btn" id="saveConfigBtn" style="width:100%;">💾 設定を保存</button>
 </div>
 <script type="module">
-import { renderBottomNav } from './js/app.js?b=e496fb2885fe';
-import { showGpsPrivacyBanner } from './js/gps-privacy-banner.js?b=e496fb2885fe';
+import { renderBottomNav } from './js/app.js?b=d9cd9c8869bc';
+import { showGpsPrivacyBanner } from './js/gps-privacy-banner.js?b=d9cd9c8869bc';
 showGpsPrivacyBanner();
-import { getConfig, saveConfig, getDrivesForMonth, getMyUserId, setMyUserId, getUserRoleMap, getMyAggregateAnalysisFlag, setMyAggregateAnalysisFlag, getMyConsecutiveShiftsCount } from './js/storage.js?b=e496fb2885fe';
-import { ACCESS_LEVELS, getAccessLevel, getNextThreshold } from './js/aggregate-access.js?b=e496fb2885fe';
-import { buildReferralUrl } from './js/admin-companies.js?b=e496fb2885fe';
-import { getMyCompanyId } from './js/storage.js?b=e496fb2885fe';
-import { renderQrSvg, downloadQrPng } from './js/qr-code.js?b=e496fb2885fe';
-import { isValidUserId } from './js/userid.js?b=e496fb2885fe';
-import { DEFAULT_CONFIG } from './js/default-config.js?b=e496fb2885fe';
-import { calcTotalPay } from './js/payroll.js?b=e496fb2885fe';
-import { isEmailAuth, logout, loginWithUserId, getCurrentUser, initAuth, waitForAuth } from './js/firebase-auth.js?b=e496fb2885fe';
-import { renderLegalFooter } from './js/legal-footer.js?b=e496fb2885fe';
-import './js/help-toggle.js?b=e496fb2885fe';
+import { getConfig, saveConfig, getDrivesForMonth, getMyUserId, setMyUserId, getUserRoleMap, getMyAggregateAnalysisFlag, setMyAggregateAnalysisFlag, getMyConsecutiveShiftsCount } from './js/storage.js?b=d9cd9c8869bc';
+import { ACCESS_LEVELS, getAccessLevel, getNextThreshold } from './js/aggregate-access.js?b=d9cd9c8869bc';
+import { buildReferralUrl } from './js/admin-companies.js?b=d9cd9c8869bc';
+import { getMyCompanyId } from './js/storage.js?b=d9cd9c8869bc';
+import { renderQrSvg, downloadQrPng } from './js/qr-code.js?b=d9cd9c8869bc';
+import { isValidUserId } from './js/userid.js?b=d9cd9c8869bc';
+import { DEFAULT_CONFIG } from './js/default-config.js?b=d9cd9c8869bc';
+import { calcTotalPay } from './js/payroll.js?b=d9cd9c8869bc';
+import { isEmailAuth, logout, loginWithUserId, getCurrentUser, initAuth, waitForAuth } from './js/firebase-auth.js?b=d9cd9c8869bc';
+import { resolveAuthBadge } from './js/auth-state.js?b=d9cd9c8869bc';
+import { renderLegalFooter } from './js/legal-footer.js?b=d9cd9c8869bc';
+import './js/help-toggle.js?b=d9cd9c8869bc';
 import {
   getSubscription,
   cancelSubscription,
   requiresOnboarding,
   isCanceledOrUnpaid,
   formatStatus,
-} from './js/subscription-state.js?b=e496fb2885fe';
+} from './js/subscription-state.js?b=d9cd9c8869bc';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('settings');
 renderLegalFooter();
@@ -730,22 +731,14 @@ document.getElementById('weatherDefaultBtn').onclick = () => {
 async function initUI() {
   try {
     await initAuth();
-    const user = getCurrentUser();
-    const isAnon = !user || user.isAnonymous;
+    // バッジ判定は純関数 resolveAuthBadge に集約（tests/auth-state.test.js で検証済み）。
+    // admin強制切替の閲覧(匿名+実userId)を「サンプルデータ」と誤表示しないのが要点。
+    const badge = resolveAuthBadge({ emailAuthed: isEmailAuth(), myId: getMyUserId() });
     const authBadge = document.getElementById('authTypeBadge');
-    
-    if (isAnon) {
-      // 匿名ユーザー: ログインフォームを表示
-      document.getElementById('anonymousLoginSection').style.display = '';
-      document.getElementById('logoutBtn').style.display = 'none';
-      authBadge.textContent = 'サンプルデータ（ログインしてください）';
-    } else {
-      // メール認証ユーザー: ログアウトボタンを表示
-      document.getElementById('anonymousLoginSection').style.display = 'none';
-      document.getElementById('logoutBtn').style.display = '';
-      authBadge.textContent = 'ログイン中';
-      authBadge.style.color = 'green';
-    }
+    document.getElementById('anonymousLoginSection').style.display = badge.showLoginForm ? '' : 'none';
+    document.getElementById('logoutBtn').style.display = badge.showLogout ? '' : 'none';
+    authBadge.textContent = badge.text;
+    authBadge.style.color = (badge.kind === 'sample') ? '' : 'green';
   } catch (e) {
     console.error('Auth check failed:', e);
   }
