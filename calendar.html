@@ -78,8 +78,8 @@ if (location.hostname.includes('-dev')) {
 </main>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, todayIso, toLocalIso, currentBillingPeriod, getBillingPeriodRange, formatBillingPeriod, shiftBillingPeriod } from './js/app.js?b=d9cd9c8869bc';
-import { getConfig, saveConfig, getDrivesForMonth } from './js/storage.js?b=d9cd9c8869bc';
+import { renderBottomNav, formatYen, todayIso, toLocalIso, currentBillingPeriod, getBillingPeriodRange, formatBillingPeriod, shiftBillingPeriod } from './js/app.js?b=6c48a5b07b06';
+import { getConfig, saveConfig, getDrivesForMonth } from './js/storage.js?b=6c48a5b07b06';
 import {
   getShiftStateForDate,
   cycleShiftState,
@@ -87,10 +87,10 @@ import {
   getPlannedVehicle,
   pruneOrphanVehicles,
   countMonthlyShifts,
-} from './js/planned-shifts.js?b=d9cd9c8869bc';
-import { renderLegalFooter } from './js/legal-footer.js?b=d9cd9c8869bc';
-import { enforceAccess } from './js/access-control.js?b=d9cd9c8869bc';
-import './js/help-video.js?b=d9cd9c8869bc';
+} from './js/planned-shifts.js?b=6c48a5b07b06';
+import { renderLegalFooter } from './js/legal-footer.js?b=6c48a5b07b06';
+import { enforceAccess } from './js/access-control.js?b=6c48a5b07b06';
+import './js/help-video.js?b=6c48a5b07b06';
 
 if (!(await enforceAccess('core'))) {
   throw new Error('access-denied: redirected');
