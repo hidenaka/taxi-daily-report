@@ -161,22 +161,22 @@ if (location.hostname.includes('-dev')) {
 <button class="fab" onclick="location.href='input.html'" style="display:none;">＋</button>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=61ba98673ac5';
-import { getConfig, getDrivesForMonth, flushPendingQueue, saveConfig } from './js/storage.js?b=61ba98673ac5';
-import { DEFAULT_CONFIG } from './js/default-config.js?b=61ba98673ac5';
-import { calcTotalPay, calcDailySales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales, predictMonthly } from './js/payroll.js?b=61ba98673ac5';
-import { METRIC_CATALOG, METRIC_GROUPS, resolveMetrics } from './js/home-metrics.js?b=61ba98673ac5';
-import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=61ba98673ac5';
-import { processInvite } from './js/invite-crypto.js?b=61ba98673ac5';
-import { renderLegalFooter } from './js/legal-footer.js?b=61ba98673ac5';
-import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=61ba98673ac5';
-import { isEmailAuth, waitForAuth } from './js/firebase-auth.js?b=61ba98673ac5';
-import { auth } from './js/firebase-init.js?b=61ba98673ac5';
+import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=2e8a28afe875';
+import { getConfig, getDrivesForMonth, flushPendingQueue, saveConfig } from './js/storage.js?b=2e8a28afe875';
+import { DEFAULT_CONFIG } from './js/default-config.js?b=2e8a28afe875';
+import { calcTotalPay, calcDailySales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales, predictMonthly } from './js/payroll.js?b=2e8a28afe875';
+import { METRIC_CATALOG, METRIC_GROUPS, resolveMetrics } from './js/home-metrics.js?b=2e8a28afe875';
+import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=2e8a28afe875';
+import { processInvite } from './js/invite-crypto.js?b=2e8a28afe875';
+import { renderLegalFooter } from './js/legal-footer.js?b=2e8a28afe875';
+import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=2e8a28afe875';
+import { isEmailAuth, waitForAuth } from './js/firebase-auth.js?b=2e8a28afe875';
+import { auth } from './js/firebase-init.js?b=2e8a28afe875';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
-import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts } from './js/planned-shifts.js?b=61ba98673ac5';
-import { checkInviteAndWarn, fetchCompanyExists, loadInviteSlug, loadReferrer, shouldRedirectInviteToSignup, buildSignupRedirectUrl } from './js/invite-url.js?b=61ba98673ac5';
-import { shouldShowFirstRunCard } from './js/first-run.js?b=61ba98673ac5';
-import './js/help-video.js?b=61ba98673ac5';
+import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts } from './js/planned-shifts.js?b=2e8a28afe875';
+import { checkInviteAndWarn, fetchCompanyExists, loadInviteSlug, loadReferrer, shouldRedirectInviteToSignup, buildSignupRedirectUrl } from './js/invite-url.js?b=2e8a28afe875';
+import { shouldShowFirstRunCard } from './js/first-run.js?b=2e8a28afe875';
+import './js/help-video.js?b=2e8a28afe875';
 
 // 暗号化招待リンク処理は GitHub 版専用のためスキップ（Firebase 版）
 const inviteProcessed = false;
@@ -285,7 +285,10 @@ async function initOnboardBanner() {
         : 'キャビスの全機能は初月無料でお試しいただけます。';
       ctaPrimary.textContent = '初月無料で申し込む →';
       ctaPrimary.style.display = '';
-      if (!isEmailAuth()) ctaLogin.style.display = '';
+      // ログイン導線は SDK の auth.currentUser で判定（モジュールの isEmailAuth() は
+      // 永続セッション復元より後に同期されることがあり、ログイン済みでも一瞬「ログイン」
+      // ボタンを出してしまうため）。
+      if (!(auth.currentUser && !auth.currentUser.isAnonymous)) ctaLogin.style.display = '';
       banner.style.display = '';
     } else if (isCanceledOrUnpaid(sub)) {
       // 退会・未払い → いつでも自己再開できる（Stripeで再申込）
@@ -1441,7 +1444,7 @@ function pickWeatherIcon(w) {
 load();
 </script>
 <script type="module">
-import { isCoachEnabled } from './js/coach/coach-flag.js?b=61ba98673ac5';
+import { isCoachEnabled } from './js/coach/coach-flag.js?b=2e8a28afe875';
 const _ce = document.getElementById('coachEntryCard');
 if (_ce && isCoachEnabled()) _ce.style.display = '';
 </script>
