@@ -94,13 +94,13 @@ if (location.hostname.includes('-dev')) {
 </main>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDate } from './js/app.js?b=9b958984414d';
-import { getDrive, listFiles, saveDriveSafe, deleteDrive } from './js/storage.js?b=9b958984414d';
-import { calcDailySales } from './js/payroll.js?b=9b958984414d';
-import { calcTimeBreakdown, hourlyActivity, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, formatMin, timeToMinutes } from './js/chart-helpers.js?b=9b958984414d';
-import { weatherEmoji } from './js/weather.js?b=9b958984414d';
-import { renderLegalFooter } from './js/legal-footer.js?b=9b958984414d';
-import { enforceAccess } from './js/access-control.js?b=9b958984414d';
+import { renderBottomNav, formatYen, formatDate } from './js/app.js?b=acbe32f09f49';
+import { getDrive, listFiles, saveDriveSafe, deleteDrive } from './js/storage.js?b=acbe32f09f49';
+import { calcDailySales } from './js/payroll.js?b=acbe32f09f49';
+import { calcTimeBreakdown, hourlyActivity, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, formatMin, timeToMinutes } from './js/chart-helpers.js?b=acbe32f09f49';
+import { weatherEmoji } from './js/weather.js?b=acbe32f09f49';
+import { renderLegalFooter } from './js/legal-footer.js?b=acbe32f09f49';
+import { enforceAccess } from './js/access-control.js?b=acbe32f09f49';
 
 if (!(await enforceAccess('core'))) {
   throw new Error('access-denied: redirected');
@@ -136,7 +136,8 @@ async function load() {
   const sales = calcDailySales(drive);
   const valid = (drive.trips || []).filter(t => !t.isCancel);
   const validCount = valid.length;
-  const km = valid.reduce((s, t) => s + (t.km || 0), 0);
+  const km = valid.reduce((s, t) => s + (t.km || 0), 0); // 実車距離(営Km合計)
+  const totalDistanceKm = drive.totalDistanceKm; // 総走行距離(回送込み・入力欄/OCRヘッダー由来)
   const breakdown = calcTimeBreakdown(drive);
   const totalHours = breakdown.totalMin / 60;
   const hourlyRate = totalHours > 0 ? sales.inclTax / totalHours : 0;
@@ -151,7 +152,7 @@ async function load() {
       <div><div class="lbl">時間単価(乗務)</div><div class="num">${formatYen(hourlyRate)}</div></div>
     </div>
     <div class="kpi-row" style="margin-top:8px;">
-      <div><div class="lbl">走行距離</div><div class="num">${km.toFixed(1)}<span style="font-size:11px;">km</span></div></div>
+      <div><div class="lbl">実車 / 走行</div><div class="num" style="font-size:15px;">${km.toFixed(1)} / ${totalDistanceKm != null ? totalDistanceKm : '—'}<span style="font-size:11px;">km</span></div></div>
       <div><div class="lbl">出庫</div><div class="num" style="font-size:14px;">${drive.departureTime || '-'}</div></div>
       <div><div class="lbl">帰庫</div><div class="num" style="font-size:14px;">${drive.returnTime || '-'}</div></div>
       <div><div class="lbl">車種</div><div class="num" style="font-size:14px;">${drive.vehicleType === 'premium' ? 'プレ' : '普通'}</div></div>
