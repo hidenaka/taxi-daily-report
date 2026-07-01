@@ -26,7 +26,8 @@
 .period-table tr.total td { border-top: 2px solid #ddd; }
 
 .hour-list { margin-top: 8px; }
-.hour-row { display: grid; grid-template-columns: 38px 1fr 70px; gap: 6px; align-items: center; padding: 4px 0; border-bottom: 1px solid #f0f0f0; font-size: 12px; }
+.hour-row { display: grid; grid-template-columns: 38px 1fr 96px; gap: 6px; align-items: center; padding: 4px 0; border-bottom: 1px solid #f0f0f0; font-size: 12px; }
+.hour-row .vals .y { white-space: nowrap; }
 .hour-row .h { font-weight: 600; color: #444; text-align: right; padding-right: 4px; font-size: 12px; }
 .hour-row .h.zero { color: #ccc; font-weight: 400; }
 .hour-row .barcell { display: grid; grid-template-rows: 1fr 1fr; gap: 2px; }
@@ -94,13 +95,13 @@ if (location.hostname.includes('-dev')) {
 </main>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDate } from './js/app.js?b=acbe32f09f49';
-import { getDrive, listFiles, saveDriveSafe, deleteDrive } from './js/storage.js?b=acbe32f09f49';
-import { calcDailySales } from './js/payroll.js?b=acbe32f09f49';
-import { calcTimeBreakdown, hourlyActivity, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, formatMin, timeToMinutes } from './js/chart-helpers.js?b=acbe32f09f49';
-import { weatherEmoji } from './js/weather.js?b=acbe32f09f49';
-import { renderLegalFooter } from './js/legal-footer.js?b=acbe32f09f49';
-import { enforceAccess } from './js/access-control.js?b=acbe32f09f49';
+import { renderBottomNav, formatYen, formatDate } from './js/app.js?b=0dd7915ffc24';
+import { getDrive, listFiles, saveDriveSafe, deleteDrive } from './js/storage.js?b=0dd7915ffc24';
+import { calcDailySales } from './js/payroll.js?b=0dd7915ffc24';
+import { calcTimeBreakdown, hourlyActivity, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, formatMin, timeToMinutes } from './js/chart-helpers.js?b=0dd7915ffc24';
+import { weatherEmoji } from './js/weather.js?b=0dd7915ffc24';
+import { renderLegalFooter } from './js/legal-footer.js?b=0dd7915ffc24';
+import { enforceAccess } from './js/access-control.js?b=0dd7915ffc24';
 
 if (!(await enforceAccess('core'))) {
   throw new Error('access-denied: redirected');
@@ -152,7 +153,7 @@ async function load() {
       <div><div class="lbl">時間単価(乗務)</div><div class="num">${formatYen(hourlyRate)}</div></div>
     </div>
     <div class="kpi-row" style="margin-top:8px;">
-      <div><div class="lbl">実車 / 走行</div><div class="num" style="font-size:15px;">${km.toFixed(1)} / ${totalDistanceKm != null ? totalDistanceKm : '—'}<span style="font-size:11px;">km</span></div></div>
+      <div style="flex:1.5;"><div class="lbl">実車 / 走行</div><div class="num" style="font-size:14px;white-space:nowrap;">${km.toFixed(1)} / ${totalDistanceKm != null ? totalDistanceKm : '—'}<span style="font-size:11px;">km</span></div></div>
       <div><div class="lbl">出庫</div><div class="num" style="font-size:14px;">${drive.departureTime || '-'}</div></div>
       <div><div class="lbl">帰庫</div><div class="num" style="font-size:14px;">${drive.returnTime || '-'}</div></div>
       <div><div class="lbl">車種</div><div class="num" style="font-size:14px;">${drive.vehicleType === 'premium' ? 'プレ' : '普通'}</div></div>
