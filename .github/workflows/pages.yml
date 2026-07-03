@@ -10,8 +10,7 @@ permissions:
   pages: write
   id-token: write
 
-# 同時実行制御: 連続pushでも前回deployの完了を待つ(in-progress衝突防止)
-# cancel-in-progress: false = 新ジョブはqueueで待機(古いを殺さない=Pages CDNの整合性優先)
+# Queue consecutive pushes so Pages deployments do not collide.
 concurrency:
   group: "pages"
   cancel-in-progress: false
@@ -24,14 +23,53 @@ jobs:
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: '.'
+          path: "."
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry_1.outputs.page_url || steps.deployment_retry_2.outputs.page_url }}
     steps:
-      - id: deployment
+      - name: Deploy to GitHub Pages
+        id: deployment
+        continue-on-error: true
         uses: actions/deploy-pages@v5
+
+      - name: Wait before first retry
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 60
+
+      - name: Deploy to GitHub Pages retry 1
+        id: deployment_retry_1
+        if: steps.deployment.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/deploy-pages@v5
+
+      - name: Wait before second retry
+        if: steps.deployment.outcome == 'failure' && steps.deployment_retry_1.outcome == 'failure'
+        run: sleep 120
+
+      - name: Deploy to GitHub Pages retry 2
+        id: deployment_retry_2
+        if: steps.deployment.outcome == 'failure' && steps.deployment_retry_1.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/deploy-pages@v5
+
+      - name: Ignore transient deployment failure for data refresh
+        if: >-
+          steps.deployment.outcome == 'failure' &&
+          steps.deployment_retry_1.outcome == 'failure' &&
+          steps.deployment_retry_2.outcome == 'failure' &&
+          github.event_name == 'push' &&
+          startsWith(github.event.head_commit.message, 'chore(data): relay taxi data')
+        run: echo "GitHub Pages deployment failed after retries for a data refresh; the next refresh will retry."
+
+      - name: Fail non-data deployment after retries
+        if: >-
+          steps.deployment.outcome == 'failure' &&
+          steps.deployment_retry_1.outcome == 'failure' &&
+          steps.deployment_retry_2.outcome == 'failure' &&
+          !(github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore(data): relay taxi data'))
+        run: exit 1
