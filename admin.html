@@ -363,10 +363,10 @@ import { getMyUserId } from './js/storage.js?v=2';
 import { adminBatchSaveDrives, listAnonymousUsers, countUserDrives, adminDeleteUserDoc, listAllUsersWithStats, getConfigForUser, adminSaveConfigForUser, listAllSubscriptions, adminGetSubscription, adminSaveSubscription, adminListCompanies, adminSaveCompany, adminListSetupRequests, adminImportSetupRequest, adminSetUserCompany } from './js/firebase-storage.js?v=2';
 import { DEFAULT_CONFIG } from './js/default-config.js?v=2';
 import { buildCompanyDoc, buildCompanySignupUrl } from './js/admin-companies.js?v=3';
-import { renderQrSvg, downloadQrPng } from './js/qr-code.js?b=e986386e0113';
-import { parseFormattedReport } from './js/parser.js?b=e986386e0113';
-import { renderLegalFooter } from './js/legal-footer.js?b=e986386e0113';
-import { SUBSCRIPTION_STATUSES, SUBSCRIPTION_STATUS_LABELS, GRANDFATHERED_USERS, isGrandfathered, buildGrandfatheredSubscription, adminBuildSubscriptionPayload, formatStatus } from './js/subscription-state.js?b=e986386e0113';
+import { renderQrSvg, downloadQrPng } from './js/qr-code.js?b=3a4b9bbe0eb6';
+import { parseFormattedReport } from './js/parser.js?b=3a4b9bbe0eb6';
+import { renderLegalFooter } from './js/legal-footer.js?b=3a4b9bbe0eb6';
+import { SUBSCRIPTION_STATUSES, SUBSCRIPTION_STATUS_LABELS, GRANDFATHERED_USERS, isGrandfathered, buildGrandfatheredSubscription, adminBuildSubscriptionPayload, formatStatus } from './js/subscription-state.js?b=3a4b9bbe0eb6';
 import { buildAssignActions, formatAssignConfirm, adminSubStatusBadge } from './js/admin-assign-company.js?v=2';
 
 const loginSection = document.getElementById('loginSection');

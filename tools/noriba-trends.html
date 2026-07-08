@@ -61,6 +61,10 @@
     .trend-lane-label { color:var(--fg); font-weight:800; font-size:12px; }
     .trend-bars { display:grid; grid-template-columns:repeat(96, minmax(2px, 1fr)); gap:1px; align-items:end; min-height:34px; }
     .trend-bars span { display:block; background:var(--tone); border-radius:1px 1px 0 0; opacity:.88; min-height:3px; }
+    .trend-time-axis { position:relative; height:18px; margin:5px 0 0 44px; color:var(--sub); font-size:10px; font-variant-numeric:tabular-nums; }
+    .trend-time-axis span { position:absolute; top:0; transform:translateX(-50%); white-space:nowrap; }
+    .trend-time-axis span:first-child { transform:translateX(0); }
+    .trend-time-axis span:last-child { transform:translateX(-100%); }
     .trend-table { width:100%; border-collapse:collapse; }
     .trend-table th, .trend-table td { padding:7px 8px; border-bottom:1px solid #222; text-align:right; font-variant-numeric:tabular-nums; }
     .trend-table th { background:#16161c; color:var(--sub); font-size:12px; font-weight:500; }
@@ -81,13 +85,14 @@
       .trend-card { padding:8px 7px; }
       .trend-kv { font-size:10.5px; }
       .trend-bars { gap:0; }
+      .trend-time-axis { margin-left:44px; font-size:9.5px; }
     }
   </style>
   <style>body{visibility:hidden;pointer-events:none;}</style>
 </head>
 <body>
   <script type="module">
-    import { enforceAccess } from '../js/access-control.js?b=e986386e0113';
+    import { enforceAccess } from '../js/access-control.js?b=3a4b9bbe0eb6';
     if (!(await enforceAccess('core', { redirect: '../subscribe.html' }))) {
       throw new Error('access-denied: redirected');
     }
@@ -100,7 +105,7 @@
     <a href="arrivals.html" class="app-tab active" aria-current="page">✈ 空港ツール</a>
     <a href="stands.html" id="tab-stands" class="app-tab" style="display:none">📍 乗り場</a>
   </nav>
-  <script type="module" src="js/stands-tab.js?b=e986386e0113"></script>
+  <script type="module" src="js/stands-tab.js?b=3a4b9bbe0eb6"></script>
 
   <div class="terminal-tabs">
     <a href="arrivals.html" class="terminal-tab">到着便</a>
@@ -112,11 +117,11 @@
   <div id="noriba-trends-error" hidden></div>
   <main id="noriba-trends-root"></main>
 
-  <script type="module" src="./js/noriba-trends.js?b=e986386e0113"></script>
+  <script type="module" src="./js/noriba-trends.js?b=3a4b9bbe0eb6"></script>
   <div id="navHost"></div>
   <script type="module">
-    import { renderBottomNav } from '../js/app.js?b=e986386e0113';
-    import { showGpsPrivacyBanner } from '../js/gps-privacy-banner.js?b=e986386e0113';
+    import { renderBottomNav } from '../js/app.js?b=3a4b9bbe0eb6';
+    import { showGpsPrivacyBanner } from '../js/gps-privacy-banner.js?b=3a4b9bbe0eb6';
     document.getElementById('navHost').innerHTML = renderBottomNav('tools', '../');
     showGpsPrivacyBanner();
   </script>
