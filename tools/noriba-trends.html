@@ -80,6 +80,10 @@
     .trend-table th:first-child, .trend-table td:first-child { text-align:left; }
     .trend-daypart-name { display:block; color:var(--fg); font-weight:800; line-height:1.15; }
     .trend-daypart-range { display:block; margin-top:2px; color:var(--sub); font-size:10.5px; font-variant-numeric:tabular-nums; line-height:1.2; white-space:nowrap; }
+    .trend-confidence { display:inline-flex; align-items:center; justify-content:center; min-height:22px; padding:2px 7px; border-radius:999px; font-size:10.5px; font-weight:800; line-height:1; white-space:nowrap; border:1px solid transparent; }
+    .trend-confidence.is-normal { color:#7ee0b2; background:rgba(23,111,70,.18); border-color:rgba(126,224,178,.28); }
+    .trend-confidence.is-reference { color:#ffd28a; background:rgba(148,93,0,.2); border-color:rgba(255,210,138,.32); }
+    .trend-confidence.is-mixed { color:#b7c8ff; background:rgba(78,161,255,.16); border-color:rgba(183,200,255,.28); }
     .trend-total { color:var(--accent); font-weight:800; }
     .trend-detail { margin:0 12px 18px; color:var(--sub); font-size:12px; }
     .trend-detail summary { cursor:pointer; padding:9px 0; color:var(--accent); }
@@ -106,7 +110,7 @@
 </head>
 <body>
   <script type="module">
-    import { enforceAccess } from '../js/access-control.js?b=91f4362ff016';
+    import { enforceAccess } from '../js/access-control.js?b=944727ae01b5';
     if (!(await enforceAccess('core', { redirect: '../subscribe.html' }))) {
       throw new Error('access-denied: redirected');
     }
@@ -119,7 +123,7 @@
     <a href="arrivals.html" class="app-tab active" aria-current="page">✈ 空港ツール</a>
     <a href="stands.html" id="tab-stands" class="app-tab" style="display:none">📍 乗り場</a>
   </nav>
-  <script type="module" src="js/stands-tab.js?b=91f4362ff016"></script>
+  <script type="module" src="js/stands-tab.js?b=944727ae01b5"></script>
 
   <div class="terminal-tabs">
     <a href="arrivals.html" class="terminal-tab">到着便</a>
@@ -131,11 +135,11 @@
   <div id="noriba-trends-error" hidden></div>
   <main id="noriba-trends-root"></main>
 
-  <script type="module" src="./js/noriba-trends.js?b=91f4362ff016"></script>
+  <script type="module" src="./js/noriba-trends.js?b=944727ae01b5"></script>
   <div id="navHost"></div>
   <script type="module">
-    import { renderBottomNav } from '../js/app.js?b=91f4362ff016';
-    import { showGpsPrivacyBanner } from '../js/gps-privacy-banner.js?b=91f4362ff016';
+    import { renderBottomNav } from '../js/app.js?b=944727ae01b5';
+    import { showGpsPrivacyBanner } from '../js/gps-privacy-banner.js?b=944727ae01b5';
     document.getElementById('navHost').innerHTML = renderBottomNav('tools', '../');
     showGpsPrivacyBanner();
   </script>
