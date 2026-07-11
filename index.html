@@ -163,22 +163,22 @@ if (location.hostname.includes('-dev')) {
 <button class="fab" onclick="location.href='input.html'" style="display:none;">＋</button>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=75fb64c1699f';
-import { getConfig, getDrivesForMonth, flushPendingQueue, saveConfig } from './js/storage.js?b=75fb64c1699f';
-import { DEFAULT_CONFIG } from './js/default-config.js?b=75fb64c1699f';
-import { calcTotalPay, calcDailySales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales, predictMonthly } from './js/payroll.js?b=75fb64c1699f';
-import { METRIC_CATALOG, METRIC_GROUPS, resolveMetrics } from './js/home-metrics.js?b=75fb64c1699f';
-import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=75fb64c1699f';
-import { processInvite } from './js/invite-crypto.js?b=75fb64c1699f';
-import { renderLegalFooter } from './js/legal-footer.js?b=75fb64c1699f';
-import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=75fb64c1699f';
-import { isEmailAuth, waitForAuth } from './js/firebase-auth.js?b=75fb64c1699f';
-import { auth } from './js/firebase-init.js?b=75fb64c1699f';
+import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=68c15a677217';
+import { getConfig, getDrivesForMonth, flushPendingQueue, saveConfig } from './js/storage.js?b=68c15a677217';
+import { DEFAULT_CONFIG } from './js/default-config.js?b=68c15a677217';
+import { calcTotalPay, calcDailySales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales, predictMonthly } from './js/payroll.js?b=68c15a677217';
+import { METRIC_CATALOG, METRIC_GROUPS, resolveMetrics } from './js/home-metrics.js?b=68c15a677217';
+import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=68c15a677217';
+import { processInvite } from './js/invite-crypto.js?b=68c15a677217';
+import { renderLegalFooter } from './js/legal-footer.js?b=68c15a677217';
+import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=68c15a677217';
+import { isEmailAuth, waitForAuth } from './js/firebase-auth.js?b=68c15a677217';
+import { auth } from './js/firebase-init.js?b=68c15a677217';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
-import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts, isRosterDayOff } from './js/planned-shifts.js?b=75fb64c1699f';
-import { checkInviteAndWarn, fetchCompanyExists, loadInviteSlug, loadReferrer, shouldRedirectInviteToSignup, buildSignupRedirectUrl } from './js/invite-url.js?b=75fb64c1699f';
-import { shouldShowFirstRunCard } from './js/first-run.js?b=75fb64c1699f';
-import './js/help-video.js?b=75fb64c1699f';
+import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts, isRosterDayOff } from './js/planned-shifts.js?b=68c15a677217';
+import { checkInviteAndWarn, fetchCompanyExists, loadInviteSlug, loadReferrer, shouldRedirectInviteToSignup, buildSignupRedirectUrl } from './js/invite-url.js?b=68c15a677217';
+import { shouldShowFirstRunCard } from './js/first-run.js?b=68c15a677217';
+import './js/help-video.js?b=68c15a677217';
 
 // 暗号化招待リンク処理は GitHub 版専用のためスキップ（Firebase 版）
 const inviteProcessed = false;
@@ -1322,7 +1322,8 @@ function renderCalendar(drives, range, rosterDriveDates) {
     const isToday = iso === today;
     const isPlanned = plannedSet.has(iso) && iso >= today;
     const isPaid = paidSet.has(iso);
-    const isDayOff = !drive && !isPaid && !isPlanned && isRosterDayOff(iso, rosterDriveDates, plannedSet);
+    const isDayOff = !drive && !isPaid && !isPlanned
+      && isRosterDayOff(iso, rosterDriveDates, plannedSet, today);
     const cls = ['cal-cell'];
     let plannedVehicle = null;
     if (drive) {
@@ -1457,7 +1458,7 @@ function pickWeatherIcon(w) {
 load();
 </script>
 <script type="module">
-import { isCoachEnabled } from './js/coach/coach-flag.js?b=75fb64c1699f';
+import { isCoachEnabled } from './js/coach/coach-flag.js?b=68c15a677217';
 const _ce = document.getElementById('coachEntryCard');
 if (_ce && isCoachEnabled()) _ce.style.display = '';
 </script>
