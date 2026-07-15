@@ -9,7 +9,25 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
 <!-- Cloudflare Turnstile（Bot対策・ログインフォーム保護） -->
-<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+<!-- dev環境では読み込まない: 本番サイトキーがdevドメイン以外(localhost等)で
+     Error 110200(Domain not authorized)を無限リトライするのを防ぐ。また dev は
+     人間判定自体をスキップする（moduleより前に走る bootstrap で一度だけ判定し、
+     下の SKIP_TURNSTILE も同じ結果を使う）。 -->
+<script>
+(function () {
+  var isDev = location.hostname.includes('-dev')
+    || location.pathname.includes('-dev')
+    || location.hostname === 'localhost'
+    || location.hostname === '127.0.0.1';
+  window.__CABIS_IS_DEV__ = isDev;
+  if (!isDev) {
+    var s = document.createElement('script');
+    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+    s.async = true; s.defer = true;
+    document.head.appendChild(s);
+  }
+})();
+</script>
 <style>
   body { padding-bottom: 24px; }
   .turnstile-row { margin: 14px 0 8px; min-height: 70px; display: flex; justify-content: center; }
@@ -166,12 +184,12 @@ if (location.hostname.includes('-dev')) {
   </div>
 </main>
 <script type="module">
-import { renderLegalFooter } from './js/legal-footer.js?b=68c15a677217';
-import { waitForAuth, isEmailAuth, loginWithUserId, signUp } from './js/firebase-auth.js?b=68c15a677217';
-import { loadInviteSlug, validateInviteSlug, fetchCompanyExists, checkInviteAndWarn } from './js/invite-url.js?b=68c15a677217';
-import { generateSlug } from './js/slug-gen.js?b=68c15a677217';
-import { validateSignupFields, buildNotifyPayload, postSignupNotify } from './js/signup-notify.js?b=68c15a677217';
-import { billingApiBase } from './js/subscription-state.js?b=68c15a677217';
+import { renderLegalFooter } from './js/legal-footer.js?b=c0bcfa0479b1';
+import { waitForAuth, isEmailAuth, loginWithUserId, signUp } from './js/firebase-auth.js?b=c0bcfa0479b1';
+import { loadInviteSlug, validateInviteSlug, fetchCompanyExists, checkInviteAndWarn } from './js/invite-url.js?b=c0bcfa0479b1';
+import { generateSlug } from './js/slug-gen.js?b=c0bcfa0479b1';
+import { validateSignupFields, buildNotifyPayload, postSignupNotify } from './js/signup-notify.js?b=c0bcfa0479b1';
+import { billingApiBase } from './js/subscription-state.js?b=c0bcfa0479b1';
 renderLegalFooter();
 
 // 招待URL `?company=<slug>` を捕捉・検証（完全招待制・decisions 6）。
@@ -186,6 +204,17 @@ let turnstileLoginToken = null;
 let turnstileSignupToken = null;
 window.onTurnstileLogin = (t) => { turnstileLoginToken = t; };
 window.onTurnstileSignup = (t) => { turnstileSignupToken = t; };
+
+// dev環境ではBot対策(Turnstile人間判定)を行わない。
+// 理由: devは本番と別のFirebaseプロジェクト(taxi-dailydata-dev)・別データで、
+// 検証者(オーナー)しかログインしない閉じた確認環境。総当たり対策は不要。
+// 本番(window.__CABIS_IS_DEV__ !== true)では従来どおり必須＝安全側デフォルトは常に判定あり。
+const SKIP_TURNSTILE = window.__CABIS_IS_DEV__ === true;
+if (SKIP_TURNSTILE) {
+  // 不要（かつ dev では検証が通らない）チェックボックスを隠す。module script は
+  // DOM解析後に実行されるため、この時点で .turnstile-row は既に存在する。
+  document.querySelectorAll('.turnstile-row').forEach(el => { el.style.display = 'none'; });
+}
 
 function resetTurnstile(widgetId) {
   // Turnstile API は動的ロード（async script）。未ロード時は安全にスキップ
@@ -339,20 +368,24 @@ loginBtn.addEventListener('click', async () => {
     showMsg('loginMsg', 'ログインIDとパスワードを入力してください', 'error');
     return;
   }
-  if (!turnstileLoginToken) {
-    showMsg('loginMsg', '人間判定が完了していません。数秒お待ちいただいてから、もう一度お試しください。', 'error');
-    return;
-  }
-  loginBtn.disabled = true;
-  showMsg('loginMsg', '人間判定中…', 'info');
-  const okHuman = await verifyTurnstile(turnstileLoginToken);
-  // Turnstile token は使い切り。次の試行に備えて widget をリセット。
-  turnstileLoginToken = null;
-  resetTurnstile('turnstileLogin');
-  if (!okHuman) {
-    showMsg('loginMsg', '人間判定に失敗しました。ページを再読み込みしてもう一度お試しください。', 'error');
-    loginBtn.disabled = false;
-    return;
+  if (!SKIP_TURNSTILE) {
+    if (!turnstileLoginToken) {
+      showMsg('loginMsg', '人間判定が完了していません。数秒お待ちいただいてから、もう一度お試しください。', 'error');
+      return;
+    }
+    loginBtn.disabled = true;
+    showMsg('loginMsg', '人間判定中…', 'info');
+    const okHuman = await verifyTurnstile(turnstileLoginToken);
+    // Turnstile token は使い切り。次の試行に備えて widget をリセット。
+    turnstileLoginToken = null;
+    resetTurnstile('turnstileLogin');
+    if (!okHuman) {
+      showMsg('loginMsg', '人間判定に失敗しました。ページを再読み込みしてもう一度お試しください。', 'error');
+      loginBtn.disabled = false;
+      return;
+    }
+  } else {
+    loginBtn.disabled = true;
   }
   showMsg('loginMsg', 'ログインしています…', 'info');
   const r = await loginWithUserId(id, pw);
@@ -380,19 +413,23 @@ signupBtn.addEventListener('click', async () => {
     showMsg('signupMsg', v.errors.join(' / '), 'error');
     return;
   }
-  if (!turnstileSignupToken) {
-    showMsg('signupMsg', '人間判定が完了していません。数秒お待ちいただいてから、もう一度お試しください。', 'error');
-    return;
-  }
-  signupBtn.disabled = true;
-  showMsg('signupMsg', '人間判定中…', 'info');
-  const okHuman = await verifyTurnstile(turnstileSignupToken);
-  turnstileSignupToken = null;
-  resetTurnstile('turnstileSignup');
-  if (!okHuman) {
-    showMsg('signupMsg', '人間判定に失敗しました。ページを再読み込みしてもう一度お試しください。', 'error');
-    signupBtn.disabled = false;
-    return;
+  if (!SKIP_TURNSTILE) {
+    if (!turnstileSignupToken) {
+      showMsg('signupMsg', '人間判定が完了していません。数秒お待ちいただいてから、もう一度お試しください。', 'error');
+      return;
+    }
+    signupBtn.disabled = true;
+    showMsg('signupMsg', '人間判定中…', 'info');
+    const okHuman = await verifyTurnstile(turnstileSignupToken);
+    turnstileSignupToken = null;
+    resetTurnstile('turnstileSignup');
+    if (!okHuman) {
+      showMsg('signupMsg', '人間判定に失敗しました。ページを再読み込みしてもう一度お試しください。', 'error');
+      signupBtn.disabled = false;
+      return;
+    }
+  } else {
+    signupBtn.disabled = true;
   }
   showMsg('signupMsg', '登録しています…', 'info');
   const r = await signUp(id, pw);

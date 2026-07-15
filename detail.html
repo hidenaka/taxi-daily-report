@@ -95,13 +95,13 @@ if (location.hostname.includes('-dev')) {
 </main>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDate } from './js/app.js?b=68c15a677217';
-import { getDrive, listFiles, saveDriveSafe, deleteDrive } from './js/storage.js?b=68c15a677217';
-import { calcDailySales } from './js/payroll.js?b=68c15a677217';
-import { calcTimeBreakdown, hourlyActivity, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, formatMin, timeToMinutes } from './js/chart-helpers.js?b=68c15a677217';
-import { weatherEmoji } from './js/weather.js?b=68c15a677217';
-import { renderLegalFooter } from './js/legal-footer.js?b=68c15a677217';
-import { enforceAccess } from './js/access-control.js?b=68c15a677217';
+import { renderBottomNav, formatYen, formatDate } from './js/app.js?b=c0bcfa0479b1';
+import { getDrive, listFiles, saveDriveSafe, deleteDrive } from './js/storage.js?b=c0bcfa0479b1';
+import { calcDailySales } from './js/payroll.js?b=c0bcfa0479b1';
+import { calcTimeBreakdown, hourlyActivity, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, formatMin, timeToMinutes, isSummaryOnly } from './js/chart-helpers.js?b=c0bcfa0479b1';
+import { weatherEmoji } from './js/weather.js?b=c0bcfa0479b1';
+import { renderLegalFooter } from './js/legal-footer.js?b=c0bcfa0479b1';
+import { enforceAccess } from './js/access-control.js?b=c0bcfa0479b1';
 
 if (!(await enforceAccess('core'))) {
   throw new Error('access-denied: redirected');
@@ -132,6 +132,13 @@ async function load() {
   const drive = await getDrive(date);
   if (!drive) { document.getElementById('title').textContent = '見つかりません'; return; }
   document.getElementById('title').textContent = `${formatDate(drive.date)} 詳細`;
+  if (isSummaryOnly(drive)) {
+    const b = document.createElement('div');
+    b.style.cssText = 'background:#fdf3e3;border:1px solid #f0d9a8;color:#7c4a03;border-radius:6px;padding:8px 10px;margin:8px 0;font-size:12px;line-height:1.6;';
+    b.innerHTML = '💴 <strong>合計のみの日報</strong>です。売上と給与には反映されますが、明細が無いため時間帯・エリア別のグラフは表示されません。';
+    const titleEl = document.getElementById('title');
+    (titleEl.parentElement || titleEl).insertAdjacentElement('afterend', b);
+  }
   renderDateNav(date);
 
   const sales = calcDailySales(drive);
@@ -149,7 +156,7 @@ async function load() {
     <div class="kpi-row">
       <div><div class="lbl">売上(税込)</div><div class="num">${formatYen(sales.inclTax)}</div></div>
       <div><div class="lbl">件数</div><div class="num">${validCount}</div></div>
-      <div><div class="lbl">平均単価</div><div class="num">${formatYen(avgPrice)}</div></div>
+      <div><div class="lbl">平均単価</div><div class="num">${validCount > 0 ? formatYen(avgPrice) : '—'}</div></div>
       <div><div class="lbl">時間単価(乗務)</div><div class="num">${formatYen(hourlyRate)}</div></div>
     </div>
     <div class="kpi-row" style="margin-top:8px;">
