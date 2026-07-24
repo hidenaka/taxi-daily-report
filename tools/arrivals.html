@@ -311,7 +311,7 @@
 </head>
 <body>
   <script type="module">
-    import { enforceAccess } from '../js/access-control.js?b=88b52eda91d1';
+    import { enforceAccess } from '../js/access-control.js?b=9a7f5df11af2';
     if (!(await enforceAccess('core', { redirect: '../subscribe.html' }))) {
       throw new Error('access-denied: redirected');
     }
@@ -322,7 +322,7 @@
     <a href="arrivals.html" class="app-tab active" aria-current="page">✈ 空港ツール</a>
     <a href="stands.html" id="tab-stands" class="app-tab" style="display:none">📍 乗り場</a>
   </nav>
-  <script type="module" src="js/stands-tab.js?b=88b52eda91d1"></script>
+  <script type="module" src="js/stands-tab.js?b=9a7f5df11af2"></script>
 
   <div class="terminal-tabs">
     <!-- T1/T2 の個別タブは非表示（合計のみ表示）。T3(国際)は実績・予測の仕組みが整ったら表示する -->
@@ -428,9 +428,9 @@
   <script type="module" src="./js/arrivals-app.js?v=20260507b"></script>
   <div id="navHost"></div>
   <script type="module">
-    import { renderBottomNav } from '../js/app.js?b=88b52eda91d1';
-    import { showGpsPrivacyBanner } from '../js/gps-privacy-banner.js?b=88b52eda91d1';
-    import '../js/help-video.js?b=88b52eda91d1';
+    import { renderBottomNav } from '../js/app.js?b=9a7f5df11af2';
+    import { showGpsPrivacyBanner } from '../js/gps-privacy-banner.js?b=9a7f5df11af2';
+    import '../js/help-video.js?b=9a7f5df11af2';
     document.getElementById('navHost').innerHTML = renderBottomNav('tools', '../');
     showGpsPrivacyBanner();
   </script>
