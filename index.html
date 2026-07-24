@@ -4,6 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>Cabis（キャビス）｜ タクシー乗務員のための業務支援アプリ</title>
+<!-- コールドスタート高速化: Firebase SDK/バックエンドへの接続とダウンロードを HTML パース時点から先行させる。
+     従来はローカル JS を firebase-init.js まで5階層たどった後に初めて gstatic CDN の巨大な
+     firestore.js を取りに行くウォーターフォールになっており、ホーム初回表示が待たされていた。 -->
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js" crossorigin>
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js" crossorigin>
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js" crossorigin>
+<link rel="modulepreload" href="js/firebase-init.js">
+<link rel="modulepreload" href="js/firebase-auth.js">
+<link rel="modulepreload" href="js/firebase-storage.js">
+<link rel="modulepreload" href="js/storage.js">
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -163,22 +177,22 @@ if (location.hostname.includes('-dev')) {
 <button class="fab" onclick="location.href='input.html'" style="display:none;">＋</button>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=c0bcfa0479b1';
-import { getConfig, getDrivesForMonth, flushPendingQueue, saveConfig } from './js/storage.js?b=c0bcfa0479b1';
-import { DEFAULT_CONFIG } from './js/default-config.js?b=c0bcfa0479b1';
-import { calcTotalPay, calcDailySales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales, predictMonthly } from './js/payroll.js?b=c0bcfa0479b1';
-import { METRIC_CATALOG, METRIC_GROUPS, resolveMetrics } from './js/home-metrics.js?b=c0bcfa0479b1';
-import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=c0bcfa0479b1';
-import { processInvite } from './js/invite-crypto.js?b=c0bcfa0479b1';
-import { renderLegalFooter } from './js/legal-footer.js?b=c0bcfa0479b1';
-import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=c0bcfa0479b1';
-import { isEmailAuth, waitForAuth } from './js/firebase-auth.js?b=c0bcfa0479b1';
-import { auth } from './js/firebase-init.js?b=c0bcfa0479b1';
+import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=88b52eda91d1';
+import { getConfig, getDrivesForMonth, flushPendingQueue, saveConfig } from './js/storage.js?b=88b52eda91d1';
+import { DEFAULT_CONFIG } from './js/default-config.js?b=88b52eda91d1';
+import { calcTotalPay, calcDailySales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales, predictMonthly } from './js/payroll.js?b=88b52eda91d1';
+import { METRIC_CATALOG, METRIC_GROUPS, resolveMetrics } from './js/home-metrics.js?b=88b52eda91d1';
+import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=88b52eda91d1';
+import { processInvite } from './js/invite-crypto.js?b=88b52eda91d1';
+import { renderLegalFooter } from './js/legal-footer.js?b=88b52eda91d1';
+import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=88b52eda91d1';
+import { isEmailAuth, waitForAuth, getUserId } from './js/firebase-auth.js?b=88b52eda91d1';
+import { auth } from './js/firebase-init.js?b=88b52eda91d1';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
-import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts, isRosterDayOff } from './js/planned-shifts.js?b=c0bcfa0479b1';
-import { checkInviteAndWarn, fetchCompanyExists, loadInviteSlug, loadReferrer, shouldRedirectInviteToSignup, buildSignupRedirectUrl } from './js/invite-url.js?b=c0bcfa0479b1';
-import { shouldShowFirstRunCard } from './js/first-run.js?b=c0bcfa0479b1';
-import './js/help-video.js?b=c0bcfa0479b1';
+import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts, isRosterDayOff } from './js/planned-shifts.js?b=88b52eda91d1';
+import { checkInviteAndWarn, fetchCompanyExists, loadInviteSlug, loadReferrer, shouldRedirectInviteToSignup, buildSignupRedirectUrl } from './js/invite-url.js?b=88b52eda91d1';
+import { shouldShowFirstRunCard, shouldMarkHasDrive, isExistingLocalRealUser } from './js/first-run.js?b=88b52eda91d1';
+import './js/help-video.js?b=88b52eda91d1';
 
 // 暗号化招待リンク処理は GitHub 版専用のためスキップ（Firebase 版）
 const inviteProcessed = false;
@@ -206,7 +220,9 @@ checkInviteAndWarn(urlParams, localStorage, fetchCompanyExists);
     if (!hasCompanyParam) return;
     const slug = loadInviteSlug(localStorage);
     if (!slug) return;
-    const isExistingLocalUser = localStorage.getItem('cabis_has_drive') === '1';
+    // 印(cabis_has_drive)だけでなく taxi_user_id が実ユーザーかも見る。サンプル閲覧で印が
+    // 誤保存された端末（招待リンク再訪で user_sample に着地する不具合）を自己修復するため。
+    const isExistingLocalUser = isExistingLocalRealUser(localStorage);
     await waitForAuth();
     if (!shouldRedirectInviteToSignup(hasCompanyParam, isEmailAuth(), isExistingLocalUser)) return;
     location.replace(buildSignupRedirectUrl(slug, loadReferrer(localStorage)));
@@ -321,6 +337,11 @@ let config = null;
 
 async function load() {
   await flushPendingQueue();
+  // config と drives は互いに独立。config はコールドスタート時に
+  // userConfigs→users→companies の直列往復(最大3回)がかかるため、その裏で
+  // drives の取得を先行させ、認証復元・往復を重ねて初回表示を短縮する。
+  // (ウォーム時は両者とも TTL キャッシュ即返しなので影響なし)
+  const drivesPromise = fetchRenderDrives();
   config = await getConfig();
   if (!config) {
     config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
@@ -329,7 +350,7 @@ async function load() {
   config.shifts.plannedVehicles = config.shifts.plannedVehicles || {};
   config.shifts.paidLeaveDates = config.shifts.paidLeaveDates || [];
   pruneOrphanVehicles(config);
-  await render();
+  await render(drivesPromise);
 }
 
 // 折りたたみセクション。中身が空なら何も出さない
@@ -351,8 +372,12 @@ async function maybeShowFirstRunCard(isCurrent, currentCount) {
   const card = document.getElementById('firstRunCard');
   if (!card) return;
   // 当期にデータあり → 既存ユーザー。marker をセットして隠す
+  // （サンプル user_sample 閲覧中は印を付けない。付けると招待リンク訪問者の端末が既存ユーザー
+  //   扱いになり signup リダイレクトが抑止される＝user_sample に着地する不具合の真因）
   if (currentCount > 0) {
-    try { localStorage.setItem('cabis_has_drive', '1'); } catch (e) {}
+    if (shouldMarkHasDrive({ myUserId: getUserId(), driveCount: currentCount })) {
+      try { localStorage.setItem('cabis_has_drive', '1'); } catch (e) {}
+    }
     card.style.display = 'none';
     return;
   }
@@ -367,19 +392,29 @@ async function maybeShowFirstRunCard(isCurrent, currentCount) {
       const prev = await getDrivesForMonth(shiftBillingPeriod(viewPeriod, -1));
       if (prev && prev.length > 0) {
         hasAnyDrive = true;
-        try { localStorage.setItem('cabis_has_drive', '1'); } catch (e) {}
+        if (shouldMarkHasDrive({ myUserId: getUserId(), driveCount: prev.length })) {
+          try { localStorage.setItem('cabis_has_drive', '1'); } catch (e) {}
+        }
       }
     } catch (e) { card.style.display = 'none'; return; }
   }
   card.style.display = shouldShowFirstRunCard({ hasAnyDrive }) ? 'block' : 'none';
 }
 
-async function render() {
-  const [rawDrives, previousRosterDrives, nextRosterDrives] = await Promise.all([
+// 表示に必要な当月度±1ヶ月の drives を取得（当月度は必須、前後月はロースター日付用）。
+// load() から config 取得と並行起動できるよう関数化している。
+function fetchRenderDrives() {
+  return Promise.all([
     getDrivesForMonth(viewPeriod),
     getDrivesForMonth(shiftBillingPeriod(viewPeriod, -1)).catch(() => []),
     getDrivesForMonth(shiftBillingPeriod(viewPeriod, 1)).catch(() => []),
   ]);
+}
+
+async function render(drivesPromise) {
+  // load() が config 取得の裏で先行起動した promise があればそれを使う。
+  // 期間ナビ(prev/next)等からの呼び出しでは引数なし → その場で取得（viewPeriod は最新）。
+  const [rawDrives, previousRosterDrives, nextRosterDrives] = await (drivesPromise || fetchRenderDrives());
   rawDrives.sort((a, b) => a.date.localeCompare(b.date));
   const rosterDriveDates = [...new Set([...previousRosterDrives, ...rawDrives, ...nextRosterDrives].map(d => d.date))];
   // ホームではフィルタなし。drives は raw と同一（calendar/sumTableは全件表示）
@@ -1458,7 +1493,7 @@ function pickWeatherIcon(w) {
 load();
 </script>
 <script type="module">
-import { isCoachEnabled } from './js/coach/coach-flag.js?b=c0bcfa0479b1';
+import { isCoachEnabled } from './js/coach/coach-flag.js?b=88b52eda91d1';
 const _ce = document.getElementById('coachEntryCard');
 if (_ce && isCoachEnabled()) _ce.style.display = '';
 </script>

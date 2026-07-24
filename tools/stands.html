@@ -84,12 +84,12 @@
 </head>
 <body>
   <script type="module">
-    import { enforceAccess } from '../js/access-control.js?b=c0bcfa0479b1';
+    import { enforceAccess } from '../js/access-control.js?b=88b52eda91d1';
     if (!(await enforceAccess('core', { redirect: '../subscribe.html' }))) {
       throw new Error('access-denied: redirected');
     }
   </script>
-  <script src="../vendor/leaflet/leaflet.js?b=c0bcfa0479b1"></script>
+  <script src="../vendor/leaflet/leaflet.js?b=88b52eda91d1"></script>
   <nav class="app-tabs" role="tablist" aria-label="アプリ切替">
     <a href="./" class="app-tab">⏱ 乗務タイマー</a>
     <a href="ic.html" class="app-tab">🛣 IC判定</a>
@@ -112,7 +112,7 @@
     <div id="sheet-images"></div>
   </div>
   <div id="img-overlay"><button class="x" id="img-overlay-close" type="button" aria-label="閉じる">×</button><img id="img-overlay-img" alt=""></div>
-  <script type="module" src="js/stands-app.js?b=c0bcfa0479b1"></script>
+  <script type="module" src="js/stands-app.js?b=88b52eda91d1"></script>
   <div id="georef-overlay" hidden>
     <div class="g-bar">
       <span class="g-title">📐 PDF合わせ</span>
