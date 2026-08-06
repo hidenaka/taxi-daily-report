@@ -178,22 +178,22 @@ if (location.hostname.includes('-dev')) {
 <button class="fab" onclick="location.href='input.html'" style="display:none;">＋</button>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=391c55a88e78';
-import { getConfig, getDrivesForMonth, flushPendingQueue, saveConfig } from './js/storage.js?b=391c55a88e78';
-import { DEFAULT_CONFIG } from './js/default-config.js?b=391c55a88e78';
-import { calcTotalPay, calcDailySales, isApproxSales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales, predictMonthly } from './js/payroll.js?b=391c55a88e78';
-import { METRIC_CATALOG, METRIC_GROUPS, resolveMetrics } from './js/home-metrics.js?b=391c55a88e78';
-import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=391c55a88e78';
-import { processInvite } from './js/invite-crypto.js?b=391c55a88e78';
-import { renderLegalFooter } from './js/legal-footer.js?b=391c55a88e78';
-import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=391c55a88e78';
-import { isEmailAuth, waitForAuth, getUserId } from './js/firebase-auth.js?b=391c55a88e78';
-import { auth } from './js/firebase-init.js?b=391c55a88e78';
+import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=db08d79c0491';
+import { getConfig, getDrivesForMonth, flushPendingQueue, saveConfig } from './js/storage.js?b=db08d79c0491';
+import { DEFAULT_CONFIG } from './js/default-config.js?b=db08d79c0491';
+import { calcTotalPay, calcDailySales, isApproxSales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales, predictMonthly } from './js/payroll.js?b=db08d79c0491';
+import { METRIC_CATALOG, METRIC_GROUPS, resolveMetrics } from './js/home-metrics.js?b=db08d79c0491';
+import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=db08d79c0491';
+import { processInvite } from './js/invite-crypto.js?b=db08d79c0491';
+import { renderLegalFooter } from './js/legal-footer.js?b=db08d79c0491';
+import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=db08d79c0491';
+import { isEmailAuth, waitForAuth, getUserId } from './js/firebase-auth.js?b=db08d79c0491';
+import { auth } from './js/firebase-init.js?b=db08d79c0491';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
-import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts, isRosterDayOff } from './js/planned-shifts.js?b=391c55a88e78';
-import { checkInviteAndWarn, fetchCompanyExists, loadInviteSlug, loadReferrer, shouldRedirectInviteToSignup, buildSignupRedirectUrl } from './js/invite-url.js?b=391c55a88e78';
-import { shouldShowFirstRunCard, shouldMarkHasDrive, isExistingLocalRealUser } from './js/first-run.js?b=391c55a88e78';
-import './js/help-video.js?b=391c55a88e78';
+import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts, isRosterDayOff } from './js/planned-shifts.js?b=db08d79c0491';
+import { checkInviteAndWarn, fetchCompanyExists, loadInviteSlug, loadReferrer, shouldRedirectInviteToSignup, buildSignupRedirectUrl } from './js/invite-url.js?b=db08d79c0491';
+import { shouldShowFirstRunCard, shouldMarkHasDrive, isExistingLocalRealUser } from './js/first-run.js?b=db08d79c0491';
+import './js/help-video.js?b=db08d79c0491';
 
 // 暗号化招待リンク処理は GitHub 版専用のためスキップ（Firebase 版）
 const inviteProcessed = false;
@@ -1243,6 +1243,8 @@ function renderSummaryTable(drives) {
   }
 
   let totalIncl = 0, totalExcl = 0, totalKm = 0;
+  const allDays = dailyAgg.length;
+  const approxDays = dailyAgg.filter(a => a.summary).length;
   let detIncl = 0, detExcl = 0, detCount = 0, detDays = 0, detKm = 0, detTripMin = 0, detTotalMin = 0, detRestMin = 0;
   const periodTotals = {};
   for (const k of PKEYS) periodTotals[k] = 0;
@@ -1294,7 +1296,7 @@ function renderSummaryTable(drives) {
         <tbody>
           ${rows}
           <tr class="total">
-            <td class="date">合計</td>
+            <td class="date">合計${approxDays > 0 ? `<span class="badge" style="font-size:9px;padding:0 4px;background:#fff3e0;color:#e65100;margin-left:3px;">概算${approxDays}含</span>` : ''}</td>
             <td>${detCount}</td>
             <td>${formatYen(totalIncl)}</td>
             <td>${formatYen(totalExcl)}</td>
@@ -1310,8 +1312,8 @@ function renderSummaryTable(drives) {
           <tr class="total" style="background:#fff8e1;">
             <td class="date">1乗務平均</td>
             <td>${(detCount / detDays).toFixed(1)}</td>
-            <td>${formatYen(detIncl / detDays)}</td>
-            <td>${formatYen(detExcl / detDays)}</td>
+            <td>${formatYen(totalIncl / allDays)}</td>
+            <td>${formatYen(totalExcl / allDays)}</td>
             ${PKEYS.map(k => `<td>${periodTotals[k] > 0 ? formatYen(periodTotals[k] / detDays) : '—'}</td>`).join('')}
             <td>${(detKm / detDays).toFixed(1)}</td>
             <td>${formatMin(detTotalMin / detDays)}</td>
@@ -1323,6 +1325,7 @@ function renderSummaryTable(drives) {
         </tbody>
       </table>
     </div>
+    ${approxDays > 0 ? `<p class="muted" style="font-size:11px;margin:6px 0 0;">「概」＝日報の写真が読めず合計のみで登録した乗務（${approxDays}件）。金額（税込・税抜）は合計にも1乗務平均にも含めています。件数・時間帯別・実車km・時間・時間単価は明細のある${detDays}乗務ぶんだけの集計です。</p>` : ''}
   `;
 }
 
@@ -1512,7 +1515,7 @@ function pickWeatherIcon(w) {
 load();
 </script>
 <script type="module">
-import { isCoachEnabled } from './js/coach/coach-flag.js?b=391c55a88e78';
+import { isCoachEnabled } from './js/coach/coach-flag.js?b=db08d79c0491';
 const _ce = document.getElementById('coachEntryCard');
 if (_ce && isCoachEnabled()) _ce.style.display = '';
 </script>
