@@ -109,12 +109,17 @@ const toHalfDigits = (s) =>
 // =============================================================================
 
 // 列名 box のテキストを正規化列名へ。当たらなければ null。
-function matchHeaderLabel(text) {
+export function matchHeaderLabel(text) {
   const t = String(text || '').trim();
   if (HEADER_ALIASES[t]) return HEADER_ALIASES[t];
+  // 「地」で終わる語は 乗車地 / 降車地 のどちらか。異体字誤読（例: "乘車地"）が
+  // 部分一致で時刻列の 乗車 / 降車 に化けると、その1点が x 軸アフィンを壊して
+  // 16列すべてがずれる（IMG_1523 で実証）。どちらか確定できないなら当てない。
+  const endsWithChi = /地$/.test(t);
   // 前後ノイズ保険: エイリアスが先頭/末尾に来る場合のみ部分一致を許す。
   for (const [alias, name] of Object.entries(HEADER_ALIASES)) {
     if (alias.length < 2) continue;
+    if (endsWithChi && !/地$/.test(alias)) continue;
     if (t.length > alias.length + 4) continue; // 長すぎる連結は表外見出し
     if (t.startsWith(alias) || t.endsWith(alias)) {
       // "休憩時間"→"時間" のような「別漢字＋列名」複合語は表外見出しとして除外。
@@ -374,10 +379,142 @@ function robustAffine(points) {
   return { a: m.a, b: m.b, inliers: pts.length };
 }
 
+// =============================================================================
+// 見出し行に頼らない表の特定（フォールバック）
+// =============================================================================
+//
+// 見出し行の文字（No/乗車/降車/…）は本文より小さく、写真がぼけると真っ先に潰れる。
+// 見出しが読めないと表の位置が決まらず、本文が読めていても丸ごと落ちていた
+// （LINE 経由で圧縮された写真＝約164万画素、で実証。本文は82%が高信頼なのに0件）。
+//
+// そこで見出しが取れないときは、本文の「どの列に何が入るか」で枠を当てる。
+// 明細表は列ごとに中身の種類が決まっている:
+//   時刻→乗車/降車/時間、地名→乗車地/降車地、小数→営Km、金額→合計〜立替、備考→決済種別。
+// 各 box を種類分けし、x 軸アフィン (a,b) を走査して「種類と列が合う box の割合」を
+// 最大化する。幾何（列の隙間・表の左右端）だけでは OCR の box が列境界をまたぐため
+// 決まらないが、中身の種類を使うと決まる（実測: 幅の誤差 0.8〜2.4%）。
+
+// 列 index: 0 No / 1 乗車 / 2 降車 / 3 時間 / 4 迎 / 5 乗車地 / 6 降車地 / 7 営Km
+//           8 男 / 9 女 / 10 合計 / 11 料金 / 12 現収 / 13 未収 / 14 立替 / 15 備考
+const BODY_KIND_COLUMNS = {
+  time: new Set([1, 2, 3]),
+  place: new Set([5, 6]),
+  decimal: new Set([7]),
+  money: new Set([10, 11, 12, 13, 14]),
+  flag: new Set([4]),
+  note: new Set([15]),
+};
+
+// box のテキストから中身の種類を判定する。判定できなければ null（採点に使わない）。
+function classifyBodyCell(text) {
+  const t = toHalfDigits(String(text || '').trim());
+  if (!t) return null;
+  if (/[区市]/.test(t) && t.length >= 4) return 'place';
+  if (/決済|決斉|チケット|ETC|Visa|QuickPay|AMEX|交通|遠割/i.test(t)) return 'note';
+  if (/^[迎連週迅]$/.test(t)) return 'flag';
+  if (/^\d{1,2}[:：.\-]\d{2}$/.test(t)) return 'time';
+  const digits = t.replace(/[^0-9]/g, '');
+  if (digits.length === 4 && /^[0-9:：.\-]+$/.test(t)) return 'time';
+  if (/^\d{1,2}[.]\d$/.test(t)) return 'decimal';
+  if (/^[0-9,.]+$/.test(t) && digits.length >= 3 && digits.length <= 6) return 'money';
+  return null;
+}
+
+// 本文 box から x 軸アフィンと表の y 帯を推定する。取れなければ null。
+export function fitGridFromBody(boxes) {
+  const isPlace = (b) => /[区市]/.test(txt(b)) && txt(b).length >= 4;
+  const pick = (arr, p) => arr[Math.max(0, Math.min(arr.length - 1, Math.floor(arr.length * p)))];
+  const placeYs = boxes.filter(isPlace).map(cy).sort((p, q) => p - q);
+  if (placeYs.length < 8) return null;               // 地名が少なすぎる＝明細表ではない
+
+  // 明細表の y 帯を取る。上部サマリーにも地名（乗務開始場所）が数個あるので、
+  // 「等間隔に密集している最大の塊」だけを表とみなす。塊から離れた地名は捨てる。
+  const gaps = [];
+  for (let i = 1; i < placeYs.length; i++) gaps.push(placeYs[i] - placeYs[i - 1]);
+  const medGap = [...gaps].sort((p, q) => p - q)[Math.floor(gaps.length / 2)] || 1;
+  const maxGap = Math.max(medGap * 4, 40);
+  let bestRun = { s: 0, e: 0 }, runStart = 0;
+  for (let i = 1; i <= placeYs.length; i++) {
+    if (i === placeYs.length || placeYs[i] - placeYs[i - 1] > maxGap) {
+      if (i - runStart > bestRun.e - bestRun.s) bestRun = { s: runStart, e: i };
+      runStart = i;
+    }
+  }
+  const band = placeYs.slice(bestRun.s, bestRun.e);
+  if (band.length < 8) return null;
+  const yLo = pick(band, 0.02), yHi = pick(band, 0.98);
+
+  const items = [];
+  for (const b of boxes) {
+    const yc = cy(b);
+    if (yc < yLo - 30 || yc > yHi + 30) continue;
+    const kind = classifyBodyCell(b.text);
+    if (kind) items.push({ xl: b.bbox[0], xr: b.bbox[2], kind });
+  }
+  if (items.length < 40) return null;
+
+  const xls = items.map((i) => i.xl).sort((p, q) => p - q);
+  const xrs = items.map((i) => i.xr).sort((p, q) => p - q);
+
+  // 探索範囲は本文の広がりから決める（画像サイズに依存させない）。
+  const span = pick(xrs, 0.98) - pick(xls, 0.02);
+  const bCenter = span / (TEMPLATE.colBoundFrac[16] - TEMPLATE.colBoundFrac[0]);
+  const aCenter = pick(xls, 0.02) - bCenter * TEMPLATE.colBoundFrac[0];
+
+  // 種類ごとに重みを均す。時刻3列・金額5列・地名2列は「1列ずらしても型が合う」ため、
+  // 数の多い種類に任せると1列ずれた解に落ちる。1列しかない 迎・営Km・備考 は
+  // ずれを一意に決められるので、数が少なくても同じだけ効かせる。
+  const perKind = {};
+  for (const it of items) perKind[it.kind] = (perKind[it.kind] || 0) + 1;
+  const kinds = Object.keys(perKind);
+  for (const it of items) it.w = 1 / perKind[it.kind];
+  const totalW = kinds.length;
+
+  const score = (a, b) => {
+    const bounds = TEMPLATE.colBoundFrac.map((f) => a + b * f);
+    let ok = 0;
+    for (const it of items) {
+      let best = -1, ov = 0;
+      for (let i = 0; i < 16; i++) {
+        const o = Math.min(it.xr, bounds[i + 1]) - Math.max(it.xl, bounds[i]);
+        if (o > ov) { ov = o; best = i; }
+      }
+      if (best >= 0 && BODY_KIND_COLUMNS[it.kind].has(best)) ok += it.w;
+    }
+    // 枠の左右端が本文の広がりと合っているか（1列ずれの解を弱める）
+    const edge =
+      (Math.abs(bounds[0] - pick(xls, 0.02)) + Math.abs(bounds[16] - pick(xrs, 0.98))) / b;
+    return ok / totalW - edge * 0.6;
+  };
+
+  // 粗探索 → 山登りで細部を詰める
+  let best = null;
+  const coarse = bCenter * 0.01;
+  for (let b = bCenter * 0.7; b <= bCenter * 1.4; b += coarse) {
+    for (let a = aCenter - bCenter * 0.2; a <= aCenter + bCenter * 0.2; a += coarse) {
+      const s = score(a, b);
+      if (!best || s > best.s) best = { a, b, s };
+    }
+  }
+  for (const st of [bCenter * 0.003, bCenter * 0.001, bCenter * 0.0003]) {
+    let improved = true;
+    while (improved) {
+      improved = false;
+      for (const [da, db] of [[st, 0], [-st, 0], [0, st], [0, -st], [st, st], [-st, -st], [st, -st], [-st, st]]) {
+        const s = score(best.a + da, best.b + db);
+        if (s > best.s + 1e-9) { best = { a: best.a + da, b: best.b + db, s }; improved = true; }
+      }
+    }
+  }
+  // 一致率が低いときは表と見なさない（誤検出で無意味な行を作らない）
+  if (best.s < 0.5) return null;
+  return { a: best.a, b: best.b, agreement: best.s, yTop: yLo, yBottom: yHi };
+}
+
 // ヘッダーラベル box 群を取得（最も明細表らしい y 帯を選ぶ）。
 function locateTable(boxes) {
   const header = findHeaderRow(boxes);
-  if (!header) return null;
+  if (!header) return locateTableFromBody(boxes);
 
   // テンプレ列順 index に対する検出済みヘッダー中心 x の対応点
   const order = TEMPLATE.columns;
@@ -389,14 +526,38 @@ function locateTable(boxes) {
     if (i == null) continue;
     points.push([TEMPLATE.colCenterFrac[i], hb.x]);
   }
-  if (points.length < 4) return null;
+  if (points.length < 4) return locateTableFromBody(boxes);
 
   // x 軸アフィン: pixelX = ax + bx * frac。
   // これがテーブル領域の特定: 16 列の x ピクセル位置が一意に決まる。
   const xm = robustAffine(points);
-  if (!xm) return null;
+  if (!xm) return locateTableFromBody(boxes);
 
   return { header, xm };
+}
+
+// 見出しが取れないときの表特定。fitGridFromBody で枠を求め、
+// 本文の先頭行の少し上に「疑似ヘッダー」を置いて以降の処理をそのまま使う。
+function locateTableFromBody(boxes) {
+  const fit = fitGridFromBody(boxes);
+  if (!fit) return null;
+  const pitch = fit.b * TEMPLATE.pitchFrac;
+  const y = fit.yTop - pitch;              // 見出し行があるはずの位置
+  return {
+    header: {
+      y,
+      top: y - pitch * 0.6,
+      bottom: fit.yTop - pitch * 0.45,     // 本文1行目の直上で切る
+      boxes: [],
+      labelBoxes: new Set(),
+    },
+    xm: { a: fit.a, b: fit.b, inliers: 0 },
+    fromBody: true,
+    agreement: fit.agreement,
+    // 明細表の下端。見出しが読めない写真では ETC明細 の見出し(預り金/会社負担)も
+    // 読めず etcY カットが効かないため、地名の密集帯の下で切る。
+    bodyBottom: fit.yBottom + pitch * 1.5,
+  };
 }
 
 // テーブル座標系を組み立てる。
@@ -489,6 +650,111 @@ function clusterRows(items, slope, pitch) {
   return rows;
 }
 
+// =============================================================================
+// END 物理行 → エントリ（START 物理行）の対応づけ
+// =============================================================================
+//
+// 明細1行には エントリ K の START 列群（No〜乗車地）と END 列群（降車地〜備考）が
+// 印字されるが、END 列群は START 列群に対して縦にずれて出る（印字ヘッドの段ずれ）。
+// ずれ量は画像ごとに違い、実測で -1.2 ピッチ 〜 +0.2 ピッチ（1ピッチ以上ばらつく）。
+//
+// 旧実装は「No が数字で読めた START 行」と END 行を上から順に 1:1 対応させていた。
+// これは No が1つでも読めないと以降の全 END が1行ズレる。実際 2026/06/18 の明細は
+// 用紙のパンチ穴が No.11/12 を潰し、その2行が営業行から丸ごと落ちたうえ、13件目以降
+// の降車地・km・料金が2つ手前のエントリのものになった（IMG_1556 で再現・実証）。
+//
+// そこで No に依存せず y 幾何で対応づける:
+//   1. 系統オフセット Δ（= endY − startY）の候補を広く走査する。
+//      Δ が 1 ピッチずれた偽解（エイリアス）は、構造ペナルティで排除する:
+//        ・休 行に END が付く       … 休 行に END 列は無い（強いペナルティ）
+//        ・No の読めた行に END が付かない … トリップには必ず END がある
+//        ・END 行が余る             … END は必ずどれかのエントリのもの
+//   2. 各 Δ について順序保存の最適割当を DP で解き、総コスト最小の Δ を採る。
+// コストは全て「ピッチ単位」で表し、画像の解像度に依らないようにする。
+
+// 割当コストの重み（ピッチ単位）。
+const AS_TOL = 0.45;        // このズレを超える組み合わせは対応候補にしない
+const AS_REST_MATCH = 2.0;  // 休 行に END を付けたときの罰
+const AS_TRIP_MISS = 0.8;   // No の読めたトリップ行に END が付かないときの罰
+const AS_UNKNOWN_MISS = 0.25; // No が読めない行に END が付かないときの罰（弱）
+const AS_END_SKIP = 1.5;    // END 行を余らせたときの罰
+
+/**
+ * END 物理行を START 物理行（エントリ）へ順序保存で対応づける。
+ * @param {Array<{y:number, kind:'trip'|'rest'|'unknown'}>} starts y 昇順の START 物理行
+ * @param {Array<number>} endYs y 昇順の END 物理行の代表 y
+ * @param {number} pitch 行ピッチ（px）
+ * @returns {{map:Array<number>, delta:number, cost:number}}
+ *   map[j] = endYs[j] を割り当てた starts の index（-1 は未割当）
+ */
+export function assignEndRows(starts, endYs, pitch) {
+  const m = endYs.length;
+  const n = starts.length;
+  if (!m || !n || !(pitch > 0)) return { map: new Array(m).fill(-1), delta: 0, cost: 0 };
+
+  const skipStartCost = (i) => {
+    const k = starts[i].kind;
+    if (k === 'trip') return AS_TRIP_MISS;
+    if (k === 'unknown') return AS_UNKNOWN_MISS;
+    return 0; // rest: END が無いのが正常
+  };
+
+  // 与えられた Δ で順序保存の最適割当を DP で解く。
+  function solve(delta) {
+    const INF = Infinity;
+    // best[i][j] = starts[0..i) と endYs[0..j) まで処理したときの最小コスト
+    const best = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(INF));
+    const from = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+    best[0][0] = 0;
+    for (let i = 1; i <= n; i++) {
+      best[i][0] = best[i - 1][0] + skipStartCost(i - 1);
+      from[i][0] = 1; // START スキップ
+    }
+    for (let j = 1; j <= m; j++) {
+      best[0][j] = best[0][j - 1] + AS_END_SKIP;
+      from[0][j] = 2; // END スキップ
+    }
+    for (let i = 1; i <= n; i++) {
+      for (let j = 1; j <= m; j++) {
+        let cur = best[i - 1][j] + skipStartCost(i - 1);
+        let mode = 1;
+        const skipEnd = best[i][j - 1] + AS_END_SKIP;
+        if (skipEnd < cur) { cur = skipEnd; mode = 2; }
+        const resid = Math.abs(endYs[j - 1] - starts[i - 1].y - delta) / pitch;
+        if (resid <= AS_TOL && best[i - 1][j - 1] < INF) {
+          const match =
+            best[i - 1][j - 1] + resid +
+            (starts[i - 1].kind === 'rest' ? AS_REST_MATCH : 0);
+          if (match < cur) { cur = match; mode = 3; }
+        }
+        best[i][j] = cur;
+        from[i][j] = mode;
+      }
+    }
+    // 逆追跡
+    const map = new Array(m).fill(-1);
+    let i = n, j = m;
+    while (i > 0 || j > 0) {
+      const mode = i === 0 ? 2 : j === 0 ? 1 : from[i][j];
+      if (mode === 3) { map[j - 1] = i - 1; i--; j--; }
+      else if (mode === 2) { j--; }
+      else { i--; }
+    }
+    return { map, cost: best[n][m] };
+  }
+
+  // Δ の探索範囲は実測ばらつき（-1.2〜+0.2 ピッチ）に余裕を持たせる。
+  // 1px 刻み（DP は n*m が数千なので全走査でも軽い）。
+  const lo = Math.round(-2.0 * pitch);
+  const hi = Math.round(1.0 * pitch);
+  let bestOverall = null;
+  for (let d = lo; d <= hi; d++) {
+    const r = solve(d);
+    if (!bestOverall || r.cost < bestOverall.cost) bestOverall = { ...r, delta: d };
+  }
+  return bestOverall;
+}
+
 // メイン: OCR boxes → {rows}
 //
 // 行の扱い:
@@ -526,6 +792,8 @@ export function reconstructRows(ocr) {
     }
   }
   const labelBoxes = loc.header.labelBoxes || new Set();
+  // 見出しを使わず特定した場合は、本文帯の下端でも切る（ETC明細の混入防止）。
+  if (loc.bodyBottom != null && loc.bodyBottom < etcY) etcY = loc.bodyBottom;
 
   const order = TEMPLATE.columns;
   const colDef = order.map((n) => KEIHO_COLUMNS.find((c) => c.name === n));
@@ -688,50 +956,36 @@ export function reconstructRows(ocr) {
   }
   const startRawYc = startRows.map(rawYc);
 
-  // --- 各 START 行が numbered（通常トリップ）か 休（休憩）かを判定 ---
+  // --- 各 START 行の種別（トリップ / 休憩 / 不明）を判定 ---
   // 構造的事実: END 列（降車地・料金 等）は「トリップ」にのみ印字される。
-  // 休 行は START 列のみ。よって END 物理行は numbered 行と 1:1 で並ぶ。
-  // No セルを正規化して判定する。
+  // 休 行は START 列のみ。
+  // No が読めない行（パンチ穴で潰れる・誤読）は 'unknown'。トリップかもしれないので
+  // END を付ける候補として残す（旧実装はここで落としていた）。
   function noTextOf(row) {
     const bs = (row.items.filter((it) => it.ci === 0) || []).map((it) => it.b);
     if (!bs.length) return '';
     bs.sort((a, b) => cx(a) - cx(b));
     return bs.map(txt).join('');
   }
-  const isNumbered = startRows.map((row) => {
-    const t = toHalfDigits(noTextOf(row));
-    return /\d/.test(t) && !/[休保㈱]/.test(noTextOf(row));
+  const startKinds = startRows.map((row) => {
+    const noText = noTextOf(row);
+    if (/[休保㈱]/.test(noText)) return 'rest';
+    if (/\d/.test(toHalfDigits(noText)) || /貸/.test(noText)) return 'trip';
+    return 'unknown';
   });
 
-  // --- END 物理行 → エントリ対応 ---
-  // 構造的事実（A,B 両方で確認）:
-  //   (1) END 列は numbered トリップにのみ印字される（休 行に END 列は無い）。
-  //   (2) END 物理行クラスタは numbered エントリと「上から順に 1:1」で並ぶ。
-  // よって y 昇順の j 番目の END 物理行 → j 番目の numbered START 行（トリップ）。
-  // 休 行・先頭エントリの違いに依らず順序だけで決まる。
-  // ただし OCR が END 物理行を 1 つ落とすと以降が 1 ズレる。これを防ぐため、
-  // 割り当て後に「END 行 y と numbered START 行 y のズレ」を見て、ズレが
-  // 系統的に大きくなったら numbered 行側をスキップして整合を取り戻す。
-  const numberedIdx = [];
-  startRows.forEach((_, i) => { if (isNumbered[i]) numberedIdx.push(i); });
-
-  const endByEntry = startRows.map(() => []);
+  // --- END 物理行 → エントリ対応（y 幾何ベース）---
+  // assignEndRows を参照。No の読めた行の順序には依存しない。
   const endSorted = endRowsRaw
     .map((er) => ({ er, ey: rawYc(er) }))
     .sort((a, b) => a.ey - b.ey);
+  const starts = startRows.map((_, i) => ({ y: startRawYc[i], kind: startKinds[i] }));
+  const assign = assignEndRows(starts, endSorted.map((e) => e.ey), pitch);
 
-  let k = 0;
-  for (const { er, ey } of endSorted) {
-    if (k >= numberedIdx.length) break;
-    while (
-      k + 1 < numberedIdx.length &&
-      ey - startRawYc[numberedIdx[k]] > pitch * 1.4
-    ) {
-      k++;
-    }
-    endByEntry[numberedIdx[k]].push(...er.items);
-    k++;
-  }
+  const endByEntry = startRows.map(() => []);
+  assign.map.forEach((si, j) => {
+    if (si >= 0) endByEntry[si].push(...endSorted[j].er.items);
+  });
 
   // --- 行ごとに START/END バケットを作り finalizeRow ---
   const columnsForFinalize = colDef.map((c) => ({
@@ -759,10 +1013,32 @@ export function reconstructRows(ocr) {
     rows.push(row);
   }
 
+  const _debug = {
+    pitch,
+    startRows: startRows.map((sr, i) => ({
+      y: startRawYc[i],
+      kind: startKinds[i],
+      no: noTextOf(sr),
+      end: assign.map.indexOf(i),
+      text: sr.items.slice().sort((a, b) => a.xc - b.xc).map((it) => txt(it.b)).join(' | '),
+    })),
+    endRows: endSorted.map(({ er, ey }) => ({
+      y: ey,
+      text: er.items.slice().sort((a, b) => a.xc - b.xc).map((it) => txt(it.b)).join(' | '),
+    })),
+    endRowsDropped: endRowsAll
+      .filter((er) => !endRowsRaw.includes(er))
+      .map((er) => ({
+        y: rawYc(er),
+        text: er.items.slice().sort((a, b) => a.xc - b.xc).map((it) => txt(it.b)).join(' | '),
+      })),
+  };
+
   return {
     rows,
     _grid: { pitch, startRows: startRows.length },
     _loc: { a: loc.xm.a, b: loc.xm.b, inliers: loc.xm.inliers },
+    _debug,
   };
 }
 

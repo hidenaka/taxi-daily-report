@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cabis ｜ カレンダー</title>
 <link rel="stylesheet" href="css/style.css">
 <style>
@@ -78,8 +78,8 @@ if (location.hostname.includes('-dev')) {
 </main>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, todayIso, toLocalIso, currentBillingPeriod, getBillingPeriodRange, formatBillingPeriod, shiftBillingPeriod } from './js/app.js?b=9a7f5df11af2';
-import { getConfig, saveConfig, getDrivesForMonth } from './js/storage.js?b=9a7f5df11af2';
+import { renderBottomNav, formatYen, todayIso, toLocalIso, currentBillingPeriod, getBillingPeriodRange, formatBillingPeriod, shiftBillingPeriod } from './js/app.js?b=391c55a88e78';
+import { getConfig, saveConfig, getDrivesForMonth } from './js/storage.js?b=391c55a88e78';
 import {
   getShiftStateForDate,
   cycleShiftState,
@@ -87,10 +87,10 @@ import {
   getPlannedVehicle,
   pruneOrphanVehicles,
   countMonthlyShifts,
-} from './js/planned-shifts.js?b=9a7f5df11af2';
-import { renderLegalFooter } from './js/legal-footer.js?b=9a7f5df11af2';
-import { enforceAccess } from './js/access-control.js?b=9a7f5df11af2';
-import './js/help-video.js?b=9a7f5df11af2';
+} from './js/planned-shifts.js?b=391c55a88e78';
+import { renderLegalFooter } from './js/legal-footer.js?b=391c55a88e78';
+import { enforceAccess } from './js/access-control.js?b=391c55a88e78';
+import './js/help-video.js?b=391c55a88e78';
 
 if (!(await enforceAccess('core'))) {
   throw new Error('access-denied: redirected');

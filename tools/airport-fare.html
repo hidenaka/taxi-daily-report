@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Cabis ｜ 空港定額</title>
   <link rel="stylesheet" href="css/style.css">
   <link rel="icon" type="image/png" sizes="180x180" href="icon-180.png">
@@ -61,7 +61,7 @@
 </head>
 <body>
   <script type="module">
-    import { enforceAccess } from '../js/access-control.js?b=9a7f5df11af2';
+    import { enforceAccess } from '../js/access-control.js?b=391c55a88e78';
     if (!(await enforceAccess('core', { redirect: '../subscribe.html' }))) {
       throw new Error('access-denied: redirected');
     }
@@ -88,7 +88,7 @@
   <div id="fare-popup" hidden></div>
   <div id="fare-card-host"></div>
 
-  <script type="module" src="./js/airport-fare-app.js?b=9a7f5df11af2"></script>
+  <script type="module" src="./js/airport-fare-app.js?b=391c55a88e78"></script>
   <script>
     document.querySelectorAll('.app-tab').forEach(a => {
       a.addEventListener('click', (e) => {
@@ -100,7 +100,7 @@
   </script>
   <div id="navHost"></div>
   <script type="module">
-    import { renderBottomNav } from '../js/app.js?b=9a7f5df11af2';
+    import { renderBottomNav } from '../js/app.js?b=391c55a88e78';
     document.getElementById('navHost').innerHTML = renderBottomNav('tools', '../');
   </script>
 </body>

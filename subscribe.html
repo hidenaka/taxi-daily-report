@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cabis ｜ 有料プランのお申し込み</title>
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
@@ -168,12 +168,12 @@ if (location.hostname.includes('-dev')) {
   </section>
 </main>
 <script type="module">
-import { renderLegalFooter } from './js/legal-footer.js?b=9a7f5df11af2';
-import { getSubscription, startCheckout, startFree, isPaying, formatStatus } from './js/subscription-state.js?b=9a7f5df11af2';
-import { isEmailAuth } from './js/firebase-auth.js?b=9a7f5df11af2';
-import { auth } from './js/firebase-init.js?b=9a7f5df11af2';
+import { renderLegalFooter } from './js/legal-footer.js?b=391c55a88e78';
+import { getSubscription, startCheckout, startFree, isPaying, formatStatus } from './js/subscription-state.js?b=391c55a88e78';
+import { isEmailAuth } from './js/firebase-auth.js?b=391c55a88e78';
+import { auth } from './js/firebase-init.js?b=391c55a88e78';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
-import { checkInviteAndWarn, fetchCompanyExists, fetchCompanyProfile } from './js/invite-url.js?b=9a7f5df11af2';
+import { checkInviteAndWarn, fetchCompanyExists, fetchCompanyProfile } from './js/invite-url.js?b=391c55a88e78';
 
 renderLegalFooter();
 
