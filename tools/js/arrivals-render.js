@@ -153,7 +153,7 @@ export function renderTopics(container, topics) {
   container.hidden = false;
   const items = topics.map(t => {
     const paxLabel = (t.estimatedPax !== null && t.estimatedPax !== undefined)
-      ? `約${t.estimatedPax}人`
+      ? (t.paxSource === 'notice' ? `約${t.estimatedPax}人(現地掲示)` : `約${t.estimatedPax}人`)
       : '推定不可';
     const detail = `${t.scheduledTime}→${t.estimatedTime} (${t.delayMin}分遅延) / ${paxLabel}`;
     // ターミナルの隣に号(poolLane 1-4)を併記。未確定は号を出さない。
@@ -282,7 +282,9 @@ function appendFlightRow(container, f) {
   const hasPax = f.estimatedPax !== null && f.estimatedPax !== undefined;
   const hasSeats = f.seatCount !== null && f.seatCount !== undefined;
   const paxLine = hasPax
-    ? `<span class="pax-est">推定搭乗 ${f.estimatedPax}人</span>`
+    ? (f.paxSource === 'notice'
+      ? `<span class="pax-est pax-notice">現地掲示 約${f.estimatedPax}人</span>`
+      : `<span class="pax-est">推定搭乗 ${f.estimatedPax}人</span>`)
       + (hasSeats ? `<span class="pax-max">（最大 ${f.seatCount}人）</span>` : '')
     : `<span class="pax-est">搭乗人数 推定不可</span>`;
   const statusIcon = isDelayed ? ' ⚠' : '';
@@ -356,7 +358,22 @@ export function renderPoolNotice(el, notice) {
     parts.push(`<div class="pn-tail">🚧 末尾規制：<b>${esc(notice.tailRegulation)}</b>（この末尾のみ入構可）</div>`);
   }
   if (notice.hasFlightNotice && notice.flightNoticeText) {
-    parts.push(`<div class="pn-flight"><div class="pn-h">🚖 タクシーセンター現地案内</div><pre class="pn-text">${esc(notice.flightNoticeText)}</pre></div>`);
+    // 構造化サマリ(lateFlights): 号別の未着人数・次便・客列をチップで先頭に出す
+    const sum = notice.lateFlights && notice.lateFlights.summary;
+    let chips = '';
+    if (sum) {
+      const items = [];
+      for (const lane of [1, 2, 3, 4]) {
+        const s = (sum.byStall || {})[lane];
+        const q = (sum.queue || {})[lane];
+        const bits = [];
+        if (s && s.pendingFlights > 0) bits.push(`未着${s.pendingFlights}便${s.pendingPax > 0 ? `・約${s.pendingPax}人` : ''}${s.nextEta ? `・次${esc(s.nextEta)}` : ''}`);
+        if (q != null) bits.push(`客列約${q}人`);
+        if (bits.length) items.push(`<span class="pn-chip pn-lane-${lane}">${lane}号 ${bits.join(' / ')}</span>`);
+      }
+      if (items.length) chips = `<div class="pn-chips">${items.join('')}</div>`;
+    }
+    parts.push(`<div class="pn-flight"><div class="pn-h">🚖 タクシーセンター現地案内</div>${chips}<pre class="pn-text">${esc(notice.flightNoticeText)}</pre></div>`);
   }
   el.innerHTML = parts.join('');
   el.hidden = false;
@@ -420,8 +437,11 @@ export function renderNoribaActivity(container, activity, opts = {}) {
     const flowRow = (mv.level != null)
       ? `<span class="ns-lab">流れ</span><div class="ns-trk"><div class="fill" style="width:${fill}%"></div>${mv.normalMarkerPct != null ? `<div class="norm" style="left:${mv.normalMarkerPct}%"></div><div class="normlab" style="left:${mv.normalMarkerPct}%">通常</div>` : ''}</div><span class="ns-val">${_esc(lvl)}</span>`
       : '';
-    const occRow = (a.occupancy && a.occupancy.label != null)
-      ? `<span class="ns-lab">待機車両</span><div class="ns-segs">${segs(a.occupancy.segments, a.occupancy.segments >= 4)}</div><span class="ns-val">${_esc(a.occupancy.label)}</span>`
+    // 待機車両: 量(段)＋「その号のいつも」の目盛り。号ごとに普段の埋まり具合が違うので
+    // 絶対量だけでは同じ4段が別の意味になる(2号は普段より少なめ/4号は多め)。
+    const oc = a.occupancy || {};
+    const occRow = (oc.label != null)
+      ? `<span class="ns-lab">待機車両</span><div class="ns-segs${oc.typicalPct != null ? ' has-tick' : ''}">${segs(oc.segments, oc.segments >= 4)}${oc.typicalPct != null ? `<div class="tick" style="left:${oc.typicalPct}%"></div><div class="ticklab" style="left:${oc.typicalPct}%">いつも</div>` : ''}</div><span class="ns-val">${_esc(oc.vsTypical || oc.label)}</span>`
       : '';
     const fwd = (mv.level != null && a.movement.curve)
       ? `<div class="ns-fwd">この先 <span class="ns-spark" data-spark="${(mv.sparkFuture || []).join(',')}" data-color="#8a8f88"></span> ${_esc(fwdText(mv.activeUntil))}<span class="ns-more">詳細 ›</span></div>`
@@ -441,15 +461,21 @@ export function renderNoribaActivity(container, activity, opts = {}) {
           <div class="ns-chint">流れ＝列の進み具合。実線(今日)が薄い線(通常)より上＝通常より流れている。右へ行くほど先の時間。</div>
         </div>` : '';
     const nextF = a.demand && a.demand.nextFlight ? `次 ${_esc(a.demand.nextFlight.time)} ${_esc(a.demand.nextFlight.fromName)}` : '';
+    // 現地掲示(タクシーセンター)の深夜遅延便情報。号別の未着便・人数・客列を1行で。
+    const nt = a.notice;
+    const noticeRow = (nt && (nt.pendingFlights > 0 || nt.queue != null))
+      ? `<div class="ns-notice">🌙 現地掲示${nt.pendingFlights > 0 ? ` 未着${nt.pendingFlights}便${nt.pendingPax > 0 ? `・約${nt.pendingPax}人` : ''}${nt.nextEta ? `・次${_esc(nt.nextEta)}` : ''}` : ''}${nt.queue != null ? `・客列約${nt.queue}人` : ''}</div>`
+      : '';
     return `<div class="ns-card ${tcls}" data-noriba="${a.lane}">
       <div class="ns-top"><span class="no">${a.lane}</span><span class="term">${_esc(a.terminal)}</span><span class="last">${nextF}</span></div>
       <div class="ns-met">
         <span class="ns-lab">到着便</span><div class="ns-planes">${dots(a.demand.planeIcons)}</div><span class="ns-val">60分内 ${a.demand.flights60}便</span>
         ${occRow}
-        ${flowRow}
       </div>
+      ${noticeRow}
       ${fwd}
       <div class="ns-detail" hidden>
+        ${flowRow ? `<h5>列の流れ（参考）</h5><div class="ns-met ns-met-detail">${flowRow}</div><div class="ns-chint">列移動は15分に0回のことが多く(実測85%)、短時間では差が出にくい指標です。下のグラフの形で傾向を見てください。</div>` : ''}
         <h5>到着便（60分内）</h5>${flList}
         ${curveBlock}
         ${last}

@@ -95,13 +95,13 @@ if (location.hostname.includes('-dev')) {
 </main>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDate } from './js/app.js?b=db08d79c0491';
-import { getDrive, listFiles, saveDriveSafe, deleteDrive } from './js/storage.js?b=db08d79c0491';
-import { calcDailySales } from './js/payroll.js?b=db08d79c0491';
-import { calcTimeBreakdown, hourlyActivity, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, formatMin, timeToMinutes, isSummaryOnly } from './js/chart-helpers.js?b=db08d79c0491';
-import { weatherEmoji } from './js/weather.js?b=db08d79c0491';
-import { renderLegalFooter } from './js/legal-footer.js?b=db08d79c0491';
-import { enforceAccess } from './js/access-control.js?b=db08d79c0491';
+import { renderBottomNav, formatYen, formatDate } from './js/app.js?b=857c1b2751c3';
+import { getDrive, listFiles, saveDriveSafe, deleteDrive } from './js/storage.js?b=857c1b2751c3';
+import { calcDailySales } from './js/payroll.js?b=857c1b2751c3';
+import { calcTimeBreakdown, hourlyActivity, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, formatMin, timeToMinutes, isSummaryOnly } from './js/chart-helpers.js?b=857c1b2751c3';
+import { weatherEmoji } from './js/weather.js?b=857c1b2751c3';
+import { renderLegalFooter } from './js/legal-footer.js?b=857c1b2751c3';
+import { enforceAccess } from './js/access-control.js?b=857c1b2751c3';
 
 if (!(await enforceAccess('core'))) {
   throw new Error('access-denied: redirected');
@@ -417,9 +417,9 @@ function renderTripsTable(drive) {
       <td class="r">${dur}分</td>
       <td>${t.isPickup ? '迎車' : ''}${t.isCharter ? '貸' : ''}</td>
       <td class="place" title="${t.boardPlace}">${t.boardPlace}</td>
-      <td class="place" title="${t.alightPlace}">${t.alightPlace}${t.isCancel ? ' [×]' : ''}</td>
+      <td class="place" title="${t.alightPlace}">${t.alightPlace}${t.isCancel ? (Number(t.amount) > 0 ? ' [キャンセル・補填]' : ' [×]') : ''}</td>
       <td class="r">${(t.km || 0).toFixed(1)}</td>
-      <td class="r">${t.isCancel ? '—' : formatYen(t.amount)}</td>
+      <td class="r">${(t.isCancel && !(Number(t.amount) > 0)) ? '—' : formatYen(t.amount)}</td>
       <td class="r">${gapStr}</td>
     </tr>`;
   }).join('');
