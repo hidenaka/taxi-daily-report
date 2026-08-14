@@ -178,22 +178,22 @@ if (location.hostname.includes('-dev')) {
 <button class="fab" onclick="location.href='input.html'" style="display:none;">＋</button>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=857c1b2751c3';
-import { getConfig, getDrivesForMonth, flushPendingQueue, saveConfig } from './js/storage.js?b=857c1b2751c3';
-import { DEFAULT_CONFIG } from './js/default-config.js?b=857c1b2751c3';
-import { calcTotalPay, calcDailySales, isApproxSales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales, predictMonthly } from './js/payroll.js?b=857c1b2751c3';
-import { METRIC_CATALOG, METRIC_GROUPS, resolveMetrics } from './js/home-metrics.js?b=857c1b2751c3';
-import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=857c1b2751c3';
-import { processInvite } from './js/invite-crypto.js?b=857c1b2751c3';
-import { renderLegalFooter } from './js/legal-footer.js?b=857c1b2751c3';
-import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=857c1b2751c3';
-import { isEmailAuth, waitForAuth, getUserId } from './js/firebase-auth.js?b=857c1b2751c3';
-import { auth } from './js/firebase-init.js?b=857c1b2751c3';
+import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=1ab41c23a425';
+import { getConfig, getDrivesForMonth, flushPendingQueue, saveConfig } from './js/storage.js?b=1ab41c23a425';
+import { DEFAULT_CONFIG } from './js/default-config.js?b=1ab41c23a425';
+import { calcTotalPay, calcDailySales, isApproxSales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales, predictMonthly } from './js/payroll.js?b=1ab41c23a425';
+import { METRIC_CATALOG, METRIC_GROUPS, resolveMetrics } from './js/home-metrics.js?b=1ab41c23a425';
+import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=1ab41c23a425';
+import { processInvite } from './js/invite-crypto.js?b=1ab41c23a425';
+import { renderLegalFooter } from './js/legal-footer.js?b=1ab41c23a425';
+import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=1ab41c23a425';
+import { isEmailAuth, waitForAuth, getUserId } from './js/firebase-auth.js?b=1ab41c23a425';
+import { auth } from './js/firebase-init.js?b=1ab41c23a425';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
-import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts, isRosterDayOff } from './js/planned-shifts.js?b=857c1b2751c3';
-import { checkInviteAndWarn, fetchCompanyExists, loadInviteSlug, loadReferrer, shouldRedirectInviteToSignup, buildSignupRedirectUrl } from './js/invite-url.js?b=857c1b2751c3';
-import { shouldShowFirstRunCard, shouldMarkHasDrive, isExistingLocalRealUser } from './js/first-run.js?b=857c1b2751c3';
-import './js/help-video.js?b=857c1b2751c3';
+import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts, isRosterDayOff } from './js/planned-shifts.js?b=1ab41c23a425';
+import { checkInviteAndWarn, fetchCompanyExists, loadInviteSlug, loadReferrer, shouldRedirectInviteToSignup, buildSignupRedirectUrl } from './js/invite-url.js?b=1ab41c23a425';
+import { shouldShowFirstRunCard, shouldMarkHasDrive, isExistingLocalRealUser } from './js/first-run.js?b=1ab41c23a425';
+import './js/help-video.js?b=1ab41c23a425';
 
 // 暗号化招待リンク処理は GitHub 版専用のためスキップ（Firebase 版）
 const inviteProcessed = false;
@@ -441,8 +441,19 @@ async function render(drivesPromise) {
 
   // 現在月度かつ責任出番未達の段階では、予定責任出番ベース(rateTable["11"]等)で歩率計算
   // 過去月度・確定月度は実shiftCountベース(従来通り)
-  const useResponsibilityTier = isCurrent && rawDrives.length > 0 && rawDrives.length < respShifts;
-  const actualResult = calcTotalPay(rawDrives, config, range.start, range.end, { useResponsibilityTier });
+  // 歩率テーブルの段選び用の責任出番。有給日は乗務しないので出番に数えない
+  // (11乗務で1日有給 → 10出番のテーブル)。予定表(expandedDates)は有給と排他なので
+  // plannedShifts には有給日が入らない。予定未設定で設定値に頼るときだけ有給を引く。
+  const paidLeaveInPeriod = (config.shifts?.paidLeaveDates || [])
+    .filter(d => d >= range.start && d <= range.end).length;
+  const respShiftsForTier = plannedShifts > 0
+    ? plannedShifts
+    : Math.max(1, (config.responsibilityShifts || 11) - paidLeaveInPeriod);
+  const useResponsibilityTier = isCurrent && rawDrives.length > 0 && rawDrives.length < respShiftsForTier;
+  const actualResult = calcTotalPay(rawDrives, config, range.start, range.end, {
+    useResponsibilityTier,
+    respShifts: respShiftsForTier,
+  });
   const actualTakeHome = actualResult.total * takeHomeRate;
 
   let predicted = null;
@@ -1515,7 +1526,7 @@ function pickWeatherIcon(w) {
 load();
 </script>
 <script type="module">
-import { isCoachEnabled } from './js/coach/coach-flag.js?b=857c1b2751c3';
+import { isCoachEnabled } from './js/coach/coach-flag.js?b=1ab41c23a425';
 const _ce = document.getElementById('coachEntryCard');
 if (_ce && isCoachEnabled()) _ce.style.display = '';
 </script>

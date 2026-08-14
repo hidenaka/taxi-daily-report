@@ -184,12 +184,12 @@ if (location.hostname.includes('-dev')) {
   </div>
 </main>
 <script type="module">
-import { renderLegalFooter } from './js/legal-footer.js?b=857c1b2751c3';
-import { waitForAuth, isEmailAuth, loginWithUserId, signUp } from './js/firebase-auth.js?b=857c1b2751c3';
-import { loadInviteSlug, validateInviteSlug, fetchCompanyExists, checkInviteAndWarn } from './js/invite-url.js?b=857c1b2751c3';
-import { generateSlug } from './js/slug-gen.js?b=857c1b2751c3';
-import { validateSignupFields, buildNotifyPayload, postSignupNotify } from './js/signup-notify.js?b=857c1b2751c3';
-import { billingApiBase } from './js/subscription-state.js?b=857c1b2751c3';
+import { renderLegalFooter } from './js/legal-footer.js?b=1ab41c23a425';
+import { waitForAuth, isEmailAuth, loginWithUserId, signUp } from './js/firebase-auth.js?b=1ab41c23a425';
+import { loadInviteSlug, validateInviteSlug, fetchCompanyExists, checkInviteAndWarn } from './js/invite-url.js?b=1ab41c23a425';
+import { generateSlug } from './js/slug-gen.js?b=1ab41c23a425';
+import { validateSignupFields, buildNotifyPayload, postSignupNotify } from './js/signup-notify.js?b=1ab41c23a425';
+import { billingApiBase } from './js/subscription-state.js?b=1ab41c23a425';
 renderLegalFooter();
 
 // 招待URL `?company=<slug>` を捕捉・検証（完全招待制・decisions 6）。
