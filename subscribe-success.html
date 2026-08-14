@@ -39,9 +39,9 @@ if ('serviceWorker' in navigator) {
   <a href="index.html" style="display:block;text-align:center;text-decoration:none;color:var(--primary);font-size:13px;">あとで（ホームへ進む）</a>
 </main>
 <script type="module">
-import { renderLegalFooter } from './js/legal-footer.js?b=1ab41c23a425';
-import { getSubscription, formatStatus, isPaying } from './js/subscription-state.js?b=1ab41c23a425';
-import { clearSubCache } from './js/sub-cache.js?b=1ab41c23a425';
+import { renderLegalFooter } from './js/legal-footer.js?b=5fad6ec17e0f';
+import { getSubscription, formatStatus, isPaying } from './js/subscription-state.js?b=5fad6ec17e0f';
+import { clearSubCache } from './js/sub-cache.js?b=5fad6ec17e0f';
 renderLegalFooter();
 
 // Stripe Webhook による Firestore 反映には数秒のラグがあるため、数回ポーリングする。
