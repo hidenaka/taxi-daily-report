@@ -61,7 +61,7 @@
 </head>
 <body>
   <script type="module">
-    import { enforceAccess } from '../js/access-control.js?b=581df6978d1f';
+    import { enforceAccess } from '../js/access-control.js?b=92eeb72e4c71';
     if (!(await enforceAccess('core', { redirect: '../subscribe.html' }))) {
       throw new Error('access-denied: redirected');
     }
@@ -88,7 +88,7 @@
   <div id="fare-popup" hidden></div>
   <div id="fare-card-host"></div>
 
-  <script type="module" src="./js/airport-fare-app.js?b=581df6978d1f"></script>
+  <script type="module" src="./js/airport-fare-app.js?b=92eeb72e4c71"></script>
   <script>
     document.querySelectorAll('.app-tab').forEach(a => {
       a.addEventListener('click', (e) => {
@@ -100,7 +100,7 @@
   </script>
   <div id="navHost"></div>
   <script type="module">
-    import { renderBottomNav } from '../js/app.js?b=581df6978d1f';
+    import { renderBottomNav } from '../js/app.js?b=92eeb72e4c71';
     document.getElementById('navHost').innerHTML = renderBottomNav('tools', '../');
   </script>
 </body>
