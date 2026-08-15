@@ -268,18 +268,30 @@ function wrapHalfDay(diffMin) {
 // 大幅遅延便（予定より BIG_DELAY_MIN 分以上遅れている未到着便）を抽出する。
 // nowMinutes (0:00からの分) を渡すと、到着予定が TOPIC_PAST_GRACE_MIN 分より
 // 過去の便を除外し、並び順も「今から近い順」(日またぎ考慮) になる。
-export function detectTopics(flights, nowMinutes = null) {
+//
+// opts.includeNotice=true で「現地掲示に載っている便」も遅れ幅に関係なく拾う。
+// 掲示は羽田タクシーセンターの【遅れ便情報】そのもので、乗り場が確定している
+// 唯一の情報源。実データ(2026-06-26の掲示14便)では掲示便の多くが遅れ30分未満で、
+// 遅れ幅だけで切ると「確定情報が消えて推定だけが残る」逆転が起きていた。
+export function detectTopics(flights, nowMinutes = null, opts = {}) {
+  const includeNotice = opts.includeNotice === true;
   const topics = [];
   for (const f of flights) {
     if (f.status === '到着' || f.status === '欠航') continue;
+    const posted = includeNotice && f.laneSource === 'notice';
     const sched = timeToMinutes(f.scheduledTime);
+    // 掲示に出ている便は掲示の到着予定を正とする。APIが定刻のまま更新されていない
+    // ことがあり(実データ: JL920 定刻22:00のまま/掲示23:37)、遅れ幅も掲示から数え直す。
+    const displayTime = (posted && f.noticeEta) ? f.noticeEta : (f.estimatedTime ?? f.scheduledTime);
+    const disp = timeToMinutes(displayTime);
     const est = timeToMinutes(f.estimatedTime ?? f.scheduledTime);
-    const delayMin = (sched !== null && est !== null)
-      ? Math.max(0, wrapHalfDay(est - sched))
+    const ref = (posted && disp !== null) ? disp : est;
+    const delayMin = (sched !== null && ref !== null)
+      ? Math.max(0, wrapHalfDay(ref - sched))
       : 0;
-    if (delayMin < BIG_DELAY_MIN) continue;
-    if (nowMinutes !== null && est !== null) {
-      const rel = wrapHalfDay(est - nowMinutes);
+    if (delayMin < BIG_DELAY_MIN && !posted) continue;
+    if (nowMinutes !== null && disp !== null) {
+      const rel = wrapHalfDay(disp - nowMinutes);
       if (rel < -TOPIC_PAST_GRACE_MIN) continue; // 30分以上過去=表示しない
     }
     topics.push({
@@ -289,20 +301,131 @@ export function detectTopics(flights, nowMinutes = null) {
       poolLane: f.poolLane ?? null,
       scheduledTime: f.scheduledTime,
       estimatedTime: f.estimatedTime ?? f.scheduledTime,
+      displayTime,
       delayMin,
       estimatedPax: f.estimatedPax ?? null,
       paxSource: f.paxSource ?? null,
+      laneSource: f.laneSource ?? null,
+      poolLaneModel: f.poolLaneModel ?? null,
+      noticeEta: f.noticeEta ?? null,
       laneActual: f.laneActual ?? null,
       laneActualDiffers: f.laneActualDiffers ?? false
     });
   }
   const sortKey = (t) => {
-    const m = timeToMinutes(t.estimatedTime);
+    const m = timeToMinutes(t.displayTime ?? t.estimatedTime);
     if (m === null) return Infinity;
     return nowMinutes !== null ? wrapHalfDay(m - nowMinutes) : m;
   };
   topics.sort((a, b) => sortKey(a) - sortKey(b));
   return topics;
+}
+
+// --- 遅延便の「並ぶ乗り場」ガイド (2026-08-15 本人要望) ---------------------
+// 遅れた便は通常と違う号に着くことがある。実測(現地掲示で号が確定した27便)では
+// 6便=22% が静的推定と違う号だった。しかも食い違いは必ず同じターミナル内の隣同士
+// (T1: 1↔2 / T2: 3↔4) で起きるので、ターミナルだけ見て並ぶと外れる。
+// 便を時刻順に並べただけでは「どこに並ぶか」が読み取れないため、号でまとめ直す。
+
+const isLaneNo = (n) => Number.isInteger(n) && n >= 1 && n <= 4;
+
+// 1便の「並ぶ号」を根拠の強い順に決める。決まらなければ null(当てずっぽうで出さない)。
+//   notice   … 今夜の現地掲示で確定
+//   actual   … 同じ便・同じ時間帯で実際に着いた実績(＝遅れた日の過去の傾向)
+//   estimate … 到着口からの静的推定(＝通常時の号)
+//
+// 3つの見方(通常時 / 遅れた日の傾向 / 今夜の確定)を潰さずに全部返す。乗務員が
+// 「ふだんはここだが遅れると向こう、今夜は掲示で確定」を自分で読めるようにするため
+// (2026-08-15 本人要望)。決定に使った1つだけ返すと比較ができない。
+export function resolveTopicLane(t) {
+  if (!t) return null;
+  // 通常時の号 = 静的推定。掲示が上書きしていれば退避した poolLaneModel が元の値。
+  const normalLane = isLaneNo(t.poolLaneModel) ? t.poolLaneModel
+    : (t.laneSource === 'notice' ? (isLaneNo(t.poolLane) ? t.poolLane : null)
+      : (isLaneNo(t.poolLane) ? t.poolLane : null));
+  // 遅れた日の過去の傾向(実績は現地掲示の履歴＝遅延便のみから学習している)
+  const trend = (t.laneActual && isLaneNo(t.laneActual.stall))
+    ? { lane: t.laneActual.stall, n: t.laneActual.n ?? null, share: t.laneActual.share ?? null }
+    : null;
+  // 今夜の確定
+  const confirmedLane = (t.laneSource === 'notice' && isLaneNo(t.poolLane)) ? t.poolLane : null;
+
+  const base = { normalLane, trend, confirmedLane };
+  if (confirmedLane != null) return { ...base, lane: confirmedLane, basis: 'notice', basisN: null };
+  if (trend) return { ...base, lane: trend.lane, basis: 'actual', basisN: trend.n };
+  if (isLaneNo(t.poolLane)) return { ...base, lane: t.poolLane, basis: 'estimate', basisN: null };
+  return null;
+}
+
+// pool-status から1号ぶんの待機車両(量の目安)を作る。号別カードと遅延便ガイドの共通規則。
+// fillRate(全レーン埋まり率0-1)が主系 — 旧 occ/実スロット数は前列のみで遠景の満車を
+// 過小評価していた(満車でも「並」)。fillRate が無いデータは従来 occ にフォールバック。
+// typicalFillRate があれば「その号のいつも」との比較も付ける(号ごとに普段が大きく違う)。
+export function laneOccupancy(poolStatus, lane) {
+  const st = poolStatus && poolStatus.stalls ? poolStatus.stalls['stall' + lane] : null;
+  if (st && typeof st.fillRate === 'number') {
+    const segments = fillRateSegments(st.fillRate);
+    const out = { segments, label: occupancyLabel(segments), vehicles: st.occ ?? null, fillPct: Math.round(st.fillRate * 100) };
+    if (typeof st.typicalFillRate === 'number' && st.typicalFillRate > 0) {
+      out.typicalPct = Math.round(st.typicalFillRate * 100);
+      out.vsTypical = compareToTypical(st.fillRate, st.typicalFillRate);
+    }
+    return out;
+  }
+  if (st && typeof st.occ === 'number') {
+    const segments = occupancySegments(st.occ, STALL_CAPACITY[lane] || 16);
+    return { segments, label: occupancyLabel(segments), vehicles: st.occ };
+  }
+  return { segments: 0, label: null, vehicles: null };
+}
+
+// ガイドに載せる先の長さ。ページ既定の表示窓(+180分)に合わせる。
+// 「今どこに並ぶか」の材料なので、10時間先の遅延便を混ぜると読めなくなる
+// (実データ: 20:10定刻→24:43予定の便が昼のうちから出ていた)。落とした件数は必ず表示する。
+export const DELAY_GUIDE_HORIZON_MIN = 180;
+
+/**
+ * detectTopics の結果を「号」ごとにまとめる。号の並びは到着が近い順(topics の順)。
+ * @param {Array} topics detectTopics の戻り値
+ * @param {object|null} poolStatus pool-status.json (待機車両の量を添えるため。無くても動く)
+ * @param {{nowMinutes?:number|null, horizonMin?:number|null}} opts nowMinutes を渡すと先の便を laterCount へ回す
+ * @returns {{lanes:Array, unresolved:Array, total:number, laterCount:number}}
+ */
+export function buildDelayLaneGuide(topics, poolStatus = null, opts = {}) {
+  const nowMinutes = opts.nowMinutes ?? null;
+  const horizonMin = opts.horizonMin === undefined ? DELAY_GUIDE_HORIZON_MIN : opts.horizonMin;
+  const all = Array.isArray(topics) ? topics : [];
+  const list = [];
+  let laterCount = 0;
+  for (const t of all) {
+    if (nowMinutes !== null && horizonMin !== null) {
+      const est = timeToMinutes(t.displayTime ?? t.estimatedTime);
+      if (est !== null && wrapHalfDay(est - nowMinutes) > horizonMin) { laterCount += 1; continue; }
+    }
+    list.push(t);
+  }
+  const byLane = new Map();
+  const unresolved = [];
+  for (const t of list) {
+    const r = resolveTopicLane(t);
+    if (!r) { unresolved.push(t); continue; }
+    if (!byLane.has(r.lane)) byLane.set(r.lane, []);
+    byLane.get(r.lane).push({ ...t, ...r });
+  }
+  // 号は常に 1→4 の順に並べる。乗り場は動かないので、見るたび同じ位置にある方が探しやすく、
+  // 上の「乗り場の状況」カード(1〜4号)とも突き合わせやすい。便は号の中で到着が近い順。
+  const lanes = [...byLane.entries()].sort((a, b) => a[0] - b[0]).map(([lane, flights]) => ({
+    lane,
+    terminal: lane <= 2 ? 'T1' : 'T2',
+    count: flights.length,
+    pax: flights.reduce((s, f) => s + (typeof f.estimatedPax === 'number' ? f.estimatedPax : 0), 0),
+    // 号のうち1便でも掲示/実績で裏が取れていれば、その号の確度として持ち上げる
+    strongest: flights.some((f) => f.basis === 'notice') ? 'notice'
+      : (flights.some((f) => f.basis === 'actual') ? 'actual' : 'estimate'),
+    occupancy: laneOccupancy(poolStatus, lane),
+    flights,
+  }));
+  return { lanes, unresolved, total: list.length, laterCount };
 }
 
 export function minutesSince(isoString) {
@@ -404,7 +527,8 @@ export function lookupLaneActual(flight, patterns) {
   if (!flight || !patterns) return null;
   const fno = laneNormFn(flight.flightNumber);
   if (!fno) return null;
-  const band = laneTimeBand(flight.estimatedTime ?? flight.scheduledTime ?? null);
+  // 掲示があればその到着予定で時間帯を判定する(APIが定刻のまま更新されない便があるため)
+  const band = laneTimeBand(flight.noticeEta ?? flight.estimatedTime ?? flight.scheduledTime ?? null);
   if (band === 'unknown' || band === 'day') return null; // 実績はすべて深夜帯の掲示由来
   const fb = patterns.byFlightBand?.[`${fno}|${band}`];
   if (!fb || fb.n < 2 || fb.share < LANE_DECISIVE_SHARE) return null;
@@ -412,20 +536,25 @@ export function lookupLaneActual(flight, patterns) {
 }
 
 /**
- * 便配列に実績を付ける。推定号(poolLane)と実績が違う便には laneActual を持たせる。
- * 現地掲示で既に確定済み(laneSource==='notice')の便は上書きしない(掲示が最優先)。
- * @returns 付与した件数
+ * 便配列に「遅れた日の過去の傾向」(laneActual)を付ける。
+ *
+ * 今夜の掲示で確定済み(laneSource==='notice')の便にも付ける。号を決めるのは掲示だが、
+ * 「通常はどこ・遅れた日はどこ・今夜の確定はどこ」を並べて見せるための材料になる
+ * (2026-08-15 本人要望)。掲示便では laneActualDiffers を立てない — 便一覧の
+ * 「実績◯号」タグは掲示が決着済みの便に出す意味がないため。
+ * @returns 推定と食い違った件数(掲示便は数えない)
  */
 export function applyLaneActuals(flights, patterns) {
   if (!Array.isArray(flights) || !patterns) return 0;
   let n = 0;
   for (const f of flights) {
-    if (f.laneSource === 'notice') continue;   // 今夜の掲示が出ていればそちらが正
     if (f.status === '到着' || f.status === '欠航') continue;
     const hit = lookupLaneActual(f, patterns);
     if (!hit) continue;
     f.laneActual = hit;
-    if (f.poolLane != null && hit.stall !== f.poolLane) {
+    const decided = f.laneSource === 'notice';
+    const est = decided ? f.poolLaneModel ?? f.poolLane : f.poolLane;
+    if (!decided && est != null && hit.stall !== est) {
       f.laneActualDiffers = true;   // 推定と食い違う=乗務員に伝える価値がある
       n += 1;
     }
@@ -527,24 +656,8 @@ export function buildNoribaActivity(arrivals, forecast, poolStatus, now = new Da
       occupancy: { segments: 0, label: null, vehicles: null },
       movement: { level: null, normalRatio: null, ratioDir: null, activeUntil: null, sparkFuture: [], curve: null },
     };
-    // 待機車両(占有): pool-status の stallN.fillRate(全レーン埋まり率0-1)を段数化。
-    // 旧 occ/実スロット数は前列のみで遠景の満車を過小評価していた(満車でも「並」)。後列まで含む
-    // 全レーン学習計測の fillRate を主系にし、fillRate 無いデータは従来 occ にフォールバック。
-    const psStall = poolStatus && poolStatus.stalls ? poolStatus.stalls['stall' + lane] : null;
-    if (psStall && typeof psStall.fillRate === 'number') {
-      const seg = fillRateSegments(psStall.fillRate);
-      out.occupancy = { segments: seg, label: occupancyLabel(seg), vehicles: psStall.occ, fillPct: Math.round(psStall.fillRate * 100) };
-      // 「その号・その時間帯の普段」の目盛りと相対ラベル。号ごとに普段の埋まり具合が
-      // 大きく違う(昼 2号0.87 vs 4号0.50)ため、絶対量だけでは同じ見た目の意味が逆になる。
-      if (typeof psStall.typicalFillRate === 'number' && psStall.typicalFillRate > 0) {
-        out.occupancy.typicalPct = Math.round(psStall.typicalFillRate * 100);
-        out.occupancy.vsTypical = compareToTypical(psStall.fillRate, psStall.typicalFillRate);
-      }
-    } else if (psStall && typeof psStall.occ === 'number') {
-      const cap = STALL_CAPACITY[lane] || 16;
-      const seg = occupancySegments(psStall.occ, cap);
-      out.occupancy = { segments: seg, label: occupancyLabel(seg), vehicles: psStall.occ };
-    }
+    // 待機車両(占有)は laneOccupancy に集約(遅延便ガイドと同じ規則を2か所に持たないため)。
+    out.occupancy = laneOccupancy(poolStatus, lane);
     if (!fc) return out;
     const key = 'stall' + lane;
     const dayVals = fc.slots.map((s) => (s.stalls && typeof s.stalls[key] === 'number') ? s.stalls[key] : 0);
@@ -641,8 +754,11 @@ export function applyNoticeOverrides(flights, lateFlights) {
       f.estimatedPax = nf.pax;
       f.paxSource = 'notice';
     }
-    if (Number.isInteger(nf.stall) && nf.stall >= 1 && nf.stall <= 4 && f.poolLane !== nf.stall) {
-      f.poolLaneModel = f.poolLane ?? null;
+    // 掲示に号があれば、推定と一致していても laneSource='notice'(=確定)を立てる。
+    // 一致時に立てないと「掲示に載っている便」を後段で見分けられず、遅延便ガイドで
+    // 確定情報が落ちて推定だけが残る(2026-06-26の掲示14便で再現。8便中1便しか出なかった)。
+    if (Number.isInteger(nf.stall) && nf.stall >= 1 && nf.stall <= 4) {
+      if (f.poolLane !== nf.stall) f.poolLaneModel = f.poolLane ?? null;
       f.poolLane = nf.stall;
       f.laneSource = 'notice';
     }
