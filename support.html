@@ -197,25 +197,25 @@ if (location.hostname.includes('-dev')) {
 </main>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDateY, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, toLocalIso } from './js/app.js?b=92eeb72e4c71';
-import { showGpsPrivacyBanner } from './js/gps-privacy-banner.js?b=92eeb72e4c71';
+import { renderBottomNav, formatYen, formatDateY, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, toLocalIso } from './js/app.js?b=34032ffcffe3';
+import { showGpsPrivacyBanner } from './js/gps-privacy-banner.js?b=34032ffcffe3';
 showGpsPrivacyBanner();
-import { getDrivesForMonth, getDrivesForMonthCached, getAllUsersDrivesForMonth, getAllUsersDrivesForMonthCached, listActiveUserIds, listActiveUserIdsCached, getMyUserId, getUserRoleMap, getUserRoleMapCached, getDrive, getConfig, getConfigCached, getMyAggregateAnalysisFlag, getMyConsecutiveShiftsCount } from './js/storage.js?b=92eeb72e4c71';
-import { ACCESS_LEVELS, getAccessLevel, getAccessLimits, getNextThreshold } from './js/aggregate-access.js?b=92eeb72e4c71';
+import { getDrivesForMonth, getDrivesForMonthCached, getAllUsersDrivesForMonth, getAllUsersDrivesForMonthCached, listActiveUserIds, listActiveUserIdsCached, getMyUserId, getUserRoleMap, getUserRoleMapCached, getDrive, getConfig, getConfigCached, getMyAggregateAnalysisFlag, getMyConsecutiveShiftsCount } from './js/storage.js?b=34032ffcffe3';
+import { ACCESS_LEVELS, getAccessLevel, getAccessLimits, getNextThreshold } from './js/aggregate-access.js?b=34032ffcffe3';
 import {
   ensureActiveVehicleType,
   getActiveVehicleType,
   filterDrivesByVehicle,
   renderTodayVehicleToggle,
-} from './js/vehicle-filter.js?b=92eeb72e4c71';
-import { hourlyDowEfficiency, peerMedianHourlyDow, dropoffAreaAnalysis, nextBoardBreakdown, dropoffHistoryAtArea, boardHistoryAtArea, buildNeighborMap, highValueAreas, highValueAreasByZone, boardHistoryAtAreaByZone, calcPaceAtElapsed, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin, dowOf, ZONE_PRESETS, getZoneAt, getZoneForElapsed, OFFICE_AREA, hourlyDowDailyValues, classifyEarning, stabilityTier, heatmapLegendHtml, heatmapFromCells } from './js/chart-helpers.js?b=92eeb72e4c71';
-import { auth, db } from './js/firebase-init.js?b=92eeb72e4c71';
-import { resolveWorkerBase, refreshPool, listMyGroups } from './js/group-client.js?b=92eeb72e4c71';
-import { chooseInitialRecArea, filterRecAreaCandidates } from './js/rec-area.js?b=92eeb72e4c71';
-import { renderLegalFooter } from './js/legal-footer.js?b=92eeb72e4c71';
-import { enforceAccess } from './js/access-control.js?b=92eeb72e4c71';
-import './js/help-toggle.js?b=92eeb72e4c71';
-import './js/help-video.js?b=92eeb72e4c71'; // ▶使い方動画のインライン展開プレイヤー
+} from './js/vehicle-filter.js?b=34032ffcffe3';
+import { hourlyDowEfficiency, peerMedianHourlyDow, dropoffAreaAnalysis, nextBoardBreakdown, dropoffHistoryAtArea, boardHistoryAtArea, buildNeighborMap, highValueAreas, highValueAreasByZone, boardHistoryAtAreaByZone, calcPaceAtElapsed, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin, dowOf, ZONE_PRESETS, getZoneAt, getZoneForElapsed, OFFICE_AREA, hourlyDowDailyValues, classifyEarning, stabilityTier, heatmapLegendHtml, heatmapFromCells } from './js/chart-helpers.js?b=34032ffcffe3';
+import { auth, db } from './js/firebase-init.js?b=34032ffcffe3';
+import { resolveWorkerBase, refreshPool, listMyGroups } from './js/group-client.js?b=34032ffcffe3';
+import { chooseInitialRecArea, filterRecAreaCandidates } from './js/rec-area.js?b=34032ffcffe3';
+import { renderLegalFooter } from './js/legal-footer.js?b=34032ffcffe3';
+import { enforceAccess } from './js/access-control.js?b=34032ffcffe3';
+import './js/help-toggle.js?b=34032ffcffe3';
+import './js/help-video.js?b=34032ffcffe3'; // ▶使い方動画のインライン展開プレイヤー
 
 const REC_AREA_LS_KEY = 'cabis_rec_area_last';
 const REC_AREA_FALLBACK = '千代田区丸の内';
@@ -310,6 +310,15 @@ async function renderPaceCard() {
   paceState = { allDrives: drives, dowFilter: todayDow, manualElapsedMin: paceState.manualElapsedMin, todayDepHour: paceState.todayDepHour || 7 };
   renderPaceBody();
 }
+// 平均から外した日の内訳。理由が違うので分けて出す(0件のものは書かない)。
+function excludedNote(ref) {
+  const parts = [];
+  if (ref.excludedEarly > 0) parts.push(`早退${ref.excludedEarly}日`);
+  if (ref.excludedOutlier > 0) parts.push(`とび抜けた${ref.excludedOutlier}日`);
+  if (parts.length === 0) return '';
+  return ` <span style="color:#e65100;">(${parts.join('・')}を除く)</span>`;
+}
+
 function renderPaceBody() {
   const card = document.getElementById('paceCard');
   if (!card) return;
@@ -382,7 +391,7 @@ function renderPaceBody() {
   } else {
     const pace = ref.avgSales / (elapsedMin / 60);
     body = `
-      <div style="margin-top:8px;font-size:11px;color:var(--muted);">${ctxLabel} ・ 過去${ref.days}日${ref.excludedDays > 0 ? ` <span style="color:#e65100;">(外れ値${ref.excludedDays}日除外)</span>` : ''}</div>
+      <div style="margin-top:8px;font-size:11px;color:var(--muted);">${ctxLabel} ・ 過去${ref.days}日${excludedNote(ref)}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px;">
         <div style="background:#f5f5f5;padding:8px;border-radius:6px;">
           <div style="font-size:10px;color:var(--muted);">平均累積営収</div>
