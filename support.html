@@ -95,6 +95,7 @@ if (location.hostname.includes('-dev')) {
       <ul>
         <li>降ろした場所と時刻を選ぶと、過去に同じ条件で取れた次の乗車履歴が出ます</li>
         <li>「30分以内に次の乗車が取れた率」が高い順に並びます</li>
+        <li>その条件の実績が少ないときは、前後の時間帯 → 過去すべての実績、の順に自動で広げて表示します（広げたときは結果の上にお知らせが出ます）</li>
         <li>表記は<strong>「乗った場所→降ろした場所」</strong>。降ろした位置から見た「次にお客様を乗せた場所」と「その人を降ろした場所」</li>
         <li>「📍 現在地から自動入力」で GPS から降ろし場所を自動セット</li>
       </ul>
@@ -197,25 +198,26 @@ if (location.hostname.includes('-dev')) {
 </main>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDateY, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, toLocalIso } from './js/app.js?b=1110d81ddcfc';
-import { showGpsPrivacyBanner } from './js/gps-privacy-banner.js?b=1110d81ddcfc';
+import { renderBottomNav, formatYen, formatDateY, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, toLocalIso } from './js/app.js?b=0ace0677f953';
+import { showGpsPrivacyBanner } from './js/gps-privacy-banner.js?b=0ace0677f953';
 showGpsPrivacyBanner();
-import { getDrivesForMonth, getDrivesForMonthCached, getAllUsersDrivesForMonth, getAllUsersDrivesForMonthCached, listActiveUserIds, listActiveUserIdsCached, getMyUserId, getUserRoleMap, getUserRoleMapCached, getDrive, getConfig, getConfigCached, getMyAggregateAnalysisFlag, getMyConsecutiveShiftsCount } from './js/storage.js?b=1110d81ddcfc';
-import { ACCESS_LEVELS, getAccessLevel, getAccessLimits, getNextThreshold } from './js/aggregate-access.js?b=1110d81ddcfc';
+import { getDrivesForMonth, getDrivesForMonthCached, getAllDrives, getAllUsersDrivesForMonth, getAllUsersDrivesForMonthCached, listActiveUserIds, listActiveUserIdsCached, getMyUserId, getUserRoleMap, getUserRoleMapCached, getDrive, getConfig, getConfigCached, getMyAggregateAnalysisFlag, getMyConsecutiveShiftsCount } from './js/storage.js?b=0ace0677f953';
+import { ACCESS_LEVELS, getAccessLevel, getAccessLimits, getNextThreshold } from './js/aggregate-access.js?b=0ace0677f953';
 import {
   ensureActiveVehicleType,
   getActiveVehicleType,
   filterDrivesByVehicle,
   renderTodayVehicleToggle,
-} from './js/vehicle-filter.js?b=1110d81ddcfc';
-import { hourlyDowEfficiency, peerMedianHourlyDow, dropoffAreaAnalysis, nextBoardBreakdown, dropoffHistoryAtArea, boardHistoryAtArea, buildNeighborMap, highValueAreas, highValueAreasByZone, boardHistoryAtAreaByZone, calcPaceAtElapsed, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin, dowOf, ZONE_PRESETS, getZoneAt, getZoneForElapsed, OFFICE_AREA, hourlyDowDailyValues, classifyEarning, stabilityTier, heatmapLegendHtml, heatmapFromCells } from './js/chart-helpers.js?b=1110d81ddcfc';
-import { auth, db } from './js/firebase-init.js?b=1110d81ddcfc';
-import { resolveWorkerBase, refreshPool, listMyGroups } from './js/group-client.js?b=1110d81ddcfc';
-import { chooseInitialRecArea, filterRecAreaCandidates } from './js/rec-area.js?b=1110d81ddcfc';
-import { renderLegalFooter } from './js/legal-footer.js?b=1110d81ddcfc';
-import { enforceAccess } from './js/access-control.js?b=1110d81ddcfc';
-import './js/help-toggle.js?b=1110d81ddcfc';
-import './js/help-video.js?b=1110d81ddcfc'; // ▶使い方動画のインライン展開プレイヤー
+} from './js/vehicle-filter.js?b=0ace0677f953';
+import { hourlyDowEfficiency, peerMedianHourlyDow, dropoffAreaAnalysis, searchNextBoardStepwise, boardAreaStats, dropoffHistoryAtArea, boardHistoryAtArea, buildNeighborMap, highValueAreas, highValueAreasByZone, boardHistoryAtAreaByZone, calcPaceAtElapsed, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin, dowOf, ZONE_PRESETS, getZoneAt, getZoneForElapsed, OFFICE_AREA, hourlyDowDailyValues, classifyEarning, stabilityTier, heatmapLegendHtml, heatmapFromCells } from './js/chart-helpers.js?b=0ace0677f953';
+import { auth, db } from './js/firebase-init.js?b=0ace0677f953';
+import { resolveWorkerBase, refreshPool, listMyGroups } from './js/group-client.js?b=0ace0677f953';
+import { chooseInitialRecArea, filterRecAreaCandidates } from './js/rec-area.js?b=0ace0677f953';
+import { nearbyUnexploredAreas, areasNearPoint } from './js/area-geo.js?b=0ace0677f953';
+import { renderLegalFooter } from './js/legal-footer.js?b=0ace0677f953';
+import { enforceAccess } from './js/access-control.js?b=0ace0677f953';
+import './js/help-toggle.js?b=0ace0677f953';
+import './js/help-video.js?b=0ace0677f953'; // ▶使い方動画のインライン展開プレイヤー
 
 const REC_AREA_LS_KEY = 'cabis_rec_area_last';
 const REC_AREA_FALLBACK = '千代田区丸の内';
@@ -264,6 +266,12 @@ let activeUserIds = []; // 集計対象数表示用 — フィルタ後のユニ
 let rawMyDrives = [];   // フィルタ前 自分(全月flat)
 let rawAllDrives = [];  // フィルタ前 全員(全月flat)
 let rawAllUserIds = []; // フィルタ前 アクティブUserId
+// 推奨検索・近隣マップ用の「全期間」。表示期間(monthsRange)だけでは1人分のデータが薄く、
+// エリア×時刻で3件たまるところがほとんど無いため、足りないときの受け皿として持つ。
+// 推奨検索を実際に使うまで取りに行かない(遅延ロード)。
+let rawFullDrives = null;   // フィルタ前 全期間
+let fullDrives = null;      // 車種フィルタ後 全期間 (null = 未ロード)
+let fullDrivesPromise = null;
 let currentPeriods = [];
 let myUserId = '';      // 履歴で自分/他人を区別する用
 let areaSort = 'dropoffs';
@@ -534,17 +542,38 @@ function applyLoaded(periods, myParts, allParts, userIds, roleMap, label) {
   applyVehicleFilterAndRender(label);
 }
 
+// 全期間の乗務を1回だけ取りに行く(推奨検索を押したときに初めて必要になる)。
+// 取れたら近隣マップも全期間で作り直す — 近隣関係は「どの町とどの町が続けて動けるか」であり、
+// 表示期間の長さで変わるものではないので、材料は多いほど正しくなる。
+async function ensureFullDrives() {
+  if (fullDrives) return fullDrives;
+  if (!fullDrivesPromise) {
+    fullDrivesPromise = getAllDrives()
+      .then(list => {
+        rawFullDrives = list || [];
+        fullDrives = filterDrivesByVehicle(rawFullDrives, getActiveVehicleType());
+        neighborMap = buildNeighborMap(fullDrives);
+        updateNeighborInfo();
+        return fullDrives;
+      })
+      .catch(() => { fullDrivesPromise = null; return null; });
+  }
+  return fullDrivesPromise;
+}
+
 function applyVehicleFilterAndRender(label) {
   const type = getActiveVehicleType();
   myDrives = filterDrivesByVehicle(rawMyDrives, type);
   allDrives = filterDrivesByVehicle(rawAllDrives, type);
+  fullDrives = rawFullDrives ? filterDrivesByVehicle(rawFullDrives, type) : null;
   // フィルタ後のユニークuserIdを再計算
   const filteredUserIds = new Set(allDrives.map(d => d.userId).filter(Boolean));
   // rawAllUserIds の中で、filteredUserIds に含まれているものだけを残す
   activeUserIds = rawAllUserIds.filter(uid => filteredUserIds.has(uid));
   document.getElementById('rangeInfo').textContent =
     `${formatBillingPeriod(currentPeriods[0])} 〜 ${formatBillingPeriod(currentPeriods[currentPeriods.length-1])} (自分: ${myDrives.length}乗務)${label || ''}`;
-  neighborMap = buildNeighborMap(allDrives);
+  // 全期間が既にあればそちらで近隣マップを作る(材料が多いほど近隣を正しく拾える)
+  neighborMap = buildNeighborMap(fullDrives || allDrives);
   updateDataSourceInfo();
   populateRecommendArea();
   updateNeighborInfo();
@@ -810,12 +839,6 @@ function normalizePlace(s) {
   r = r.replace(/\d+$/, '');
   return r.trim();
 }
-function commonPrefixLen(a, b) {
-  let i = 0;
-  while (i < a.length && i < b.length && a[i] === b[i]) i++;
-  return i;
-}
-
 // GPS取得 → 国土地理院reverse geocoding → エリア推定 → recArea セット
 // silent=true: 自動実行モード（UIを触らず、エラー黙殺、完全一致のみ値上書き）
 async function runGpsLookup({ silent = false } = {}) {
@@ -831,6 +854,9 @@ async function runGpsLookup({ silent = false } = {}) {
       navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000, enableHighAccuracy: true })
     );
     const { latitude: lat, longitude: lon } = pos.coords;
+    // この画面を開いている間だけ手元に置く。保存も送信もしない
+    // (画面を離れれば消える。Firestore にも localStorage にも書かない)。
+    gpsPos = [lat, lon];
     if (!silent) info.textContent = `緯度${lat.toFixed(5)}, 経度${lon.toFixed(5)} → 町名取得中…`;
     const res = await fetch(`https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress?lat=${lat}&lon=${lon}`);
     const data = await res.json();
@@ -863,48 +889,26 @@ async function runGpsLookup({ silent = false } = {}) {
       showRecGpsBadge(true, '確定');
       if (!silent) info.innerHTML = `📍 今いる場所: <strong>${matched}</strong>${detailToggle(gpsDetailBase)}`;
       if (!silent) document.getElementById('recSearch').click();
-    } else if (detected && !silent) {
-      // 完全一致なし → 同区内の「文字列が近いエリア」を起点に、neighborMapで実移動可能範囲に絞る
-      let wardMatch = detected.match(/^([^区市]+(?:区|市[^区]+?区|市))/);
-      let ward = wardMatch ? wardMatch[1] : '';
-      let wardNote = '';
-      // detectedが町名だけ(区が取れなかった)の場合、過去データから町名一致するエリアを探して区を推定
-      if (!ward) {
-        const townHit = options.find(v => v.endsWith(detected) || v.includes(detected));
-        if (townHit) {
-          const wm = townHit.match(/^([^区市]+(?:区|市[^区]+?区|市))/);
-          if (wm) ward = wm[1];
-          wardNote = `<br>区不明 → 町名「${detected}」から区を推定: ${ward || '(推定不可)'}`;
-        }
-      }
-      const wardAreas = ward ? options.filter(v => v.startsWith(ward)) : [];
-      if (wardAreas.length === 0) {
-        info.innerHTML = `📍 今いる場所: <strong>${detected}</strong> — この近くの過去データがまだ無いため検索できません`;
+    } else if (!silent) {
+      // 町名がそのまま過去データに無い場合。
+      // 以前はここで「同じ区で名前が似ている町」を起点にしていたが、それは地理を
+      // 一切見ていない選び方で、実測ではあてずっぽう(同じ区からランダムに3つ選ぶ)と
+      // 同じ15%しか当たっていなかった。緯度経度を持っているのだから、そのまま
+      // 距離で探す。
+      const near = await areasNearGps(GPS_RADIUS_KM);
+      if (!near.length) {
+        info.innerHTML = `📍 今いる場所: <strong>${detected || 'この辺り'}</strong> — ここから${GPS_RADIUS_KM}km以内に、まだ営業の記録がありません`;
         return;
       }
-      // 起点候補: 共通プレフィックス長が「区名+1文字以上」 → 同町名相当
-      const minMatch = ward.length + 1;
-      let seeds = wardAreas.filter(v => commonPrefixLen(v, detected) >= minMatch);
-      if (seeds.length === 0) {
-        // ない場合は共通プレフィックス長最大のもの上位3
-        const sorted = wardAreas.slice().sort((a, b) => commonPrefixLen(b, detected) - commonPrefixLen(a, detected));
-        seeds = sorted.slice(0, 3);
-      }
-      // 起点 + neighborMapで1ホップ到達可能なエリアに絞る(=過去25分以内移動実績がある関係)
-      const reachable = new Set(seeds);
-      for (const s of seeds) {
-        if (neighborMap[s]) for (const n of neighborMap[s]) reachable.add(n);
-      }
-      gpsWideAreas = Array.from(reachable);
-      recWideLabel = `${detected} 周辺`;
-      recWideDetailHtml = `${gpsDetailBase}<br>ピッタリの履歴がないため、起点 ${seeds.join(', ')} から実移動実績のある ${gpsWideAreas.length} エリアにまとめて検索${wardNote}`;
+      gpsWideAreas = near.map(n => n.area);
+      recWideLabel = `${detected || 'この辺り'} 周辺`;
+      recWideDetailHtml = `${gpsDetailBase}<br>この町名の記録が無いため、いまいる場所から半径${GPS_RADIUS_KM}km以内で記録のある ${near.length} か所をまとめて検索`
+        + `<br>近い順: ${near.slice(0, 5).map(n => `${n.area}(${n.km.toFixed(1)}km)`).join(', ')}`;
       setRecWideOption(`📍${recWideLabel}(GPS)`); // プルダウン表示を「今いる場所」に同期
-      document.getElementById('recExpand').checked = false; // 既に近隣含めて拡張済み
+      document.getElementById('recExpand').checked = false; // 既に周辺をまとめているので二重に広げない
       showRecGpsBadge(true, '範囲');
-      info.innerHTML = `📍 今いる場所: <strong>${recWideLabel}</strong>(近場の実績エリアでまとめて検索)${detailToggle(recWideDetailHtml)}`;
+      info.innerHTML = `📍 今いる場所: <strong>${recWideLabel}</strong>(ここから${GPS_RADIUS_KM}km以内の記録${near.length}か所をまとめて検索)${detailToggle(recWideDetailHtml)}`;
       document.getElementById('recSearch').click();
-    } else if (!silent) {
-      info.innerHTML = `📍 今いる場所: <strong>${detected || '(取得できず)'}</strong> — 該当エリアなし`;
     }
   } catch (err) {
     if (!silent) info.textContent = '位置情報取得エラー: ' + (err.message || err.code);
@@ -936,8 +940,94 @@ function userBadge(userId) {
   return `<span style="display:inline-block;padding:1px 4px;background:${bg};color:${color};border-radius:3px;font-size:9px;font-weight:700;margin-right:3px;vertical-align:middle;">${label}</span>`;
 }
 
-function renderHistoryFallback(area, hour, expand) {
-  const result = dropoffHistoryAtArea(allDrives, area, hour, 1, expand ? neighborMap : null, 30);
+// GPSで取れた いまいる場所 [lat, lng]。この画面を開いている間だけメモリに置き、
+// 保存も送信もしない。町名に変換したあとも捨てずに持つのは、町名が過去データに
+// 無いときに「文字が似ている町」を探す代わりに、距離で探すため。
+let gpsPos = null;
+// GPSで拾う半径。実績で「近所」とされたペアの79%が2km以内に収まる。
+const GPS_RADIUS_KM = 2;
+
+// 町の代表座標。推奨検索を押したときに1回だけ読む(203KB)。
+let areaCoords = null;
+let areaCoordsPromise = null;
+async function ensureAreaCoords() {
+  if (areaCoords) return areaCoords;
+  if (!areaCoordsPromise) {
+    areaCoordsPromise = fetch('./js/data/area-coords.json')
+      .then(r => r.ok ? r.json() : null)
+      .then(j => { areaCoords = j; return j; })
+      .catch(() => { areaCoordsPromise = null; return null; });
+  }
+  return areaCoordsPromise;
+}
+
+// いまいる場所（緯度経度）から半径内で、実際に営業した記録のある場所を近い順に。
+// 町名の文字くらべを介さないので、過去データに無い町にいても効く。
+async function areasNearGps(radiusKm = GPS_RADIUS_KM) {
+  if (!gpsPos) return [];
+  const coords = await ensureAreaCoords();
+  if (!coords) return [];
+  await ensureFullDrives();
+  const pool = fullDrives || allDrives;
+  // 降車でも乗車でも、その場所に居た記録があれば起点候補にする
+  const stats = {};
+  for (const a of dropoffAreaAnalysis(pool)) stats[a.area] = { count: a.dropoffs };
+  for (const [area, s] of Object.entries(boardAreaStats(pool, null))) {
+    stats[area] = { count: (stats[area]?.count || 0) + s.count };
+  }
+  return areasNearPoint(gpsPos, coords, stats, { radiusKm });
+}
+
+// 「近いのに、この流れでは行っていない町」
+//
+// 本表(次に乗れたエリア)の母集団には混ぜない。混ぜると降車件数=分母が膨らんで
+// 取得率の数字が薄まってしまうため(実測: 半径3kmまで広げると1位の30分以内取得率が
+// 15.4%→9.6%に見かけ上さがる)。根拠が違うものは別枠にして、判断は本人に委ねる。
+// useGps: GPSでいまいる場所が分かっているなら、その緯度経度を起点にする。
+// エリア名から代表座標を引き直すと町の真ん中に丸められるので、実際に立っている
+// 位置から測るほうが正しい。GPS範囲モード(町名が過去データに無い)でもこれで出せる。
+async function renderNearbyUnexplored(area, hour, useGps) {
+  const originPoint = useGps ? gpsPos : null;
+  if (!originPoint && (!area || area === GPS_WIDE_VALUE)) return '';
+  const coords = await ensureAreaCoords();
+  if (!coords) return '';
+  // 母集団は常に全期間。「その場所の実力」を見るのに表示期間で切る理由がないうえ、
+  // 直近だけだとほとんど3件に届かず何も出せなかった(実測 出る率40% → 83%)。
+  const pool = fullDrives || allDrives;
+  const neighbors = (area && neighborMap[area]) || new Set();
+  const originLabel = originPoint ? 'いまいる場所' : area;
+  // まず降ろした時刻の前後3時間で見て、足りなければ時間帯を外す
+  let stats = boardAreaStats(pool, hour, 3);
+  let rows = nearbyUnexploredAreas({ area, originPoint, neighbors, coords, boardStats: stats });
+  let scopeText = `${String(hour).padStart(2, '0')}時ごろ`;
+  if (rows.length < 3) {
+    stats = boardAreaStats(pool, null);
+    rows = nearbyUnexploredAreas({ area, originPoint, neighbors, coords, boardStats: stats });
+    scopeText = '時間帯を問わず';
+  }
+  if (!rows.length) return '';
+  const tailNote = originPoint
+    ? `いまいる場所からの直線距離です（この位置は保存していません）。`
+    : `${area}で降ろした後かどうかは問いません。`;
+  let h = `<div style="margin-top:14px;padding:10px 12px;background:#f4f8fb;border:1px solid #cfe0ec;border-radius:8px;">`
+    + `<div style="font-size:12px;font-weight:600;margin-bottom:2px;">🧭 近くにあるが、この流れでは行っていない場所</div>`
+    + `<div class="muted" style="font-size:10px;margin-bottom:6px;">${originLabel}から2km以内で、${scopeText}にお客様を乗せた実績がある場所。上の表とは数え方が違います（${tailNote}）。</div>`
+    + '<div style="overflow-x:auto;"><table class="area-table"><thead><tr>'
+    + '<th class="l">場所</th><th>距離</th><th>乗せた回数</th><th>その乗車の運賃(平均/中央)</th>'
+    + '</tr></thead><tbody>';
+  for (const r of rows) {
+    h += `<tr><td class="l">${r.area}</td><td>${r.km.toFixed(1)}km</td><td>${r.count}</td>`
+      + `<td>${formatYen(r.avgSales)}<span class="muted" style="font-size:9px;margin-left:4px;">中${formatYen(stats[r.area].medianSales)}</span></td></tr>`;
+  }
+  h += '</tbody></table></div>'
+    + `<p class="muted" style="font-size:10px;margin-top:4px;margin-bottom:0;">上の表に入っていないのは「そこへ流れた実績が少ない」だけで、悪い場所とは限りません。逆にここの回数が多い＝良い、でもありません。まだ試していない近場として並べています。</p>`
+    + '</div>';
+  return h;
+}
+
+// drives/hourWindow は推奨検索が条件を広げたとき、同じ母集団で履歴を出すために受け取る
+function renderHistoryFallback(area, hour, expand, drives = allDrives, hourWindow = 1) {
+  const result = dropoffHistoryAtArea(drives, area, hour, hourWindow, expand ? neighborMap : null, 30);
   const s = result.stats;
   if (s.totalDropoffs === 0) {
     return '<p class="muted" style="font-size:11px;">このエリアの降車履歴なし</p>';
@@ -991,7 +1081,7 @@ function renderHistoryFallback(area, hour, expand) {
   return html;
 }
 
-document.getElementById('recSearch').onclick = () => {
+document.getElementById('recSearch').onclick = async () => {
   const sel = document.getElementById('recArea').value;
   const time = document.getElementById('recTime').value;
   const expand = document.getElementById('recExpand').checked;
@@ -1002,25 +1092,45 @@ document.getElementById('recSearch').onclick = () => {
   const dropoffArg = isWide ? gpsWideAreas : sel;
   // 見出しの「降ろした場所」: 範囲モードはGPSラベル、通常はプルダウンの実エリア
   const headLabel = isWide ? recWideLabel : sel;
-  const result = nextBoardBreakdown(allDrives, dropoffArg, hour, 1, expand ? neighborMap : null);
-  // 30分以内取得率の高い順
-  const evaluated = result.rows
-    .filter(r => r.count >= 3)
-    .sort((a, b) => b.ratio30 - a.ratio30);
   const body = document.getElementById('recBody');
-  const winLabel = `${String((hour-1+24)%24).padStart(2,'0')}:00-${String((hour+1)%24).padStart(2,'0')}:59`;
+  // 表示期間だけでは1人分のデータが足りずほぼ何も出ないため、
+  // 足りなければ時間帯→期間の順に自動で広げる。全期間はここで初めて要る。
+  body.innerHTML = '<p class="muted" style="font-size:11px;">探しています…</p>';
+  await ensureFullDrives();
+  const search = searchNextBoardStepwise({
+    recentDrives: allDrives,
+    allDrives: fullDrives,
+    neighbors: expand ? neighborMap : null,
+    area: dropoffArg,
+    hour,
+  });
+  const { result, evaluated, drives: usedDrives, hourWindow, hourCenter, widened, widenedLabel } = search;
+  const w = hourWindow ?? 1;
+  const winLabel = hourCenter == null
+    ? '終日'
+    : `${String((hour-w+24)%24).padStart(2,'0')}:00-${String((hour+w)%24).padStart(2,'0')}:59`;
+  const winSuffix = hourCenter == null ? '' : `(±${w}h)`;
   const neighborSuffix = !isWide && expand && result.includedAreas.length > 1 ? '+近隣' : '';
+  const widenNote = widened
+    ? `<div style="font-size:10px;color:#e65100;margin-bottom:4px;">この条件だけでは実績が少ないため、${widenedLabel}</div>`
+    : '';
   // サンプル件数などの内訳は控えめなサブ行へ(見出しはすっきり)
   const countLine = `<div class="muted" style="font-size:10px;margin-bottom:6px;">${isWide ? `${result.includedAreas.length}エリア・` : ''}降車${result.totalDropoffs}件中、30分以内に次が取れた ${result.totalNextWithin30}件</div>`;
+  // 「近いのに、この流れでは行っていない町」も併せて出す(母集団には混ぜない)
+  // GPSバッジが出ている＝いまいる場所が分かっている。そのときは座標を起点にする
+  const gpsActive = !!gpsPos && document.getElementById('recGpsBadge').style.display !== 'none';
+  const nearbyHtml = await renderNearbyUnexplored(isWide ? null : sel, hour, gpsActive);
   if (evaluated.length === 0) {
-    body.innerHTML = `<div style="font-size:12px;font-weight:600;margin-bottom:2px;">📍 ${headLabel}${neighborSuffix} で <strong>${winLabel}</strong>(±1h) に降ろした後</div>`
-      + `<p class="muted" style="font-size:11px;margin-bottom:6px;">3件以上の該当データがまだありません。下に過去の動き履歴を表示します。</p>`
-      + renderHistoryFallback(dropoffArg, hour, expand);
+    body.innerHTML = `<div style="font-size:12px;font-weight:600;margin-bottom:2px;">📍 ${headLabel}${neighborSuffix} で <strong>${winLabel}</strong>${winSuffix} に降ろした後</div>`
+      + `<p class="muted" style="font-size:11px;margin-bottom:6px;">まとめて出せるだけの実績がまだありません。下に過去の動き履歴を表示します。</p>`
+      + nearbyHtml
+      + renderHistoryFallback(dropoffArg, hourCenter, expand, usedDrives, w);
     return;
   }
   const top = evaluated.slice(0, 10);
   const maxSales = Math.max(...top.map(r => r.avgSales || 0), 1);
-  let html = `<div style="font-size:12px;font-weight:600;margin-bottom:2px;">📍 ${headLabel}${neighborSuffix} で <strong>${winLabel}</strong>(±1h) に降ろした後 → 次に乗れたエリア TOP${top.length}</div>`;
+  let html = `<div style="font-size:12px;font-weight:600;margin-bottom:2px;">📍 ${headLabel}${neighborSuffix} で <strong>${winLabel}</strong>${winSuffix} に降ろした後 → 次に乗れたエリア TOP${top.length}</div>`;
+  html += widenNote;
   html += countLine;
   html += '<div style="overflow-x:auto;"><table class="area-table"><thead><tr>'
     + '<th class="l">次乗車エリア</th><th>件数</th><th>15分内</th><th>30分内</th><th>次運賃(平均/中央)</th>'
@@ -1041,8 +1151,9 @@ document.getElementById('recSearch').onclick = () => {
   }
   html += '</tbody></table></div>';
   html += '<p class="muted" style="font-size:10px;margin-top:4px;">「15分内」=次乗車が速いエリア、「30分内」=仕事の見込みがあるエリア。「次運賃」=次の乗車営収の平均/中央値(¥0除外)。30分内取得率の高い順。タップで根拠データ表示</p>';
+  html += nearbyHtml;
   // 全履歴フォールバック (折りたたみ)
-  html += `<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:11px;color:var(--primary);">▶ このエリアでの全履歴を見る(待ちの目安)</summary><div style="margin-top:8px;">${renderHistoryFallback(dropoffArg, hour, expand)}</div></details>`;
+  html += `<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:11px;color:var(--primary);">▶ このエリアでの全履歴を見る(待ちの目安)</summary><div style="margin-top:8px;">${renderHistoryFallback(dropoffArg, hourCenter, expand, usedDrives, w)}</div></details>`;
   body.innerHTML = html;
   body.querySelectorAll('tr[data-idx]').forEach(tr => {
     tr.onclick = () => {

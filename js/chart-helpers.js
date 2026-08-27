@@ -691,9 +691,13 @@ export function hourlyDowEfficiency(drives) {
 
 // 場所文字列から区+町名 (丁目番号を除いた地名) を抽出
 // 例: "大田区羽田空港3" → "大田区羽田空港", "新宿区霞ヶ丘町" → "新宿区霞ヶ丘町"
+//
+// 全角数字も落とす: OCRが丁目を全角で読むことがあり、\d だけ見ていた頃は
+// 「千代田区丸の内２」が「千代田区丸の内」と別エリアに分裂していた
+// (本番実データ18,909件中609件・325種類が該当)。
 export function extractArea(place) {
   if (!place) return '';
-  return place.replace(/\d+$/, '').trim();
+  return place.replace(/[0-9０-９]+$/, '').trim();
 }
 
 // 過去データから近隣エリアを自動推定
@@ -944,6 +948,89 @@ export function nextBoardBreakdown(drives, dropoffArea, hourCenter = null, hourW
     return { area, count: g.count, count15: g.count15, avgWait, avgSales, medianSales, ratio15, ratio30, samples };
   });
   return { rows, includedAreas: Array.from(targetAreas), totalDropoffs, totalNextWithin30 };
+}
+
+// その町で「乗せた」実績を町ごとにまとめる。
+// 「近いのに候補に入っていない町」を出すとき、その町の実力を数字で添えるために使う。
+// hourCenter を渡すとその時間帯だけを数える(null=終日)。
+// 戻り値: { エリア名: { count, avgSales, medianSales } }
+export function boardAreaStats(drives, hourCenter = null, hourWindow = 1) {
+  const g = {};
+  for (const d of (drives || [])) {
+    if (isSummaryOnly(d)) continue;
+    for (const t of (d.trips || [])) {
+      if (t.isCancel) continue;
+      if (!(t.amount > 0)) continue;
+      const area = extractArea(t.boardPlace);
+      if (!area) continue;
+      if (hourCenter !== null) {
+        const bh = parseInt(String(t.boardTime).split(':')[0]);
+        if (Number.isNaN(bh) || !hourInWindow(bh, hourCenter, hourWindow)) continue;
+      }
+      (g[area] ||= { count: 0, sum: 0, list: [] });
+      g[area].count++;
+      g[area].sum += t.amount;
+      g[area].list.push(t.amount);
+    }
+  }
+  const out = {};
+  for (const [area, v] of Object.entries(g)) {
+    out[area] = { count: v.count, avgSales: v.sum / v.count, medianSales: median(v.list) };
+  }
+  return out;
+}
+
+// 推奨検索が「これは参考になる」と認める最低件数
+export const REC_MIN_SAMPLES = 3;
+
+// 条件を広げる順番。上から試して、最初に足りた段を採用する。
+// 時刻を先に広げ、それでも足りなければ期間を広げる(近い時間帯の実績を優先したいため)。
+// hourWindow: null = 時間帯を問わない
+const REC_SEARCH_STEPS = [
+  { scope: 'recent', hourWindow: 1,    label: '' },
+  { scope: 'recent', hourWindow: 2,    label: '前後2時間まで広げて表示' },
+  { scope: 'all',    hourWindow: 1,    label: '過去すべての実績まで広げて表示' },
+  { scope: 'all',    hourWindow: 2,    label: '過去すべて・前後2時間まで広げて表示' },
+  { scope: 'all',    hourWindow: null, label: '過去すべて・時間帯をまとめて表示' },
+];
+
+// 次の営業先 推奨検索: 表示期間・降車時刻ぴったりで足りなければ自動で条件を広げる
+//
+// なぜ必要か: 表示期間(既定=直近6月度)×時刻±1h だけを見ると、自分1人分のデータでは
+// 3件以上たまっているエリアがほとんど無く、結果テーブルが出ないまま履歴だけになる。
+// 本番実データ345乗務で計測すると、上位20エリア×7〜23時のうち出るのは19%。
+// 段階的に広げると75%まで出る。
+//
+// recentDrives: 表示期間の乗務 / allDrives: 全期間の乗務(未ロードなら null)
+// neighbors: 近隣マップ(「近隣エリアも含める」OFF なら null)
+// 戻り値: { result, evaluated, drives, scope, hourWindow, hourCenter,
+//           stepIndex, widened, widenedLabel, exhausted }
+//   evaluated: 採用件数を満たし、30分以内取得率の高い順に並べた rows
+//   drives:    採用した段の母集団(履歴フォールバックも同じ母集団で引くため)
+//   exhausted: 全部の段を試しても足りなかった
+export function searchNextBoardStepwise({
+  recentDrives, allDrives, neighbors, area, hour, minCount = REC_MIN_SAMPLES,
+}) {
+  const pools = { recent: recentDrives || [], all: allDrives };
+  const steps = REC_SEARCH_STEPS.filter(s => pools[s.scope] != null);
+  let last = null;
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
+    const drives = pools[step.scope];
+    const hourCenter = step.hourWindow == null ? null : hour;
+    const result = nextBoardBreakdown(drives, area, hourCenter, step.hourWindow ?? 1, neighbors);
+    const evaluated = result.rows
+      .filter(r => r.count >= minCount)
+      .sort((a, b) => b.ratio30 - a.ratio30);
+    last = {
+      result, evaluated, drives,
+      scope: step.scope, hourWindow: step.hourWindow, hourCenter,
+      stepIndex: i, widened: i > 0, widenedLabel: step.label,
+      exhausted: false,
+    };
+    if (evaluated.length > 0) return last;
+  }
+  return { ...last, exhausted: true };
 }
 
 // 全trip の平均単価 (全期間・キャンセル除外)
