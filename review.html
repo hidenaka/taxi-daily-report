@@ -194,21 +194,21 @@ if (location.hostname.includes('-dev')) {
 </main>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDate, formatDateY, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, todayIso } from './js/app.js?b=0ace0677f953';
-import { getDrivesForMonth, getDrivesForMonthCached, getConfig, getConfigCached, getDrive, getMyCompanyId } from './js/storage.js?b=0ace0677f953';
+import { renderBottomNav, formatYen, formatDate, formatDateY, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, todayIso } from './js/app.js?b=2e76ad132ad3';
+import { getDrivesForMonth, getDrivesForMonthCached, getConfig, getConfigCached, getDrive, getMyCompanyId } from './js/storage.js?b=2e76ad132ad3';
 import {
   ensureActiveVehicleType,
   getActiveVehicleType,
   filterDrivesByVehicle,
   renderVehicleTabs,
-} from './js/vehicle-filter.js?b=0ace0677f953';
-import { calcDailySales, calcTotalPay, calcMonthlySales } from './js/payroll.js?b=0ace0677f953';
-import { calcTimeBreakdown, dowPeriodMatrix, dowZoneMatrix, dowZoneEfficiency, dowAggregation, rankDrivesBySales, weatherSalesAggregation, WEATHER_LABELS, DOW_LABELS, isSummaryOnly, formatMin, ZONE_PRESETS, formatZoneRange, getShiftZones, dowOf, calcZoneBreakdown, zoneDailyValues, classifyEarning, stabilityTier, heatmapLegendHtml, salesStages, stageHeatmap } from './js/chart-helpers.js?b=0ace0677f953';
-import { renderLegalFooter } from './js/legal-footer.js?b=0ace0677f953';
-import { enforceAccess } from './js/access-control.js?b=0ace0677f953';
-import { fetchCompanyProfile } from './js/invite-url.js?b=0ace0677f953';
-import { mergeCompanyConfig, derivePeriodCompanyId } from './js/company-config.js?b=0ace0677f953';
-import './js/help-video.js?b=0ace0677f953'; // ▶使い方動画のインライン展開プレイヤー
+} from './js/vehicle-filter.js?b=2e76ad132ad3';
+import { calcDailySales, calcTotalPay, calcMonthlySales } from './js/payroll.js?b=2e76ad132ad3';
+import { calcTimeBreakdown, dowPeriodMatrix, dowZoneMatrix, dowZoneEfficiency, dowAggregation, rankDrivesBySales, weatherSalesAggregation, WEATHER_LABELS, DOW_LABELS, isSummaryOnly, formatMin, ZONE_PRESETS, formatZoneRange, getShiftZones, dowOf, calcZoneBreakdown, zoneDailyValues, classifyEarning, stabilityTier, heatmapLegendHtml, salesStages, stageHeatmap } from './js/chart-helpers.js?b=2e76ad132ad3';
+import { renderLegalFooter } from './js/legal-footer.js?b=2e76ad132ad3';
+import { enforceAccess } from './js/access-control.js?b=2e76ad132ad3';
+import { fetchCompanyProfile } from './js/invite-url.js?b=2e76ad132ad3';
+import { mergeCompanyConfig, derivePeriodCompanyId } from './js/company-config.js?b=2e76ad132ad3';
+import './js/help-video.js?b=2e76ad132ad3'; // ▶使い方動画のインライン展開プレイヤー
 
 if (!(await enforceAccess('analysis'))) {
   throw new Error('access-denied: redirected');
