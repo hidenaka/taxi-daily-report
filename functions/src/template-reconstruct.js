@@ -702,8 +702,15 @@ export function assignEndRows(starts, endYs, pitch) {
     return 0; // rest: END が無いのが正常
   };
 
+  // 表の上端付近を基準 y にする（Δ の傾きをここからの距離で効かせる）。
+  const yRef = starts.length ? starts[0].y : 0;
+
   // 与えられた Δ で順序保存の最適割当を DP で解く。
-  function solve(delta) {
+  // Δ は y の一次式 d0 + d1*(y - yRef)。斜めから撮った写真は遠近で上下の行間隔が
+  // 変わり、END と START の間隔も表の上下で変わるため（2026-09-03 の原本では
+  // 上端 -3px → 下端 -96px と 1.04 行ぶん変化した。許容は 0.45 行）。
+  // d1=0 なら従来と同じ「全行に同じ Δ」。
+  function solve(delta, slope = 0) {
     const INF = Infinity;
     // best[i][j] = starts[0..i) と endYs[0..j) まで処理したときの最小コスト
     const best = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(INF));
@@ -723,7 +730,9 @@ export function assignEndRows(starts, endYs, pitch) {
         let mode = 1;
         const skipEnd = best[i][j - 1] + AS_END_SKIP;
         if (skipEnd < cur) { cur = skipEnd; mode = 2; }
-        const resid = Math.abs(endYs[j - 1] - starts[i - 1].y - delta) / pitch;
+        const sy = starts[i - 1].y;
+        const expected = delta + slope * (sy - yRef);
+        const resid = Math.abs(endYs[j - 1] - sy - expected) / pitch;
         if (resid <= AS_TOL && best[i - 1][j - 1] < INF) {
           const match =
             best[i - 1][j - 1] + resid +
@@ -753,7 +762,34 @@ export function assignEndRows(starts, endYs, pitch) {
   let bestOverall = null;
   for (let d = lo; d <= hi; d++) {
     const r = solve(d);
-    if (!bestOverall || r.cost < bestOverall.cost) bestOverall = { ...r, delta: d };
+    if (!bestOverall || r.cost < bestOverall.cost) bestOverall = { ...r, delta: d, slope: 0 };
+  }
+  if (!bestOverall) return { map: new Array(m).fill(-1), delta: 0, slope: 0, cost: 0 };
+
+  // 2パス目: 1パス目で対応がついた組から Δ の y 依存を回帰し、その傾きで解き直す。
+  // 遠近のある写真では Δ が表の上下で1行ぶんも変わり、単一の Δ ではどちらかの端が
+  // 許容(AS_TOL)を外れて未割り当てになる。そこだけ対応が1つずれ、降車地と金額が
+  // 隣の行のものになっていた（2026-09-03 の原本で発生）。
+  // 採用条件はコストが下がることだけ。傾きが不要な写真では 1パス目が残る。
+  const pairs = [];
+  for (let j = 0; j < m; j++) {
+    const i = bestOverall.map[j];
+    if (i >= 0) pairs.push({ y: starts[i].y, d: endYs[j] - starts[i].y });
+  }
+  if (pairs.length >= 6) {
+    const my = pairs.reduce((s, p) => s + p.y, 0) / pairs.length;
+    const md = pairs.reduce((s, p) => s + p.d, 0) / pairs.length;
+    let num = 0, den = 0;
+    for (const p of pairs) { num += (p.y - my) * (p.d - md); den += (p.y - my) ** 2; }
+    const slope = den > 0 ? num / den : 0;
+    // 行が入れ替わるほどの傾きは歪みではなく誤対応なので採らない。
+    if (Math.abs(slope) > 1e-4 && Math.abs(slope) < 0.5) {
+      // 傾きを固定して切片だけ振り直す（1パス目の Δ 近傍を中心に）。
+      for (let d = lo; d <= hi; d++) {
+        const r = solve(d, slope);
+        if (r.cost < bestOverall.cost) bestOverall = { ...r, delta: d, slope };
+      }
+    }
   }
   return bestOverall;
 }
@@ -842,7 +878,13 @@ export function reconstructRows(ocr) {
     }
     if (!isFinite(cap)) cap = 40;
     let best = { lean: 0, score: Infinity };
-    for (let lean = -0.07; lean <= 0.07; lean += 0.0005) {
+    // 探索幅 ±0.15。以前は ±0.07 で、それを超える傾きの写真では補正が頭打ちになり、
+    // 下の行ほど値が右隣の列へ落ちていた（2026-09-03 の明細で実測 0.085。
+    // 営Km「7.5」が「男」列へ入って int 整形で「75」になり、金額も玉突きでずれて
+    // 運賃計が ¥88,200 → ¥24,908 になっていた）。
+    // 広げても過適合しないのは、残差をテンプレ列中心という固定アンカーからの
+    // 距離で測っているため（下の capped MAE）。
+    for (let lean = -0.15; lean <= 0.15; lean += 0.0005) {
       let score = 0;
       for (const it of items) {
         const xc = it.xc - lean * (it.yc - headerY);
