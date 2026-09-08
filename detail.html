@@ -95,13 +95,13 @@ if (location.hostname.includes('-dev')) {
 </main>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDate } from './js/app.js?b=7735fea66d21';
-import { getDrive, listFiles, saveDriveSafe, deleteDrive } from './js/storage.js?b=7735fea66d21';
-import { calcDailySales } from './js/payroll.js?b=7735fea66d21';
-import { calcTimeBreakdown, hourlyActivity, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, formatMin, timeToMinutes, isSummaryOnly } from './js/chart-helpers.js?b=7735fea66d21';
-import { weatherEmoji } from './js/weather.js?b=7735fea66d21';
-import { renderLegalFooter } from './js/legal-footer.js?b=7735fea66d21';
-import { enforceAccess } from './js/access-control.js?b=7735fea66d21';
+import { renderBottomNav, formatYen, formatDate } from './js/app.js?b=382e5c740313';
+import { getDrive, listFiles, saveDriveSafe, deleteDrive } from './js/storage.js?b=382e5c740313';
+import { calcDailySales } from './js/payroll.js?b=382e5c740313';
+import { calcTimeBreakdown, hourlyActivity, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, formatMin, timeToMinutes, isSummaryOnly } from './js/chart-helpers.js?b=382e5c740313';
+import { weatherEmoji } from './js/weather.js?b=382e5c740313';
+import { renderLegalFooter } from './js/legal-footer.js?b=382e5c740313';
+import { enforceAccess } from './js/access-control.js?b=382e5c740313';
 
 if (!(await enforceAccess('core'))) {
   throw new Error('access-denied: redirected');
