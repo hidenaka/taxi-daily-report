@@ -112,13 +112,24 @@ export function filterByTimeWindow(flights, nowDate, pastMinutes = 30, futureMin
   });
 }
 
-const DENSITY_HIGH = 600;
-const DENSITY_MID = 300;
+// 混雑の色分けのしきい値。30分コマの定員(座席数)合計で見る。
+// 実測(7日ぶん・T1+T2・30分コマ): 25% 2100 / 中央 2900 / 75% 3600。
+// 昼は3000〜4400、深夜は200〜500と10倍以上ひらく。
+// 三等分になる 2500/3500 に置いた(実測で 少ない31% / 普通39% / 多い31%)。
+// 以前は 430/860 で、実値のはるか下にあったため ほぼ全部が「多い」に振り切れ、
+// 色を見ても空いている時間帯が分からなかった。
+export const DENSITY_HIGH = 3500;
+export const DENSITY_MID = 2500;
 
 function classifyDensity(value) {
   if (value >= DENSITY_HIGH) return 'high';
   if (value >= DENSITY_MID) return 'mid';
   return 'low';
+}
+
+// 同じ判定を外からも使えるように(テスト・他画面用)
+export function classifyDensityFor(value) {
+  return classifyDensity(value);
 }
 
 export function aggregateHeatmapClient(flights) {
@@ -140,10 +151,13 @@ export function aggregateHeatmapClient(flights) {
     // 欠航便は降客をもたらさない。降客数には含めず別計上する。
     if (f.status === '欠航') { b.cancelledCount += 1; continue; }
     b.flightCount += 1;
-    if (f.estimatedPax === null) b.unknownCount += 1;
+    // 人数は座席数(定員)で数える。以前は搭乗率0.7を掛けた推定降客数だったが、
+    // その率は実測ではなく決め打ちだった(本人指示「実数は表示」)。
+    const seats = (typeof f.seatCount === 'number' && f.seatCount > 0) ? f.seatCount : null;
+    if (seats === null) b.unknownCount += 1;
     else {
-      b.totalPax += f.estimatedPax;
-      if (f.isInternational) b.internationalPax += f.estimatedPax;
+      b.totalPax += seats;
+      if (f.isInternational) b.internationalPax += seats;
     }
     if (f.isInternational) b.internationalCount += 1;
     if (f.status === '遅延') b.delayedCount += 1;
@@ -162,14 +176,16 @@ export function summarizeFlights(flights, opts = {}) {
   // 欠航便は降客をもたらさないので集計から除外し、別途 cancelledCount で数える。
   const cancelledCount = flights.filter(f => f.status === '欠航').length;
   const operating = flights.filter(f => f.status !== '欠航');
-  const totalPax = operating.reduce((s, f) => s + (f.estimatedPax ?? 0), 0);
+  // 座席数(定員)の合計。推定の降客数ではない。
+  const seatsOf = (f) => (typeof f.seatCount === 'number' && f.seatCount > 0) ? f.seatCount : 0;
+  const totalPax = operating.reduce((s, f) => s + seatsOf(f), 0);
   const internationalPax = operating
     .filter(f => f.isInternational)
-    .reduce((s, f) => s + (f.estimatedPax ?? 0), 0);
+    .reduce((s, f) => s + seatsOf(f), 0);
   const totalFlights = operating.length;
   const internationalCount = operating.filter(f => f.isInternational).length;
   const delayedCount = operating.filter(f => f.status === '遅延').length;
-  const unknownCount = operating.filter(f => f.estimatedPax === null).length;
+  const unknownCount = operating.filter(f => !(typeof f.seatCount === 'number' && f.seatCount > 0)).length;
   const hourlyAvg = totalFlights > 0 ? Math.round(totalPax / windowHours) : 0;
   const reachNoneCount = operating.filter(f => f.reachTier === 'none').length;
   return {
@@ -872,4 +888,107 @@ export async function loadArrivalsForDay(day) {
   const res = await fetch(`./data/arrivals-days/${day}.json?t=${Date.now()}`, { cache: 'no-store' });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return normalizeArrivals(await res.json());
+}
+
+// =============================================================================
+// 日付をまたぐ深夜の便
+//
+// 到着便データは前日 23:45 が最終更新で、そこから遅れた便は「24:33」のように
+// 24時を超えた表記で入る(実データ: 9/8 NH4738 千歳 定刻22:40 → 24:33 号3)。
+// 0時を過ぎるとこの便こそが乗務中に必要な情報だが、"24:33" を素直に読むと
+// 1473分となり「23時間後の便」に化けて埋もれていた。
+// 逆に当日朝の便(4:25 等)は、深夜0時台の乗務には要らない。
+// =============================================================================
+
+// 深夜モードとみなす時間帯(この間は「持ち越し便」を分けて見せる)
+export const OVERNIGHT_FROM_HOUR = 22;   // 22時〜
+export const OVERNIGHT_TO_HOUR = 5;      // 〜5時
+// 持ち越しとみなす到着の上限(翌朝6時)。実データに "39:20"(翌日15:20・20時間40分遅れ)が
+// あり、そこまで持ち越しに混ぜると深夜の画面が使えなくなるため区切る。
+export const CARRIED_OVER_UNTIL_HOUR = 6;
+// 深夜に見たとき「前の晩の便」とみなす開始時刻
+export const EVENING_FROM_HOUR = 18;
+// 深夜の一覧で、直前に着いた便をどこまでさかのぼるか(分)。
+// 長くすると 0時台に20便近く並んで、肝心の遅延便が埋もれる。
+export const JUST_LANDED_WITHIN_MIN = 60;
+
+// "24:33" → 33(翌0:33)。"23:45" → 1425。読めなければ null。
+export function minutesOfDay(hhmm) {
+  if (!hhmm) return null;
+  const m = String(hhmm).match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const raw = Number(m[1]) * 60 + Number(m[2]);
+  return raw >= 24 * 60 ? raw - 24 * 60 : raw;
+}
+
+// 24時を超えた表記か(＝日付をまたいで着く便)
+export function isPastMidnightTime(hhmm) {
+  if (!hhmm) return false;
+  const m = String(hhmm).match(/^(\d{1,2}):/);
+  return !!m && Number(m[1]) >= 24;
+}
+
+// いまから何分後か。24時超え表記の便だけ日またぎを考える。
+// 当日朝の便は「昨日の朝」なので、深夜に見ても未来には回さない。
+export function minutesFromNow(hhmm, nowMin) {
+  const t = minutesOfDay(hhmm);
+  if (t == null) return null;
+  if (isPastMidnightTime(hhmm) && nowMin >= 12 * 60) {
+    // まだ日付が変わる前(23:50 等)に、翌0:33 の便を見ている
+    return t + 24 * 60 - nowMin;
+  }
+  // 日付が変わった直後(0時台)に、前の晩の便(23:55 等)を見ている。
+  // そのまま引くと 1425分後 になり、15分前に着いたばかりの便が未来へ飛んでいた。
+  if (!isPastMidnightTime(hhmm) && nowMin < OVERNIGHT_TO_HOUR * 60 && t >= EVENING_FROM_HOUR * 60) {
+    return t - 24 * 60 - nowMin;
+  }
+  return t - nowMin;
+}
+
+// 深夜に見ているとき、「前日から持ち越した便」と「当日朝の便」を分ける。
+// carriedOver: 24時を超えて着く便(定刻からの遅れ delayMin 付き・時刻順)
+// morning:     当日朝(5時まで)の便
+export function splitOvernight(flights, now = new Date()) {
+  const h = now.getHours();
+  const isOvernight = h >= OVERNIGHT_FROM_HOUR || h < OVERNIGHT_TO_HOUR;
+  if (!isOvernight || !Array.isArray(flights)) {
+    return { isOvernight: false, carriedOver: [], morning: [] };
+  }
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const carriedOver = [];
+  const morning = [];
+  for (const f of flights) {
+    if (f.status === '欠航') continue;
+    const t = f.estimatedTime ?? f.scheduledTime;
+    // 直前に着いたばかりの便。0時を過ぎた直後は、まだロビーに客が残っているので
+    // 「さっき何が着いたか」が要る(23:55着を0:10に見る、など)。
+    if (!isPastMidnightTime(t)) {
+      const ago = minutesFromNow(t, nowMin);
+      if (ago != null && ago <= 0 && ago >= -JUST_LANDED_WITHIN_MIN) {
+        const sch = minutesOfDay(f.scheduledTime);
+        const est = minutesOfDay(t);
+        carriedOver.push({ ...f, delayMin: (sch != null && est != null) ? est - sch : null });
+        continue;
+      }
+    }
+    if (isPastMidnightTime(t)) {
+      const sch = minutesOfDay(f.scheduledTime);
+      const est = minutesOfDay(t);
+      // 翌朝までに着くものだけ。それを超えるのは「翌日に振り替わった便」で今夜の話ではない。
+      if (est == null || est >= CARRIED_OVER_UNTIL_HOUR * 60) continue;
+      // 定刻が前日の夜、到着が翌日なので 24時間ぶん足して遅れを出す
+      const delayMin = (sch != null && est != null) ? (est + 24 * 60) - sch : null;
+      carriedOver.push({ ...f, delayMin });
+    } else {
+      const m = minutesOfDay(t);
+      if (m != null && m < OVERNIGHT_TO_HOUR * 60) morning.push(f);
+    }
+  }
+  // 並べ替えは「いまから何分後か」で。時刻の数値で並べると 24:33(=0:33) が
+  // 23:55 より前に来てしまい、実際の到着順と食い違う。
+  const byWhen = (a, b) => (minutesFromNow(a.estimatedTime ?? a.scheduledTime, nowMin) ?? 0) - (minutesFromNow(b.estimatedTime ?? b.scheduledTime, nowMin) ?? 0);
+  const byTime = (a, b) => (minutesOfDay(a.estimatedTime ?? a.scheduledTime) ?? 0) - (minutesOfDay(b.estimatedTime ?? b.scheduledTime) ?? 0);
+  carriedOver.sort(byWhen);
+  morning.sort(byTime);
+  return { isOvernight: true, carriedOver, morning };
 }

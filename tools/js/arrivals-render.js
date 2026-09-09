@@ -1,4 +1,5 @@
 import { airlineToColorKey } from './airline-color.js';
+import { minutesFromNow } from './arrivals-data.js';
 
 const VALID_TERMINALS = new Set(['T1', 'T2', 'T3']);
 
@@ -25,7 +26,7 @@ export function renderNoribaCards(container, summary) {
     <div class="noriba-card nlane-${l.lane}">
       <div class="nc-head"><span class="nc-num">${l.lane}号</span><span class="nc-label">${l.label}</span></div>
       <div class="nc-pax">${l.seatSum}<span class="nc-unit">人(定員)</span></div>
-      <div class="nc-sub">${l.count}便 ・推定${l.taxiPax}人${seatUnk}</div>
+      <div class="nc-sub">${l.count}便${seatUnk}</div>
       ${lastLine}
     </div>`;
   }).join('');
@@ -42,7 +43,7 @@ export function renderNoribaCards(container, summary) {
     </div>
     <div class="noriba-cards">${cards}</div>
     ${foot}
-    <div class="nc-note">定員＝便の最大座席数（確実）。推定＝タクシー利用見込み（来ない場合あり）。欠航除外。</div>`;
+    <div class="nc-note">定員＝便の最大座席数。欠航は除いています。</div>`;
 }
 
 const TIER_INFO = {
@@ -66,13 +67,13 @@ export function renderHeatmap(container, bins) {
     const unknownNote = b.unknownCount > 0 ? ` <span class="unknown-note">機材不明${b.unknownCount}</span>` : '';
     const delayBadge = b.delayedCount > 0 ? ` <span class="delay-badge">⚠${b.delayedCount}遅延</span>` : '';
     const intlBadge = b.internationalPax > 0
-      ? ` <span class="intl-badge">国際${b.internationalPax}人</span>`
+      ? ` <span class="intl-badge">国際${b.internationalPax}</span>`
       : '';
     const tier = TIER_INFO[b.densityTier];
     const tierBadge = b.totalPax > 0
       ? ` <span class="tier-badge">${tier.emoji}${tier.label}</span>`
       : '';
-    const valueLabel = `${b.totalPax}人 (${b.flightCount}便)`;
+    const valueLabel = `${b.totalPax}人(定員) (${b.flightCount}便)`;
     row.innerHTML = `
       <span class="heatmap-time">${b.bin}</span>
       <span class="heatmap-bar-wrap">
@@ -119,8 +120,8 @@ export function renderSummary(container, summary) {
     : '';
   container.innerHTML = `
     ${cancelledPart}
-    <span class="summary-item">${summary.windowLabel} <strong>${summary.totalPax.toLocaleString()}人</strong></span>
-    <span class="summary-item">時間あたり <strong>${summary.hourlyAvg.toLocaleString()}人</strong></span>
+    <span class="summary-item">${summary.windowLabel} <strong>${summary.totalPax.toLocaleString()}人</strong>(定員)</span>
+    <span class="summary-item">1時間あたり <strong>${summary.hourlyAvg.toLocaleString()}人</strong>(定員)</span>
     <span class="summary-item">${summary.totalFlights}便</span>
     ${reachNonePart}
     ${intlPart}
@@ -515,9 +516,8 @@ export function renderNoribaActivity(container, activity, opts = {}) {
       ? `<div class="ns-fwd">この先 <span class="ns-spark" data-spark="${(mv.sparkFuture || []).join(',')}" data-color="#8a8f88"></span> ${_esc(fwdText(mv.activeUntil))}<span class="ns-more">詳細 ›</span></div>`
       : `<div class="ns-fwd"><span class="ns-more" style="margin-left:auto">詳細 ›</span></div>`;
     const flList = (a.detailFlights || []).slice(0, 6).map((f) => {
-      const pax = (typeof f.taxiPax === 'number') ? `・約${f.taxiPax}人` : '';
       const seat = (typeof f.seatCount === 'number') ? `定員${f.seatCount}` : '';
-      return `<div class="ns-fl"><span class="o">${_esc(f.time)} ${_esc(f.fromName)}</span><span class="m">${seat}${pax}</span></div>`;
+      return `<div class="ns-fl"><span class="o">${_esc(f.time)} ${_esc(f.fromName)}</span><span class="m">${seat}</span></div>`;
     }).join('') || `<div class="ns-fl"><span class="m">60分内の到着便はありません</span></div>`;
     const last = a.demand && a.demand.lastFlight ? `<div class="ns-fl" style="border:0"><span class="o">最終便</span><span class="m">${_esc(a.demand.lastFlight.time)} ${_esc(a.demand.lastFlight.fromName)}</span></div>` : '';
     const curveSvg = renderMovementCurveSvg(a.movement && a.movement.curve);
@@ -565,4 +565,75 @@ export function renderNoribaActivity(container, activity, opts = {}) {
       if (d) { d.hidden = !d.hidden; card.classList.toggle('open', !d.hidden); }
     });
   });
+}
+
+// 深夜の「前日から持ち越した便」。0時を過ぎた乗務中に一番要る情報なので最上部に出す。
+// 当日朝の便は件数だけ添える(この時間帯には要らないが、無いと不安になるため)。
+export function renderCarriedOver(container, split, now = new Date()) {
+  if (!container) return;
+  if (!split || !split.isOvernight || !split.carriedOver.length) {
+    container.innerHTML = '';
+    container.hidden = true;
+    return;
+  }
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const rows = split.carriedOver.map((f) => {
+    const t = f.estimatedTime ?? f.scheduledTime;
+    const hhmm = String(t).replace(/^(\d{1,2}):/, (_, h) => `${String(Number(h) >= 24 ? Number(h) - 24 : Number(h)).padStart(2, '0')}:`);
+    // 日またぎを含む「いまから何分後か」は data 側の計算を使う。
+    // 自前で引くと、0時台に見た 22:45 が「あと1355分」に化ける。
+    const diff = minutesFromNow(t, nowMin) ?? 0;
+    const when = diff > 0 ? `あと${diff}分` : `${-diff}分前に到着`;
+    const lane = Number.isInteger(f.poolLane) ? `${f.poolLane}号` : '号未定';
+    const delay = Number.isFinite(f.delayMin) && f.delayMin > 0 ? `<span class="co-delay">${f.delayMin}分遅れ</span>` : '';
+    return `<div class="co-row${diff > 0 ? ' is-coming' : ''}">
+      <span class="co-time">${hhmm}</span>
+      <span class="co-when">${when}</span>
+      <span class="co-lane">${lane}</span>
+      <span class="co-from">${f.fromName ?? ''} ${f.flightNumber ?? ''}</span>
+      ${delay}
+    </div>`;
+  }).join('');
+  const morningNote = split.morning.length
+    ? `<div class="co-morning">朝の便（${split.morning.length}便）は今は畳んでいます</div>`
+    : '';
+  container.hidden = false;
+  const coming = split.carriedOver.filter((f) => (minutesFromNow(f.estimatedTime ?? f.scheduledTime, nowMin) ?? 0) > 0).length;
+  const head = coming > 0
+    ? `🌙 いま前後の便（これから ${coming}便 / さっき着いた ${split.carriedOver.length - coming}便）`
+    : `🌙 さっき着いた便（${split.carriedOver.length}便）`;
+  container.innerHTML = `<div class="co-head">${head}</div>${rows}${morningNote}`;
+}
+
+// 過去の日の「その日どうだったか」。遅れの実態と、配車業務が終わった時刻を出す。
+// 深夜まで乗務する人が「あの日は何時まで客がいたか」を後から確かめるための欄。
+export function renderDaySummary(container, summary) {
+  if (!container) return;
+  if (!summary) { container.innerHTML = ''; container.hidden = true; return; }
+  const hhmm = (t) => String(t ?? '').replace(/^(\d{1,2}):/, (_, h) => {
+    const n = Number(h);
+    return `${String(n >= 24 ? n - 24 : n).padStart(2, '0')}:`;
+  });
+  const endPart = summary.dispatchEndedAt
+    ? `<div class="ds-row"><span class="ds-k">配車業務の終了案内</span><span class="ds-v ds-end">${summary.dispatchEndedAt}</span><span class="ds-note">この時刻に「本日の配車業務は終了しました」が出ました</span></div>`
+    : `<div class="ds-row"><span class="ds-k">配車業務の終了案内</span><span class="ds-v">—</span><span class="ds-note">記録が残っていません</span></div>`;
+
+  const delayPart = summary.delayed15 > 0
+    ? `<div class="ds-row"><span class="ds-k">遅れた便</span><span class="ds-v">15分以上 ${summary.delayed15}便<span class="ds-sub">（30分以上 ${summary.delayed30}便）</span></span></div>`
+    : `<div class="ds-row"><span class="ds-k">遅れた便</span><span class="ds-v">なし</span><span class="ds-note">15分以上の遅れはありませんでした</span></div>`;
+
+  const m = summary.maxDelayFlight;
+  const maxPart = m
+    ? `<div class="ds-row"><span class="ds-k">いちばん遅れた便</span><span class="ds-v">${m.fromName ?? ''} ${m.flightNumber ?? ''}<span class="ds-sub">定刻 ${m.scheduledTime} → ${hhmm(m.estimatedTime)}（${m.delayMin}分遅れ${Number.isInteger(m.poolLane) ? ` / ${m.poolLane}号` : ''}）</span></span></div>`
+    : '';
+
+  const ov = Array.isArray(summary.overnightFlights) ? summary.overnightFlights : [];
+  const ovPart = ov.length
+    ? `<div class="ds-row"><span class="ds-k">日をまたいだ便</span><span class="ds-v">${ov.length}便`
+      + ov.map(f => `<span class="ds-sub">${hhmm(f.estimatedTime)} ${f.fromName ?? ''} ${f.flightNumber ?? ''}（${f.delayMin}分遅れ${Number.isInteger(f.poolLane) ? ` / ${f.poolLane}号` : ''}）</span>`).join('')
+      + `</span></div>`
+    : `<div class="ds-row"><span class="ds-k">日をまたいだ便</span><span class="ds-v">なし</span></div>`;
+
+  container.hidden = false;
+  container.innerHTML = `<div class="ds-head">📋 この日のまとめ</div>${endPart}${delayPart}${maxPart}${ovPart}`;
 }

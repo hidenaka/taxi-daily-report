@@ -42,6 +42,26 @@
     .day-note { display: block; font-size: 11px; color: var(--sub); }
     .day-note.warn { color: #ffb74d; }
     .day-bar.is-past { border-color: #6b5a2a; background: #1d1a12; }
+    /* 深夜の持ち越し便 */
+    .carried-over { margin: 8px 12px; padding: 10px 12px; background: #1a1410; border: 1px solid #6b4a2a; border-radius: 8px; }
+    .co-head { font-size: 13px; font-weight: 700; color: #ffb74d; margin-bottom: 6px; }
+    .co-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 5px 0; border-top: 1px solid #2a2118; font-size: 13px; }
+    .co-row.is-coming { color: #fff; }
+    .co-time { font-weight: 700; font-size: 15px; min-width: 48px; }
+    .co-when { color: #ffb74d; font-size: 12px; min-width: 72px; }
+    .co-lane { background: #2a2118; padding: 1px 7px; border-radius: 4px; font-size: 12px; }
+    .co-from { color: var(--sub); }
+    .co-delay { color: #ff8a65; font-size: 12px; }
+    .co-morning { margin-top: 6px; font-size: 11px; color: var(--sub); }
+    /* 過去日のまとめ */
+    .day-summary { margin: 8px 12px; padding: 10px 12px; background: #14161a; border: 1px solid #2a3038; border-radius: 8px; }
+    .ds-head { font-size: 13px; font-weight: 700; color: #90caf9; margin-bottom: 8px; }
+    .ds-row { display: flex; gap: 10px; align-items: baseline; padding: 6px 0; border-top: 1px solid #1f242b; font-size: 13px; flex-wrap: wrap; }
+    .ds-k { color: var(--sub); min-width: 128px; font-size: 12px; }
+    .ds-v { font-weight: 700; }
+    .ds-v.ds-end { color: #ffb74d; font-size: 16px; }
+    .ds-sub { display: block; font-weight: 400; color: var(--sub); font-size: 11.5px; margin-top: 2px; }
+    .ds-note { color: var(--sub); font-size: 11px; }
     section { padding: 8px 12px; }
     h2 { font-size: 13px; color: var(--sub); margin: 8px 0; font-weight: normal; }
     #legend { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 6px 12px; background: #14141a; border-bottom: 1px solid #222; font-size: 11px; color: var(--sub); }
@@ -361,7 +381,7 @@
 </head>
 <body>
   <script type="module">
-    import { enforceAccess } from '../js/access-control.js?b=382e5c740313';
+    import { enforceAccess } from '../js/access-control.js?b=d52958b07813';
     if (!(await enforceAccess('core', { redirect: '../subscribe.html' }))) {
       throw new Error('access-denied: redirected');
     }
@@ -372,7 +392,7 @@
     <a href="arrivals.html" class="app-tab active" aria-current="page">✈ 空港ツール</a>
     <a href="stands.html" id="tab-stands" class="app-tab" style="display:none">📍 乗り場</a>
   </nav>
-  <script type="module" src="js/stands-tab.js?b=382e5c740313"></script>
+  <script type="module" src="js/stands-tab.js?b=d52958b07813"></script>
 
   <div class="terminal-tabs">
     <!-- T1/T2 の個別タブは非表示（合計のみ表示）。T3(国際)は実績・予測の仕組みが整ったら表示する -->
@@ -395,9 +415,15 @@
     <button id="day-next" type="button" class="day-nav" aria-label="次の日">▶</button>
   </div>
 
+  <!-- 過去日を見ているときの「この日のまとめ」 -->
+  <div id="day-summary" class="day-summary" hidden></div>
+
   <div id="weather-banner" hidden></div>
 
   <div id="pool-notice-banner" class="pool-notice" hidden></div>
+
+  <!-- 深夜: 前日から持ち越した便。0時過ぎの乗務中に一番要るので最上部 -->
+  <div id="carried-over" class="carried-over" hidden></div>
 
   <section id="noriba-cards-section" class="noriba-section"></section>
 
@@ -462,7 +488,7 @@
   <button id="detail-toggle" type="button">▼ 今日の全便を表示</button>
 
   <section>
-    <h2>時間帯別 推定降客数（30分単位）</h2>
+    <h2>時間帯別 定員（30分単位）</h2>
     <div id="heatmap"></div>
   </section>
 
@@ -488,9 +514,9 @@
   <script type="module" src="./js/arrivals-app.js?v=20260507b"></script>
   <div id="navHost"></div>
   <script type="module">
-    import { renderBottomNav } from '../js/app.js?b=382e5c740313';
-    import { showGpsPrivacyBanner } from '../js/gps-privacy-banner.js?b=382e5c740313';
-    import '../js/help-video.js?b=382e5c740313';
+    import { renderBottomNav } from '../js/app.js?b=d52958b07813';
+    import { showGpsPrivacyBanner } from '../js/gps-privacy-banner.js?b=d52958b07813';
+    import '../js/help-video.js?b=d52958b07813';
     document.getElementById('navHost').innerHTML = renderBottomNav('tools', '../');
     showGpsPrivacyBanner();
   </script>
