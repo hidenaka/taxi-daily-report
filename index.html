@@ -178,22 +178,22 @@ if (location.hostname.includes('-dev')) {
 <button class="fab" onclick="location.href='input.html'" style="display:none;">＋</button>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=1d0bf71d92d6';
-import { getConfig, getDrivesForMonth, flushPendingQueue, saveConfig } from './js/storage.js?b=1d0bf71d92d6';
-import { DEFAULT_CONFIG } from './js/default-config.js?b=1d0bf71d92d6';
-import { calcTotalPay, calcDailySales, isApproxSales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales, predictMonthly, tierBasisDrives, tierBasisSalesExcl } from './js/payroll.js?b=1d0bf71d92d6';
-import { METRIC_CATALOG, METRIC_GROUPS, resolveMetrics } from './js/home-metrics.js?b=1d0bf71d92d6';
-import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=1d0bf71d92d6';
-import { processInvite } from './js/invite-crypto.js?b=1d0bf71d92d6';
-import { renderLegalFooter } from './js/legal-footer.js?b=1d0bf71d92d6';
-import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=1d0bf71d92d6';
-import { isEmailAuth, waitForAuth, getUserId } from './js/firebase-auth.js?b=1d0bf71d92d6';
-import { auth } from './js/firebase-init.js?b=1d0bf71d92d6';
+import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=13301e03caf4';
+import { getConfig, getDrivesForMonth, flushPendingQueue, saveConfig } from './js/storage.js?b=13301e03caf4';
+import { DEFAULT_CONFIG } from './js/default-config.js?b=13301e03caf4';
+import { calcTotalPay, calcDailySales, isApproxSales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales, predictMonthly, tierBasisDrives, tierBasisSalesExcl } from './js/payroll.js?b=13301e03caf4';
+import { METRIC_CATALOG, METRIC_GROUPS, resolveMetrics } from './js/home-metrics.js?b=13301e03caf4';
+import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=13301e03caf4';
+import { processInvite } from './js/invite-crypto.js?b=13301e03caf4';
+import { renderLegalFooter } from './js/legal-footer.js?b=13301e03caf4';
+import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=13301e03caf4';
+import { isEmailAuth, waitForAuth, getUserId } from './js/firebase-auth.js?b=13301e03caf4';
+import { auth } from './js/firebase-init.js?b=13301e03caf4';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
-import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts, isRosterDayOff } from './js/planned-shifts.js?b=1d0bf71d92d6';
-import { checkInviteAndWarn, fetchCompanyExists, loadInviteSlug, loadReferrer, shouldRedirectInviteToSignup, buildSignupRedirectUrl } from './js/invite-url.js?b=1d0bf71d92d6';
-import { shouldShowFirstRunCard, shouldMarkHasDrive, isExistingLocalRealUser } from './js/first-run.js?b=1d0bf71d92d6';
-import './js/help-video.js?b=1d0bf71d92d6';
+import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts, isRosterDayOff } from './js/planned-shifts.js?b=13301e03caf4';
+import { checkInviteAndWarn, fetchCompanyExists, loadInviteSlug, loadReferrer, shouldRedirectInviteToSignup, buildSignupRedirectUrl } from './js/invite-url.js?b=13301e03caf4';
+import { shouldShowFirstRunCard, shouldMarkHasDrive, isExistingLocalRealUser } from './js/first-run.js?b=13301e03caf4';
+import './js/help-video.js?b=13301e03caf4';
 
 // 暗号化招待リンク処理は GitHub 版専用のためスキップ（Firebase 版）
 const inviteProcessed = false;
@@ -770,7 +770,7 @@ async function render(drivesPromise) {
             const projectedDeficit = upTier.tier.salesMin - projectedSalesExcl;
             const parenText = projectedDeficit <= 0
               ? `（現状${formatYen(drivenAvgExcl)}(税抜) → 既にこの水準より高い／現状ペース継続で次の歩率段に到達見込み）`
-              : `（現状${formatYen(drivenAvgExcl)}(税抜) → 11出番ぶんの合計まで残${formatYen(projectedDeficit)}(税抜)、残出番平均 +${formatYen((projectedDeficit) / remainingTierShifts)}/出番で到達）`;
+              : `（現状${formatYen(drivenAvgExcl)}(税抜) → 11出番分の合計まで残${formatYen(projectedDeficit)}(税抜)、残出番平均 +${formatYen((projectedDeficit) / remainingTierShifts)}/出番で到達）`;
             nextTierHtml = `
               <div style="margin-top:14px;padding:12px;background:#fff;border:1px solid #c5e1a5;border-radius:8px;">
                 <div style="font-size:10px;color:#1b5e20;letter-spacing:.05em;margin-bottom:6px;font-weight:600;">次の歩率段（${upTierMan}万円段 ${(upTier.tier.rate*100).toFixed(1)}%）の条件</div>
@@ -782,11 +782,11 @@ async function render(drivesPromise) {
                   </div>
                 </div>
                 <div style="padding:5px 7px;background:#f9fbf3;border-radius:5px;margin-bottom:6px;">
-                  <div style="font-size:9.5px;color:#666;">11出番ぶんの合計</div>
+                  <div style="font-size:9.5px;color:#666;">11出番分の合計</div>
                   <div style="font-size:12.5px;color:#1b5e20;font-weight:600;">${formatYen(upTierTotalExcl)}以上(税抜) / ${formatYen(upTierTotalIncl)}以上(税込)</div>
                 </div>
                 <div style="padding:5px 7px;background:#f9fbf3;border-radius:5px;">
-                  <div style="font-size:9.5px;color:#666;">残${remainingTierShifts}出番の必要平均（11出番ぶんの合計に届くため）</div>
+                  <div style="font-size:9.5px;color:#666;">残${remainingTierShifts}出番の必要平均（11出番分の合計に届くため）</div>
                   <div style="font-size:13px;color:#1b5e20;font-weight:700;line-height:1.4;">
                     ${formatYen(requiredRemainingAvgExcl)}/出番(税抜)<br>
                     <span style="font-size:11px;font-weight:600;">${formatYen(requiredRemainingAvgIncl)}/出番(税込)</span>
@@ -1533,7 +1533,7 @@ function pickWeatherIcon(w) {
 load();
 </script>
 <script type="module">
-import { isCoachEnabled } from './js/coach/coach-flag.js?b=1d0bf71d92d6';
+import { isCoachEnabled } from './js/coach/coach-flag.js?b=13301e03caf4';
 const _ce = document.getElementById('coachEntryCard');
 if (_ce && isCoachEnabled()) _ce.style.display = '';
 </script>
