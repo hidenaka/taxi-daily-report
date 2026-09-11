@@ -513,7 +513,7 @@
 </head>
 <body>
   <script type="module">
-    import { enforceAccess } from '../js/access-control.js?b=9ca65af172f6';
+    import { enforceAccess } from '../js/access-control.js?b=a7bd02aa9b82';
     if (!(await enforceAccess('core', { redirect: '../subscribe.html' }))) {
       throw new Error('access-denied: redirected');
     }
@@ -525,7 +525,7 @@
     <a href="arrivals.html" class="app-tab">✈ 空港ツール</a>
     <a href="stands.html" id="tab-stands" class="app-tab" style="display:none">📍 乗り場</a>
   </nav>
-  <script type="module" src="js/stands-tab.js?b=9ca65af172f6"></script>
+  <script type="module" src="js/stands-tab.js?b=a7bd02aa9b82"></script>
   <main>
     <header>
       <h1>タクシー乗務タイマー<button class="help-video-btn" data-help-video="timer" type="button">▶ 使い方（30秒）</button></h1>
@@ -703,10 +703,10 @@
   </dialog>
 
 <script type="module">
-import { computeRemainingMs, fmtCountdown, crossedZero, normalizeTimerState, fmtClockShort, overtimeNote, distanceMeters, normalizeCountdownPresets } from './js/countdown.js?b=9ca65af172f6';
-import { newRecordId, ensureRecordIds, mergeSyncDocs, pickSettings } from './js/timer-sync.js?b=9ca65af172f6';
-import { pullTimerState, pushTimerState } from './js/timer-cloud.js?b=9ca65af172f6';
-import { waitForAuth } from '../js/firebase-auth.js?b=9ca65af172f6';
+import { computeRemainingMs, fmtCountdown, crossedZero, normalizeTimerState, fmtClockShort, overtimeNote, distanceMeters, normalizeCountdownPresets } from './js/countdown.js?b=a7bd02aa9b82';
+import { newRecordId, ensureRecordIds, mergeSyncDocs, pickSettings } from './js/timer-sync.js?b=a7bd02aa9b82';
+import { pullTimerState, pushTimerState } from './js/timer-cloud.js?b=a7bd02aa9b82';
+import { waitForAuth } from '../js/firebase-auth.js?b=a7bd02aa9b82';
 // ============================================================
 // --- Pure ---
 // 依存のない純粋関数。入出力のみで動く。
@@ -1706,11 +1706,11 @@ document.querySelectorAll('.app-tab').forEach(a => {
 </script>
 <div id="navHost"></div>
 <script type="module">
-  import { renderBottomNav } from '../js/app.js?b=9ca65af172f6';
-  import { showGpsPrivacyBanner } from '../js/gps-privacy-banner.js?b=9ca65af172f6';
+  import { renderBottomNav } from '../js/app.js?b=a7bd02aa9b82';
+  import { showGpsPrivacyBanner } from '../js/gps-privacy-banner.js?b=a7bd02aa9b82';
   document.getElementById('navHost').innerHTML = renderBottomNav('tools', '../');
   showGpsPrivacyBanner();
-  import '../js/help-video.js?b=9ca65af172f6';
+  import '../js/help-video.js?b=a7bd02aa9b82';
 </script>
 </body>
 </html>
