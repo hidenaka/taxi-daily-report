@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Cabis ｜ 雨雲レーダーβ</title>
   <!-- 表示されている版＝いま動いているHTML。sw.js の版と一緒に上げる -->
-  <meta name="app-version" content="v398">
+  <meta name="app-version" content="v399">
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="../vendor/leaflet/leaflet.css">
   <link rel="icon" type="image/png" sizes="180x180" href="icon-180.png">
@@ -157,7 +157,7 @@
 </head>
 <body>
   <script type="module">
-    import { enforceAccess } from '../js/access-control.js?b=920e25435362';
+    import { enforceAccess } from '../js/access-control.js?b=65b6f87941c9';
     if (!(await enforceAccess('core', { redirect: '../subscribe.html' }))) {
       throw new Error('access-denied: redirected');
     }
@@ -195,7 +195,7 @@
     document.addEventListener('visibilitychange', () => { if (!document.hidden) fitAppHeight(); });
     if (window.visualViewport) window.visualViewport.addEventListener('resize', fitAppHeight);
   </script>
-  <script src="../vendor/leaflet/leaflet.js?b=920e25435362"></script>
+  <script src="../vendor/leaflet/leaflet.js?b=65b6f87941c9"></script>
 
   <nav class="app-tabs" role="tablist" aria-label="アプリ切替">
     <a href="./" class="app-tab">⏱ 乗務タイマー</a>
@@ -205,7 +205,7 @@
     <a href="stands.html" id="tab-stands" class="app-tab" style="display:none">📍 乗り場</a>
   </nav>
 
-  <script type="module" src="js/stands-tab.js?b=920e25435362"></script>
+  <script type="module" src="js/stands-tab.js?b=65b6f87941c9"></script>
   <div id="radar-stage">
     <div id="radar-map"></div>
 
@@ -265,9 +265,9 @@
 
   <div id="navHost"></div>
   <script type="module">
-    import { renderBottomNav } from '../js/app.js?b=920e25435362';
+    import { renderBottomNav } from '../js/app.js?b=65b6f87941c9';
     document.getElementById('navHost').innerHTML = renderBottomNav('tools', '../');
   </script>
-  <script type="module" src="js/radar-app.js?b=920e25435362"></script>
+  <script type="module" src="js/radar-app.js?b=65b6f87941c9"></script>
 </body>
 </html>
