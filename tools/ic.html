@@ -20,7 +20,7 @@
 </head>
 <body>
   <script type="module">
-    import { enforceAccess } from '../js/access-control.js?b=0fec2375a310';
+    import { enforceAccess } from '../js/access-control.js?b=920e25435362';
     if (!(await enforceAccess('core', { redirect: '../subscribe.html' }))) {
       throw new Error('access-denied: redirected');
     }
@@ -33,7 +33,7 @@
     <a href="arrivals.html" class="app-tab">✈ 空港ツール</a>
     <a href="stands.html" id="tab-stands" class="app-tab" style="display:none">📍 乗り場</a>
   </nav>
-  <script type="module" src="js/stands-tab.js?b=0fec2375a310"></script>
+  <script type="module" src="js/stands-tab.js?b=920e25435362"></script>
   <main class="app">
     <div style="padding:6px 12px 0;">
       <button class="help-video-btn" data-help-video="ic-route" type="button">▶ 使い方（15秒）</button>
@@ -160,8 +160,8 @@
   </script>
   <div id="navHost"></div>
   <script type="module">
-    import { renderBottomNav } from '../js/app.js?b=0fec2375a310';
-    import '../js/help-video.js?b=0fec2375a310';
+    import { renderBottomNav } from '../js/app.js?b=920e25435362';
+    import '../js/help-video.js?b=920e25435362';
     document.getElementById('navHost').innerHTML = renderBottomNav('tools', '../');
   </script>
 </body>
