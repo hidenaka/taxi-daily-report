@@ -157,13 +157,13 @@ if (location.hostname.includes('-dev')) {
 </main>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, todayIso } from './js/app.js?b=b940b666852a';
-import { getConfig, getDrive, saveDriveSafe } from './js/storage.js?b=b940b666852a';
-import { fetchWeatherForDate } from './js/weather.js?b=b940b666852a';
-import { renderLegalFooter } from './js/legal-footer.js?b=b940b666852a';
-import { enforceAccess } from './js/access-control.js?b=b940b666852a';
-import './js/help-toggle.js?b=b940b666852a';
-import './js/help-video.js?b=b940b666852a';
+import { renderBottomNav, todayIso } from './js/app.js?b=d079aa34a9cd';
+import { getConfig, getDrive, saveDriveSafe } from './js/storage.js?b=d079aa34a9cd';
+import { fetchWeatherForDate } from './js/weather.js?b=d079aa34a9cd';
+import { renderLegalFooter } from './js/legal-footer.js?b=d079aa34a9cd';
+import { enforceAccess } from './js/access-control.js?b=d079aa34a9cd';
+import './js/help-toggle.js?b=d079aa34a9cd';
+import './js/help-video.js?b=d079aa34a9cd';
 
 if (!(await enforceAccess('core'))) {
   throw new Error('access-denied: redirected');
