@@ -273,3 +273,49 @@ export function pointTile(lat, lon, z) {
     py: Math.min(255, Math.max(0, Math.floor((fy - y) * 256))),
   };
 }
+
+// 帯だけでは「で、いつ降るのか」が読み取りにくいので、先頭に一言そえる。
+// levels は各コマの雨の強さ(rainLevelFromPixel の結果)、frames は同じ並び。
+export function describeRainTimeline(levels, frames) {
+  const lv = Array.isArray(levels) ? levels : [];
+  const fr = Array.isArray(frames) ? frames : [];
+  if (lv.length === 0 || fr.length === 0) return '';
+  let nowIdx = fr.findIndex((f) => f.isLatestObs);
+  if (nowIdx < 0) nowIdx = 0;
+  if (lv[nowIdx] >= 0) return `いま雨（${RAIN_LEVELS[lv[nowIdx]].label}mm/h）`;
+  for (let i = nowIdx + 1; i < lv.length; i++) {
+    if (lv[i] >= 0) {
+      const h = new Intl.DateTimeFormat('ja-JP', {
+        hour: 'numeric', hour12: false, timeZone: 'Asia/Tokyo',
+      }).format(new Date(fr[i].timeMs));
+      return `${h.endsWith('時') ? h : `${h}時`}ごろから雨`;
+    }
+  }
+  return 'この先ずっと雨なし';
+}
+
+// --- 地図のまん中が「どこか」を住所で出す ------------------------------------
+// 国土地理院の逆ジオコーダ。鍵不要・出典表示のみ（地図と同じ地理院）。
+// 返るのは市区町村コード(muniCd)と町名(lv01Nm)。
+// コード→名前は tools/data/muni.json（同梱・1,919件）で引く。
+export const MUNI_TABLE_URL = 'data/muni.json';
+
+export function reverseGeocodeUrl(lat, lon) {
+  const q = new URLSearchParams({ lat: String(lat), lon: String(lon) });
+  return `https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress?${q.toString()}`;
+}
+
+// 表の値は「都道府県,市区町村」。東京の中は都道府県を省く（乗務は都内が主で、
+// 毎回「東京都」が付くと長くなって読みにくいため）。
+export function formatCenterAddress(muniEntry, lv01Nm) {
+  // 政令市の町名は「　中区英町」のように全角空白つきで返ることがある
+  const town = String(lv01Nm ?? '').replace(/[\s\u3000]+/g, '');
+  if (!muniEntry) return town;
+  // 市区町村名は「横浜市　中区」のように全角空白つきで入っている（対応表に171件）
+  const [prefRaw = '', cityRaw = ''] = String(muniEntry).split(',');
+  const pref = prefRaw.replace(/[\s\u3000]+/g, '');
+  const city = cityRaw.replace(/[\s\u3000]+/g, '');
+  if (!city) return town;
+  const head = pref === '東京都' ? city : `${pref}${city}`;
+  return town ? `${head}${town}` : head;
+}
