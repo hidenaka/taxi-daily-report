@@ -194,26 +194,26 @@ if (location.hostname.includes('-dev')) {
 </main>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDateY, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, toLocalIso } from './js/app.js?b=65b6f87941c9';
-import { showGpsPrivacyBanner } from './js/gps-privacy-banner.js?b=65b6f87941c9';
+import { renderBottomNav, formatYen, formatDateY, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, toLocalIso } from './js/app.js?b=6af95a5a4982';
+import { showGpsPrivacyBanner } from './js/gps-privacy-banner.js?b=6af95a5a4982';
 showGpsPrivacyBanner();
-import { getDrivesForMonth, getDrivesForMonthCached, getAllDrives, getAllUsersDrivesForMonth, getAllUsersDrivesForMonthCached, listActiveUserIds, listActiveUserIdsCached, getMyUserId, getUserRoleMap, getUserRoleMapCached, getDrive, getConfig, getConfigCached, getMyAggregateAnalysisFlag, getMyConsecutiveShiftsCount } from './js/storage.js?b=65b6f87941c9';
-import { ACCESS_LEVELS, getAccessLevel, getAccessLimits, getNextThreshold } from './js/aggregate-access.js?b=65b6f87941c9';
+import { getDrivesForMonth, getDrivesForMonthCached, getAllDrives, getAllUsersDrivesForMonth, getAllUsersDrivesForMonthCached, listActiveUserIds, listActiveUserIdsCached, getMyUserId, getUserRoleMap, getUserRoleMapCached, getDrive, getConfig, getConfigCached, getMyAggregateAnalysisFlag, getMyConsecutiveShiftsCount } from './js/storage.js?b=6af95a5a4982';
+import { ACCESS_LEVELS, getAccessLevel, getAccessLimits, getNextThreshold } from './js/aggregate-access.js?b=6af95a5a4982';
 import {
   ensureActiveVehicleType,
   getActiveVehicleType,
   filterDrivesByVehicle,
   renderTodayVehicleToggle,
-} from './js/vehicle-filter.js?b=65b6f87941c9';
-import { hourlyDowEfficiency, peerMedianHourlyDow, dropoffAreaAnalysis, boardAreaStats, pickupAreaStats, dropoffHistoryAtArea, boardHistoryAtArea, buildNeighborMap, highValueAreas, highValueAreasByZone, boardHistoryAtAreaByZone, calcPaceAtElapsed, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin, dowOf, ZONE_PRESETS, getZoneAt, getZoneForElapsed, OFFICE_AREA, hourlyDowDailyValues, classifyEarning, stabilityTier, heatmapLegendHtml, heatmapFromCells } from './js/chart-helpers.js?b=65b6f87941c9';
-import { auth, db } from './js/firebase-init.js?b=65b6f87941c9';
-import { resolveWorkerBase, refreshPool, listMyGroups } from './js/group-client.js?b=65b6f87941c9';
-import { chooseInitialRecArea, filterRecAreaCandidates } from './js/rec-area.js?b=65b6f87941c9';
-import { areasNearPoint, pickupSpotsNear } from './js/area-geo.js?b=65b6f87941c9';
-import { renderLegalFooter } from './js/legal-footer.js?b=65b6f87941c9';
-import { enforceAccess } from './js/access-control.js?b=65b6f87941c9';
-import './js/help-toggle.js?b=65b6f87941c9';
-import './js/help-video.js?b=65b6f87941c9'; // ▶使い方動画のインライン展開プレイヤー
+} from './js/vehicle-filter.js?b=6af95a5a4982';
+import { hourlyDowEfficiency, peerMedianHourlyDow, dropoffAreaAnalysis, boardAreaStats, pickupAreaStats, dropoffHistoryAtArea, boardHistoryAtArea, buildNeighborMap, highValueAreas, highValueAreasByZone, boardHistoryAtAreaByZone, calcPaceAtElapsed, getPeriodKey, PERIOD_LABELS, DOW_LABELS, formatMin, dowOf, ZONE_PRESETS, getZoneAt, getZoneForElapsed, OFFICE_AREA, hourlyDowDailyValues, classifyEarning, stabilityTier, heatmapLegendHtml, heatmapFromCells } from './js/chart-helpers.js?b=6af95a5a4982';
+import { auth, db } from './js/firebase-init.js?b=6af95a5a4982';
+import { resolveWorkerBase, refreshPool, listMyGroups } from './js/group-client.js?b=6af95a5a4982';
+import { chooseInitialRecArea, filterRecAreaCandidates } from './js/rec-area.js?b=6af95a5a4982';
+import { areasNearPoint, pickupSpotsNear } from './js/area-geo.js?b=6af95a5a4982';
+import { renderLegalFooter } from './js/legal-footer.js?b=6af95a5a4982';
+import { enforceAccess } from './js/access-control.js?b=6af95a5a4982';
+import './js/help-toggle.js?b=6af95a5a4982';
+import './js/help-video.js?b=6af95a5a4982'; // ▶使い方動画のインライン展開プレイヤー
 
 const REC_AREA_LS_KEY = 'cabis_rec_area_last';
 const REC_AREA_FALLBACK = '千代田区丸の内';
