@@ -316,28 +316,28 @@ if (location.hostname.includes('-dev')) {
   <button class="btn" id="saveConfigBtn" style="width:100%;">💾 設定を保存</button>
 </div>
 <script type="module">
-import { renderBottomNav } from './js/app.js?b=80f721c9a03e';
-import { showGpsPrivacyBanner } from './js/gps-privacy-banner.js?b=80f721c9a03e';
+import { renderBottomNav } from './js/app.js?b=16c9651c080b';
+import { showGpsPrivacyBanner } from './js/gps-privacy-banner.js?b=16c9651c080b';
 showGpsPrivacyBanner();
-import { getConfig, saveConfig, getDrivesForMonth, getMyUserId, setMyUserId, getUserRoleMap, getMyAggregateAnalysisFlag, setMyAggregateAnalysisFlag, getMyConsecutiveShiftsCount } from './js/storage.js?b=80f721c9a03e';
-import { ACCESS_LEVELS, getAccessLevel, getNextThreshold } from './js/aggregate-access.js?b=80f721c9a03e';
-import { buildReferralUrl } from './js/admin-companies.js?b=80f721c9a03e';
-import { getMyCompanyId } from './js/storage.js?b=80f721c9a03e';
-import { renderQrSvg, downloadQrPng } from './js/qr-code.js?b=80f721c9a03e';
-import { isValidUserId } from './js/userid.js?b=80f721c9a03e';
-import { DEFAULT_CONFIG } from './js/default-config.js?b=80f721c9a03e';
-import { calcTotalPay } from './js/payroll.js?b=80f721c9a03e';
-import { isEmailAuth, logout, loginWithUserId, getCurrentUser, initAuth, waitForAuth, setViewAs, getViewAsUserId, clearViewAs } from './js/firebase-auth.js?b=80f721c9a03e';
-import { resolveAuthBadge } from './js/auth-state.js?b=80f721c9a03e';
-import { renderLegalFooter } from './js/legal-footer.js?b=80f721c9a03e';
-import './js/help-toggle.js?b=80f721c9a03e';
+import { getConfig, saveConfig, getDrivesForMonth, getMyUserId, setMyUserId, getUserRoleMap, getMyAggregateAnalysisFlag, setMyAggregateAnalysisFlag, getMyConsecutiveShiftsCount } from './js/storage.js?b=16c9651c080b';
+import { ACCESS_LEVELS, getAccessLevel, getNextThreshold } from './js/aggregate-access.js?b=16c9651c080b';
+import { buildReferralUrl } from './js/admin-companies.js?b=16c9651c080b';
+import { getMyCompanyId } from './js/storage.js?b=16c9651c080b';
+import { renderQrSvg, downloadQrPng } from './js/qr-code.js?b=16c9651c080b';
+import { isValidUserId } from './js/userid.js?b=16c9651c080b';
+import { DEFAULT_CONFIG } from './js/default-config.js?b=16c9651c080b';
+import { calcTotalPay } from './js/payroll.js?b=16c9651c080b';
+import { isEmailAuth, logout, loginWithUserId, getCurrentUser, initAuth, waitForAuth, setViewAs, getViewAsUserId, clearViewAs } from './js/firebase-auth.js?b=16c9651c080b';
+import { resolveAuthBadge } from './js/auth-state.js?b=16c9651c080b';
+import { renderLegalFooter } from './js/legal-footer.js?b=16c9651c080b';
+import './js/help-toggle.js?b=16c9651c080b';
 import {
   getSubscription,
   cancelSubscription,
   requiresOnboarding,
   isCanceledOrUnpaid,
   formatStatus,
-} from './js/subscription-state.js?b=80f721c9a03e';
+} from './js/subscription-state.js?b=16c9651c080b';
 
 document.getElementById('navHost').innerHTML = renderBottomNav('settings');
 renderLegalFooter();
