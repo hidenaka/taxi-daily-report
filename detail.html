@@ -95,13 +95,13 @@ if (location.hostname.includes('-dev')) {
 </main>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDate } from './js/app.js?b=8b3e7f6bbf93';
-import { getDrive, listFiles, saveDriveSafe, deleteDrive } from './js/storage.js?b=8b3e7f6bbf93';
-import { calcDailySales } from './js/payroll.js?b=8b3e7f6bbf93';
-import { calcTimeBreakdown, hourlyActivity, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, formatMin, timeToMinutes, isSummaryOnly } from './js/chart-helpers.js?b=8b3e7f6bbf93';
-import { weatherEmoji } from './js/weather.js?b=8b3e7f6bbf93';
-import { renderLegalFooter } from './js/legal-footer.js?b=8b3e7f6bbf93';
-import { enforceAccess } from './js/access-control.js?b=8b3e7f6bbf93';
+import { renderBottomNav, formatYen, formatDate } from './js/app.js?b=b08c8b90bbf1';
+import { getDrive, listFiles, saveDriveSafe, deleteDrive } from './js/storage.js?b=b08c8b90bbf1';
+import { calcDailySales } from './js/payroll.js?b=b08c8b90bbf1';
+import { calcTimeBreakdown, hourlyActivity, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, formatMin, timeToMinutes, isSummaryOnly } from './js/chart-helpers.js?b=b08c8b90bbf1';
+import { weatherEmoji } from './js/weather.js?b=b08c8b90bbf1';
+import { renderLegalFooter } from './js/legal-footer.js?b=b08c8b90bbf1';
+import { enforceAccess } from './js/access-control.js?b=b08c8b90bbf1';
 
 if (!(await enforceAccess('core'))) {
   throw new Error('access-denied: redirected');
@@ -415,7 +415,7 @@ function renderTripsTable(drive) {
       <td>${shiftTimeStr(t.boardTime)}</td>
       <td>${shiftTimeStr(t.alightTime)}</td>
       <td class="r">${dur}分</td>
-      <td>${t.isPickup ? '迎車' : ''}${t.isCharter ? '貸' : ''}</td>
+      <td>${t.isPickup ? '迎車' : (t.pickupKind === 'ア' ? 'アプリ' : '')}${t.isCharter ? '貸' : ''}</td>
       <td class="place" title="${t.boardPlace}">${t.boardPlace}</td>
       <td class="place" title="${t.alightPlace}">${t.alightPlace}${t.isCancel ? (Number(t.amount) > 0 ? ' [キャンセル・補填]' : ' [×]') : ''}</td>
       <td class="r">${(t.km || 0).toFixed(1)}</td>
