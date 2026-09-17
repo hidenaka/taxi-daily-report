@@ -9,7 +9,7 @@ import {
   TARGET_TIMES_OBS, TARGET_TIMES_FCST, TARGET_TIMES_SHORT,
   buildFramesWithShortRange, tileUrl, frameLabel, frameClock,
   frameOffsets, nearestFrameIndex, buildTicks,
-  RAIN_LEVELS, rainLevelFromPixel, pointTile, describeRainTimeline,
+  RAIN_LEVELS, maxLevelAround, pointTile, describeRainTimeline,
   MUNI_TABLE_URL, reverseGeocodeUrl, formatCenterAddress,
   searchPlaces, PRESET_PLACES,
 } from './radar-data.js';
@@ -154,6 +154,7 @@ function show(i) {
 // 地図の真ん中の1点について、各コマのタイルの色を読んで雨の強さを並べる。
 // タイルは地図が表示に使うものと同じなので、たいてい読み込み済み。
 const RAIN_SAMPLE_ZOOM = 10;     // 実データがある最大のズーム
+const RAIN_SAMPLE_RADIUS = 2;    // 前後2画素＝約1km四方を見る
 const stripCanvas = document.createElement('canvas');
 stripCanvas.width = 256; stripCanvas.height = 256;
 const stripCtx = stripCanvas.getContext('2d', { willReadFrequently: true });
@@ -171,15 +172,20 @@ function loadTileImage(url) {
 }
 
 async function levelAt(frame, tile) {
-  const im = await loadTileImage(tileUrl(frame, RAIN_SAMPLE_ZOOM, tile.x, tile.y));
-  if (!im) return -1;
+  // 地図が表示に使うURLと分けて取りに行く。
+  // 同じURLだと、地図側が CORS なしで入れたキャッシュを掴んでしまい、
+  // 画素を読もうとした瞬間に例外になる端末がある（読めない＝雨なしに見えてしまう）。
+  const im = await loadTileImage(`${tileUrl(frame, RAIN_SAMPLE_ZOOM, tile.x, tile.y)}?px=1`);
+  if (!im) return null;                      // 取れなかった（回線など）
   try {
     stripCtx.clearRect(0, 0, 256, 256);
     stripCtx.drawImage(im, 0, 0);
-    const d = stripCtx.getImageData(tile.px, tile.py, 1, 1).data;
-    return rainLevelFromPixel(d[0], d[1], d[2], d[3]);
+    // 1画素(約250m)だけだと、すぐ隣まで来ている雨を見落とす。
+    // 周り約1km四方でいちばん強い雨を採る。
+    const d = stripCtx.getImageData(0, 0, 256, 256).data;
+    return maxLevelAround(d, 256, 256, tile.px, tile.py, RAIN_SAMPLE_RADIUS);
   } catch {
-    return -1;   // 読めない端末では帯を出さないだけ
+    return null;                             // 画素を読めない（雨なしとは違う）
   }
 }
 
@@ -189,20 +195,32 @@ function paintStrip(levels) {
   const pcts = offsets.percents;
   let html = '';
   levels.forEach((lv, i) => {
-    if (lv < 0) return;                         // 雨なしは塗らない
+    if (lv === null || lv < 0) return;          // 雨なし・未取得は塗らない
     const left = pcts[i] ?? 0;
     const right = i + 1 < pcts.length ? pcts[i + 1] : 100;
     const w = Math.max(0.4, right - left);
     html += `<i style="left:${left.toFixed(2)}%;width:${w.toFixed(2)}%;background:${RAIN_LEVELS[lv].css}"></i>`;
   });
+  // 「いま」の位置に区切りを入れて、実際に降った雨と予想の境目を分かるようにする
+  const nowIdx = frames.findIndex((f) => f.isLatestObs);
+  if (nowIdx >= 0 && offsets.percents[nowIdx] != null) {
+    html += `<b class="rs-now" style="left:${offsets.percents[nowIdx].toFixed(2)}%"></b>`;
+  }
+
   const any = levels.some((lv) => lv >= 0);
+  const readable = levels.some((lv) => lv !== null);
   box.classList.toggle('is-dry', !any);
-  box.innerHTML = html + (any ? '' : '<span class="rs-note">この場所は、この先ずっと雨なし</span>');
+  const note = any ? ''
+    : (readable
+      ? '<span class="rs-note">この場所は、この先ずっと雨なし</span>'
+      : '<span class="rs-note">この端末では雨の帯を出せませんでした</span>');
+  box.innerHTML = html + note;
 
   // 帯の上に「どこの」「いつ降るか」を一言で
   const cap = el('radar-strip-cap');
   if (cap) {
-    const when = describeRainTimeline(levels, frames);
+    const readableForCap = levels.some((lv) => lv !== null);
+    const when = readableForCap ? describeRainTimeline(levels.map((lv) => (lv === null ? -1 : lv)), frames) : '';
     cap.textContent = when ? `まん中の場所：${when}` : '';
   }
 }
@@ -215,7 +233,7 @@ async function refreshRainStrip() {
   const c = map.getCenter();
   const tile = pointTile(c.lat, c.lng, RAIN_SAMPLE_ZOOM);
   box.innerHTML = '<span class="rs-note">この場所の雨を調べています…</span>';
-  const levels = new Array(frames.length).fill(-1);
+  const levels = new Array(frames.length).fill(null);   // null=まだ/読めない, -1=雨なし
   const CONCURRENCY = 6;
   let next = 0;
   const worker = async () => {
