@@ -95,13 +95,13 @@ if (location.hostname.includes('-dev')) {
 </main>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDate } from './js/app.js?b=b08c8b90bbf1';
-import { getDrive, listFiles, saveDriveSafe, deleteDrive } from './js/storage.js?b=b08c8b90bbf1';
-import { calcDailySales } from './js/payroll.js?b=b08c8b90bbf1';
-import { calcTimeBreakdown, hourlyActivity, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, formatMin, timeToMinutes, isSummaryOnly } from './js/chart-helpers.js?b=b08c8b90bbf1';
-import { weatherEmoji } from './js/weather.js?b=b08c8b90bbf1';
-import { renderLegalFooter } from './js/legal-footer.js?b=b08c8b90bbf1';
-import { enforceAccess } from './js/access-control.js?b=b08c8b90bbf1';
+import { renderBottomNav, formatYen, formatDate } from './js/app.js?b=3704f4274179';
+import { getDrive, listFiles, saveDriveSafe, deleteDrive } from './js/storage.js?b=3704f4274179';
+import { calcDailySales } from './js/payroll.js?b=3704f4274179';
+import { calcTimeBreakdown, hourlyActivity, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, formatMin, timeToMinutes, isSummaryOnly } from './js/chart-helpers.js?b=3704f4274179';
+import { weatherEmoji } from './js/weather.js?b=3704f4274179';
+import { renderLegalFooter } from './js/legal-footer.js?b=3704f4274179';
+import { enforceAccess } from './js/access-control.js?b=3704f4274179';
 
 if (!(await enforceAccess('core'))) {
   throw new Error('access-denied: redirected');
@@ -415,7 +415,7 @@ function renderTripsTable(drive) {
       <td>${shiftTimeStr(t.boardTime)}</td>
       <td>${shiftTimeStr(t.alightTime)}</td>
       <td class="r">${dur}分</td>
-      <td>${t.isPickup ? '迎車' : (t.pickupKind === 'ア' ? 'アプリ' : '')}${t.isCharter ? '貸' : ''}</td>
+      <td>${t.pickupKind === 'ア' ? '迎車(ア)' : (t.isPickup ? '迎車' : '')}${t.isCharter ? '貸' : ''}</td>
       <td class="place" title="${t.boardPlace}">${t.boardPlace}</td>
       <td class="place" title="${t.alightPlace}">${t.alightPlace}${t.isCancel ? (Number(t.amount) > 0 ? ' [キャンセル・補填]' : ' [×]') : ''}</td>
       <td class="r">${(t.km || 0).toFixed(1)}</td>
@@ -434,7 +434,7 @@ function renderTripsTable(drive) {
       <tbody>${rows}</tbody>
     </table>
     </div>
-    <div class="legend">区: 迎車=お客様の指定場所までお迎え / 貸=貸切。「次まで」=このイベント終了から次イベント開始までの空車時間。橙=キャンセル、薄橙背景=貸切</div>
+    <div class="legend">区: 迎車=お客様の指定場所までお迎え(ア=アプリ配車、迎車に含む) / 貸=貸切。「次まで」=このイベント終了から次イベント開始までの空車時間。橙=キャンセル、薄橙背景=貸切</div>
   `;
 }
 
