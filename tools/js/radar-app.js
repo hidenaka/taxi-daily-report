@@ -1,10 +1,9 @@
-// tools/js/radar-app.js — 工事/雨雲マップ画面の組み立て（DOM / Leaflet 側）
+// tools/js/radar-app.js — 工事/雨雲マップ画面の組み立て（DOM / MapLibre GL 側）
 //
 // 1枚の地図を、上の切り替えで「雨雲」と「工事」で使い分ける（2026-09-28）。
 // 材料づくりは radar-data.js（雨雲）/ koji-data.js（工事）の純関数側。ここは配線だけ。
 // 出典表示「出典：気象庁」「東京都建設局・OpenStreetMap」は利用条件なので必ず出す。
-import { createKojiLayer } from './koji-layer.js';
-import { LEVELS } from './koji-data.js';
+import { createKojiUi } from './koji-ui.js';
 import { weatherUrl, pickHourly, pickDaily, dayLabel, rainStartHint, RAIN_POP } from './radar-weather.js';
 import { weatherEmoji, weatherLabel } from '../../js/weather.js';
 import { distanceKm } from '../../js/area-geo.js';
@@ -36,11 +35,9 @@ let hereMarker = null;
 // （「羽田空港の天気」と出ているのに中心は別の街、を防ぐ）。
 let placePin = null;   // { name, lat, lon }
 const PLACE_NEAR_KM = 3;
-const layers = new Map();  // frameIndex → L.tileLayer
+const layers = new Map();  // frameIndex → 雨雲ラスターの layer/source id
 let mode = 'rain';         // いま見ているほう
-let koji = null;           // 工事の層（createKojiLayer の戻り）
-let kojiOffsetMin = 0;     // 工事で見ている時刻（いまから何分後）
-let kojiNightHour = null;  // 「今夜22時」を選んだときの時（分後の指定より優先）
+let koji = null;           // 工事の画面（createKojiUi の戻り）
 let syncBarSpaceFn = null; // 下のバーの高さを地図に伝える（切り替え後にも呼ぶ）
 
 // --- 地図 -----------------------------------------------------------------
@@ -54,13 +51,16 @@ function readView() {
 function saveView() {
   try {
     const c = map.getCenter();
-    localStorage.setItem(VIEW_KEY, JSON.stringify({ lat: c.lat, lon: c.lng, zoom: map.getZoom() }));
+    localStorage.setItem(VIEW_KEY, JSON.stringify({
+      lat: c.lat, lon: c.lng, zoom: map.getZoom(),
+      pitch: map.getPitch(), bearing: map.getBearing(),
+    }));
   } catch { /* 保存できなくても動作に影響なし */ }
 }
 
 // 地図を触り終わったタイミングで保存する。
-// Leaflet の moveend / zoomend は、この画面では発火しなかった(dev実機で計測して確認)。
-// 指を離した・ホイールを止めた、という操作そのものを拾うほうが確実。
+// MapLibre の moveend に加えて、指を離した・ホイールを止めた操作そのものも拾う
+// （Leaflet のころ moveend が発火しない端末があったため、保険として残す）。
 let saveTimer = null;
 function saveViewSoon() {
   clearTimeout(saveTimer);
@@ -73,14 +73,43 @@ function saveViewSoon() {
 
 function createMap() {
   const v = readView();
-  map = L.map('radar-map', { zoomControl: true }).setView([v.lat, v.lon], v.zoom);
-  // 背景は国土地理院の淡色地図。Carto の light_all はタイルに
-  // 「API KEY REQUIRED」の透かしが入るようになっていた(実機で確認)。
+  // 地図の仕組みは工事マップ本家と同じ MapLibre GL（2026-09-28 本人指示で Leaflet から移行）。
+  // 下地は国土地理院の淡色地図を灰色・薄くして敷く（本家 public/radar.js と同じ指定）。
   // 地理院タイルは鍵不要・日本語表記で、出典表示のみが条件。
-  L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {
-    maxZoom: 18, maxNativeZoom: 18,
-    attribution: '地理院タイル ｜ 雨雲：出典 気象庁',
-  }).addTo(map);
+  map = new maplibregl.Map({
+    container: 'radar-map',
+    style: {
+      version: 8,
+      sources: {
+        gsi: {
+          type: 'raster',
+          tiles: ['https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png'],
+          tileSize: 256, maxzoom: 18, attribution: '地理院タイル',
+        },
+      },
+      layers: [
+        { id: 'bg', type: 'background', paint: { 'background-color': '#f1f0ec' } },
+        {
+          id: 'gsi', type: 'raster', source: 'gsi',
+          paint: {
+            'raster-saturation': -1,        // 灰色にする
+            'raster-opacity': 0.55,         // 薄くする
+            'raster-brightness-min': 0.12,
+            'raster-brightness-max': 1,
+            'raster-contrast': -0.2,
+          },
+        },
+      ],
+    },
+    center: [v.lon, v.lat], zoom: v.zoom,
+    // 本家と同じ「立体（斜めから見る）」を既定にする
+    pitch: Number.isFinite(v.pitch) ? v.pitch : 50,
+    bearing: Number.isFinite(v.bearing) ? v.bearing : -12,
+    maxPitch: 65,
+    attributionControl: { compact: true },
+  });
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+  map.on('moveend', saveViewSoon);
   // いま動いているアプリの版を、出典表示の横に小さく出す。
   // 「直したはずなのに直っていない」が、更新前の版を見ているだけなのか
   // 判別できるようにするため。
@@ -88,13 +117,17 @@ function createMap() {
   // 画面に固定した下のバーのぶん、地図を短くする（バーに隠れないように）。
   // バーの高さは中身で変わるので、実測して伝える。
   const syncBarSpace = () => {
-    const bar = mode === 'koji' ? el('koji-bar') : el('radar-bar');
-    if (!bar || bar.hidden) return;
+    const bar = el('radar-bar');
+    if (!bar || bar.hidden) {
+      document.documentElement.style.setProperty('--bar-space', '0px');
+      if (map) map.resize();
+      return;
+    }
     const r = bar.getBoundingClientRect();
     const bottomGap = Math.max(0, (document.documentElement.clientHeight || window.innerHeight) - r.bottom);
     const space = Math.ceil(r.height + bottomGap + 8);
     document.documentElement.style.setProperty('--bar-space', space + 'px');
-    if (map) map.invalidateSize({ animate: false });
+    if (map) map.resize();
   };
   syncBarSpace();
   syncBarSpaceFn = syncBarSpace;
@@ -112,6 +145,13 @@ function createMap() {
   }
 }
 
+/** 地図が層を受け付けるようになったか。
+    MapLibre は画面が裏にいる間は描画が止まり、読み込み完了の合図も来ない。
+    合図を待たず「足してみて、だめならまた試す」形にする（show() が自分で呼び直す）。 */
+function canAddLayers(m) {
+  try { return m.isStyleLoaded() || !!(m.style && m.style._loaded); } catch { return false; }
+}
+
 
 // 稼働中のキャッシュ名(= 版)を出典表示の横に足す
 async function showRunningVersion() {
@@ -125,43 +165,61 @@ async function showRunningVersion() {
     if (!v) return;
     const slot = el('radar-ver');
     if (slot) slot.textContent = v;
-    const el2 = document.querySelector('.leaflet-control-attribution');
+    const el2 = document.querySelector('.maplibregl-ctrl-attrib-inner');
     if (el2 && !el2.textContent.includes(v)) el2.insertAdjacentHTML('beforeend', ` ｜ ${v}`);
   } catch { /* 出せなくても動作に影響なし */ }
 }
 
 // --- 雨雲のコマ -----------------------------------------------------------
+// MapLibre では「コマ＝ラスターの source と layer の組」。読み込み済みのコマは
+// そのまま残し、不透明度だけ入れ替える（切り替えたときにちらつかない）。
+const rainId = (i) => `rain-${i}`;
+
 function layerFor(i) {
   if (layers.has(i)) return layers.get(i);
   const f = frames[i];
-  const layer = L.tileLayer(tileUrl(f, '{z}', '{x}', '{y}'), {
-    opacity: 0,
-    maxZoom: 18,
-    maxNativeZoom: 10,   // 実データは約1kmメッシュ。これ以上は引き伸ばして見せる
-    zIndex: 400,
-    crossOrigin: true,
+  const id = rainId(i);
+  map.addSource(id, {
+    type: 'raster',
+    tiles: [tileUrl(f, '{z}', '{x}', '{y}')],
+    tileSize: 256,
+    maxzoom: 10,          // 実データは約1kmメッシュ。これ以上は引き伸ばして見せる
+    attribution: '雨雲：出典 気象庁',
   });
-  layer.addTo(map);
-  layers.set(i, layer);
+  map.addLayer({ id, type: 'raster', source: id, paint: { 'raster-opacity': 0, 'raster-fade-duration': 0 } });
+  layers.set(i, id);
   // 遠いコマから捨てる（端末のメモリを食わないため）
   if (layers.size > MAX_LAYERS) {
     const far = [...layers.keys()].sort((a, b) => Math.abs(b - index) - Math.abs(a - index))[0];
-    if (far !== index) { map.removeLayer(layers.get(far)); layers.delete(far); }
+    if (far !== index) {
+      const fid = layers.get(far);
+      if (map.getLayer(fid)) map.removeLayer(fid);
+      if (map.getSource(fid)) map.removeSource(fid);
+      layers.delete(far);
+    }
   }
-  return layer;
+  return id;
 }
 
+let showRetry = null;
 function show(i) {
   if (!frames.length) return;
+  // 地図の準備ができていなければ、できてから同じコマを出す（裏にいる間は待つ）
+  if (!canAddLayers(map)) {
+    clearTimeout(showRetry);
+    showRetry = setTimeout(() => show(i), 300);
+    return;
+  }
   index = Math.max(0, Math.min(frames.length - 1, i));
-  const cur = layerFor(index);
+  layerFor(index);
   // 工事を見ているときは雨雲を重ねない（線が読めなくなる）
   const op = mode === 'koji' ? 0 : 0.72;
-  for (const [k, layer] of layers) layer.setOpacity(k === index ? op : 0);
-  cur.setOpacity(op);
+  for (const [k, id] of layers) {
+    if (map.getLayer(id)) map.setPaintProperty(id, 'raster-opacity', k === index ? op : 0);
+  }
   renderTimeUi();
   // 次のコマを先に読み込んでおく（動かしたときのカクつきを減らす）
-  if (index + 1 < frames.length) layerFor(index + 1).setOpacity(0);
+  if (index + 1 < frames.length) layerFor(index + 1);
 }
 
 // バーの下の目盛り。3時間おきに「3時間前 / いま / 3時間後 …」を、
@@ -378,7 +436,7 @@ function goTo(lat, lon, zoom = 12, label = '') {
   // animate:false で即座に移動する。動かしながらだと、直後に読む中心が
   // まだ移動前のままで、覚える場所が1つ前になってしまう(実機で確認)。
   // 遠くへ飛ぶ操作なので、滑らせるより一気に移るほうが分かりやすい。
-  map.setView([lat, lon], zoom, { animate: false });
+  map.jumpTo({ center: [lon, lat], zoom });
   saveView(); // 選んだ場所は、その場で覚える(次に開いたときここから)
   placePin = label ? { name: label, lat, lon } : null;
   refreshRainStripSoon();   // 場所が変わったら、この場所の雨を調べ直す
@@ -420,10 +478,13 @@ async function runSearch(q) {
 
 // 現在地に赤い点を置く。move=true なら地図もそこへ動かす。
 function markHere(lat, lon, move) {
-  if (hereMarker) map.removeLayer(hereMarker);
-  hereMarker = L.circleMarker([lat, lon], {
-    radius: 7, color: '#fff', weight: 2, fillColor: '#e5443a', fillOpacity: 1,
-  }).addTo(map);
+  if (!hereMarker) {
+    const dot = document.createElement('div');
+    dot.className = 'here-dot';
+    hereMarker = new maplibregl.Marker({ element: dot }).setLngLat([lon, lat]).addTo(map);
+  } else {
+    hereMarker.setLngLat([lon, lat]);
+  }
   if (move) goTo(lat, lon, 13, 'いまの場所');
 }
 
@@ -631,56 +692,10 @@ function closePlacePanel() {
 // --- 雨雲 / 工事 の切り替え -------------------------------------------------
 const JST_MS = 9 * 3600 * 1000;
 
+// 既定は工事（タブ名「工事/雨雲β」と同じ並び・2026-09-28 本人指示）。
+// 前に雨雲を見ていた端末だけ雨雲から開く。
 function readMode() {
-  try { return localStorage.getItem(MODE_KEY) === 'koji' ? 'koji' : 'rain'; } catch { return 'rain'; }
-}
-
-/** 「今夜22時」= 次に来る22時（過ぎていれば翌日の22時） */
-function nextHourMs(hourJst) {
-  const now = Date.now();
-  const d = new Date(now + JST_MS);
-  let t = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), hourJst, 0, 0) - JST_MS;
-  if (t < now) t += 24 * 3600 * 1000;
-  return t;
-}
-
-function kojiTimeMs() {
-  return kojiNightHour !== null ? nextHourMs(kojiNightHour) : Date.now() + kojiOffsetMin * 60000;
-}
-
-function kojiTimeLabel() {
-  const t = new Date(kojiTimeMs() + JST_MS);
-  const hm = `${t.getUTCHours()}:${String(t.getUTCMinutes()).padStart(2, '0')}`;
-  if (kojiNightHour !== null) return `${t.getUTCMonth() + 1}/${t.getUTCDate()} ${hm} の予定`;
-  return kojiOffsetMin === 0 ? 'この画面で工事中' : `${hm} 時点の予定`;
-}
-
-function renderKojiStatus(s) {
-  if (!s) return;
-  const err = el('koji-error');
-  err.hidden = !s.error;
-  err.textContent = s.error || '';
-  if (s.loading) { el('koji-count').textContent = '—'; el('koji-count-note').textContent = '読み込み中…'; return; }
-  if (s.shown === undefined) return;
-  el('koji-count').textContent = `${s.shown}件`;
-  el('koji-count-note').textContent = `${kojiTimeLabel()}${s.total !== undefined ? `（23区ぜんぶで${s.total}件）` : ''}`;
-  const legend = el('koji-legend');
-  legend.innerHTML = LEVELS
-    .filter((l) => (s.counts?.[l.key] || 0) > 0)
-    .map((l) => `<span><i style="background:${l.color}"></i>${l.label} ${s.counts[l.key]}</span>`)
-    .join('') || '<span>この画面には工事がありません</span>';
-  if (s.fetchedAt) {
-    const d = new Date(new Date(s.fetchedAt).getTime() + JST_MS);
-    el('koji-updated').textContent = `更新 ${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
-  }
-  syncBarSpaceFn?.();
-}
-
-function setKojiTime(btn) {
-  for (const b of document.querySelectorAll('.kj-times button')) b.classList.toggle('active', b === btn);
-  kojiNightHour = btn.dataset.night ? Number(btn.dataset.night) : null;
-  kojiOffsetMin = btn.dataset.min ? Number(btn.dataset.min) : 0;
-  koji?.setTime(kojiTimeMs());
+  try { return localStorage.getItem(MODE_KEY) === 'rain' ? 'rain' : 'koji'; } catch { return 'koji'; }
 }
 
 function setMode(next) {
@@ -692,14 +707,13 @@ function setMode(next) {
   el('mode-rain').setAttribute('aria-selected', String(mode === 'rain'));
   el('mode-koji').setAttribute('aria-selected', String(mode === 'koji'));
   el('radar-bar').hidden = mode === 'koji';
-  el('koji-bar').hidden = mode !== 'koji';
+  el('koji-ui').hidden = mode !== 'koji';
   if (mode === 'koji') {
     setPlaying(false);
-    if (!koji) koji = createKojiLayer(map, { onStatus: renderKojiStatus });
-    koji.setTime(kojiTimeMs());
-    koji.setVisible(true);
+    if (!koji) koji = createKojiUi(map);
+    koji.setActive(true);
   } else {
-    koji?.setVisible(false);
+    koji?.setActive(false);
     refreshRainStripSoon();
   }
   show(index);            // 雨雲の濃さを今のモードに合わせる
@@ -720,6 +734,7 @@ async function start() {
   createMap();
   renderPresets();
 
+
   el('radar-play').addEventListener('click', () => setPlaying(!playTimer));
   el('radar-slider').addEventListener('input', (e) => {
     setPlaying(false);
@@ -730,9 +745,6 @@ async function start() {
   el('radar-locate').addEventListener('click', locateNow);
   el('mode-rain').addEventListener('click', () => setMode('rain'));
   el('mode-koji').addEventListener('click', () => setMode('koji'));
-  for (const b of document.querySelectorAll('.kj-times button')) {
-    b.addEventListener('click', () => setKojiTime(b));
-  }
   el('radar-weather-btn').addEventListener('click', openWeatherPanel);
   el('radar-weather-close').addEventListener('click', closeWeatherPanel);
   el('radar-place-close').addEventListener('click', closePlacePanel);
