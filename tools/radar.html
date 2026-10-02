@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Cabis ｜ 工事/雨雲マップβ</title>
   <!-- 表示されている版＝いま動いているHTML。sw.js の版と一緒に上げる -->
-  <meta name="app-version" content="v431">
+  <meta name="app-version" content="v432">
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="../vendor/maplibre/maplibre-gl.css">
   <link rel="icon" type="image/png" sizes="180x180" href="icon-180.png">
@@ -389,7 +389,7 @@
 </head>
 <body>
   <script type="module">
-    import { enforceAccess } from '../js/access-control.js?b=1a2500760a82';
+    import { enforceAccess } from '../js/access-control.js?b=33c3cd4a1b69';
     if (!(await enforceAccess('core', { redirect: '../subscribe.html' }))) {
       throw new Error('access-denied: redirected');
     }
@@ -427,7 +427,7 @@
     document.addEventListener('visibilitychange', () => { if (!document.hidden) fitAppHeight(); });
     if (window.visualViewport) window.visualViewport.addEventListener('resize', fitAppHeight);
   </script>
-  <script src="../vendor/maplibre/maplibre-gl.js?b=1a2500760a82"></script>
+  <script src="../vendor/maplibre/maplibre-gl.js?b=33c3cd4a1b69"></script>
 
   <nav class="app-tabs" role="tablist" aria-label="アプリ切替">
     <a href="./" class="app-tab">⏱ 乗務タイマー</a>
@@ -437,7 +437,7 @@
     <a href="stands.html" id="tab-stands" class="app-tab" style="display:none">📍 乗り場</a>
   </nav>
 
-  <script type="module" src="js/stands-tab.js?b=1a2500760a82"></script>
+  <script type="module" src="js/stands-tab.js?b=33c3cd4a1b69"></script>
   <div id="radar-stage">
     <div id="radar-map"></div>
 
@@ -590,9 +590,9 @@
 
   <div id="navHost"></div>
   <script type="module">
-    import { renderBottomNav } from '../js/app.js?b=1a2500760a82';
+    import { renderBottomNav } from '../js/app.js?b=33c3cd4a1b69';
     document.getElementById('navHost').innerHTML = renderBottomNav('tools', '../');
   </script>
-  <script type="module" src="js/radar-app.js?b=1a2500760a82"></script>
+  <script type="module" src="js/radar-app.js?b=33c3cd4a1b69"></script>
 </body>
 </html>
