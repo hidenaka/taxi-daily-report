@@ -389,7 +389,7 @@
 </head>
 <body>
   <script type="module">
-    import { enforceAccess } from '../js/access-control.js?b=b56a3b0b9b47';
+    import { enforceAccess } from '../js/access-control.js?b=4e28c472c69f';
     if (!(await enforceAccess('core', { redirect: '../subscribe.html' }))) {
       throw new Error('access-denied: redirected');
     }
@@ -427,7 +427,7 @@
     document.addEventListener('visibilitychange', () => { if (!document.hidden) fitAppHeight(); });
     if (window.visualViewport) window.visualViewport.addEventListener('resize', fitAppHeight);
   </script>
-  <script src="../vendor/maplibre/maplibre-gl.js?b=b56a3b0b9b47"></script>
+  <script src="../vendor/maplibre/maplibre-gl.js?b=4e28c472c69f"></script>
 
   <nav class="app-tabs" role="tablist" aria-label="アプリ切替">
     <a href="./" class="app-tab">⏱ 乗務タイマー</a>
@@ -437,7 +437,7 @@
     <a href="stands.html" id="tab-stands" class="app-tab" style="display:none">📍 乗り場</a>
   </nav>
 
-  <script type="module" src="js/stands-tab.js?b=b56a3b0b9b47"></script>
+  <script type="module" src="js/stands-tab.js?b=4e28c472c69f"></script>
   <div id="radar-stage">
     <div id="radar-map"></div>
 
@@ -590,9 +590,9 @@
 
   <div id="navHost"></div>
   <script type="module">
-    import { renderBottomNav } from '../js/app.js?b=b56a3b0b9b47';
+    import { renderBottomNav } from '../js/app.js?b=4e28c472c69f';
     document.getElementById('navHost').innerHTML = renderBottomNav('tools', '../');
   </script>
-  <script type="module" src="js/radar-app.js?b=b56a3b0b9b47"></script>
+  <script type="module" src="js/radar-app.js?b=4e28c472c69f"></script>
 </body>
 </html>
