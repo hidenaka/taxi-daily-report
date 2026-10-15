@@ -392,6 +392,8 @@
     .sf-dn { width: 50px; flex: none; display: flex; flex-direction: column; line-height: 1.2; }
     .sf-dn small { font-size: 9px; color: var(--sub); }
     .sf-daxis { display: flex; justify-content: space-between; margin-left: 56px; font-size: 9px; color: var(--sub); }
+    .sf-dcell:not(:last-child) .sf-daxis { display: none; }
+    @media (min-width: 760px) { .sf-dgrid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; } .sf-dcell:not(:last-child) .sf-daxis { display: flex; } }
     .sf-err { font-size: 10px; color: var(--sub); text-align: right; margin-top: 2px; }
     .sf-arr { display: flex; justify-content: space-between; gap: 6px; white-space: nowrap; margin-top: 6px; padding-top: 6px; border-top: 1px solid #2a2a30; font-size: 11px; color: var(--sub); cursor: pointer; }
     .sf-arr b { color: var(--fg); font-weight: 600; }
@@ -458,7 +460,7 @@
 </head>
 <body>
   <script type="module">
-    import { enforceAccess } from '../js/access-control.js?b=4e28c472c69f';
+    import { enforceAccess } from '../js/access-control.js?b=c4e7f6b86967';
     if (!(await enforceAccess('core', { redirect: '../subscribe.html' }))) {
       throw new Error('access-denied: redirected');
     }
@@ -470,7 +472,7 @@
     <a href="arrivals.html" class="app-tab active" aria-current="page">✈ 空港ツール</a>
     <a href="stands.html" id="tab-stands" class="app-tab" style="display:none">📍 乗り場</a>
   </nav>
-  <script type="module" src="js/stands-tab.js?b=4e28c472c69f"></script>
+  <script type="module" src="js/stands-tab.js?b=c4e7f6b86967"></script>
 
   <div class="terminal-tabs">
     <!-- T1/T2 の個別タブは非表示（合計のみ表示）。T3(国際)は実績・予測の仕組みが整ったら表示する -->
@@ -593,9 +595,9 @@
   <script type="module" src="./js/arrivals-app.js?v=20260507b"></script>
   <div id="navHost"></div>
   <script type="module">
-    import { renderBottomNav } from '../js/app.js?b=4e28c472c69f';
-    import { showGpsPrivacyBanner } from '../js/gps-privacy-banner.js?b=4e28c472c69f';
-    import '../js/help-video.js?b=4e28c472c69f';
+    import { renderBottomNav } from '../js/app.js?b=c4e7f6b86967';
+    import { showGpsPrivacyBanner } from '../js/gps-privacy-banner.js?b=c4e7f6b86967';
+    import '../js/help-video.js?b=c4e7f6b86967';
     document.getElementById('navHost').innerHTML = renderBottomNav('tools', '../');
     showGpsPrivacyBanner();
   </script>
