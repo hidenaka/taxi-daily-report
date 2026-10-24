@@ -157,13 +157,13 @@ if (location.hostname.includes('-dev')) {
 </main>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, todayIso } from './js/app.js?b=7afecd29f918';
-import { getConfig, getDrive, saveDriveSafe } from './js/storage.js?b=7afecd29f918';
-import { fetchWeatherForDate } from './js/weather.js?b=7afecd29f918';
-import { renderLegalFooter } from './js/legal-footer.js?b=7afecd29f918';
-import { enforceAccess } from './js/access-control.js?b=7afecd29f918';
-import './js/help-toggle.js?b=7afecd29f918';
-import './js/help-video.js?b=7afecd29f918';
+import { renderBottomNav, todayIso } from './js/app.js?b=cd794af7099d';
+import { getConfig, getDrive, saveDriveSafe } from './js/storage.js?b=cd794af7099d';
+import { fetchWeatherForDate } from './js/weather.js?b=cd794af7099d';
+import { renderLegalFooter } from './js/legal-footer.js?b=cd794af7099d';
+import { enforceAccess } from './js/access-control.js?b=cd794af7099d';
+import './js/help-toggle.js?b=cd794af7099d';
+import './js/help-video.js?b=cd794af7099d';
 
 if (!(await enforceAccess('core'))) {
   throw new Error('access-denied: redirected');
