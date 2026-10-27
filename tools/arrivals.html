@@ -406,7 +406,7 @@
     .sf-fl span:last-child { color: var(--sub); }
     .sf-zoom { position: fixed; inset: 0; background: rgba(0,0,0,.9); display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; z-index: 1000; color: #ddd; font-size: 12px; cursor: zoom-out; }
     .sf-zoom[hidden] { display: none; }
-    .sf-zoom img { max-width: 94vw; max-height: 80vh; border-radius: 8px; }
+    .sf-zoom img { width: 96vw; max-width: 1024px; max-height: 84vh; object-fit: contain; border-radius: 8px; }
     #forecast-section details.fc-old { margin: 8px 0; }
     #forecast-section details.fc-old > summary { cursor: pointer; color: var(--accent); font-size: 12px; margin-bottom: 6px; }
     #forecast-section { border-bottom: 1px solid #222; }
@@ -465,7 +465,7 @@
 </head>
 <body>
   <script type="module">
-    import { enforceAccess } from '../js/access-control.js?b=cd794af7099d';
+    import { enforceAccess } from '../js/access-control.js?b=72946e7911a9';
     if (!(await enforceAccess('core', { redirect: '../subscribe.html' }))) {
       throw new Error('access-denied: redirected');
     }
@@ -477,7 +477,7 @@
     <a href="arrivals.html" class="app-tab active" aria-current="page">✈ 空港ツール</a>
     <a href="stands.html" id="tab-stands" class="app-tab" style="display:none">📍 乗り場</a>
   </nav>
-  <script type="module" src="js/stands-tab.js?b=cd794af7099d"></script>
+  <script type="module" src="js/stands-tab.js?b=72946e7911a9"></script>
 
   <div class="terminal-tabs">
     <!-- T1/T2 の個別タブは非表示（合計のみ表示）。T3(国際)は実績・予測の仕組みが整ったら表示する -->
@@ -600,9 +600,9 @@
   <script type="module" src="./js/arrivals-app.js?v=20260507b"></script>
   <div id="navHost"></div>
   <script type="module">
-    import { renderBottomNav } from '../js/app.js?b=cd794af7099d';
-    import { showGpsPrivacyBanner } from '../js/gps-privacy-banner.js?b=cd794af7099d';
-    import '../js/help-video.js?b=cd794af7099d';
+    import { renderBottomNav } from '../js/app.js?b=72946e7911a9';
+    import { showGpsPrivacyBanner } from '../js/gps-privacy-banner.js?b=72946e7911a9';
+    import '../js/help-video.js?b=72946e7911a9';
     document.getElementById('navHost').innerHTML = renderBottomNav('tools', '../');
     showGpsPrivacyBanner();
   </script>
