@@ -122,7 +122,7 @@
 </head>
 <body>
   <script type="module">
-    import { enforceAccess } from '../js/access-control.js?b=da65c6017253';
+    import { enforceAccess } from '../js/access-control.js?b=752514874d8c';
     if (!(await enforceAccess('core', { redirect: '../subscribe.html' }))) {
       throw new Error('access-denied: redirected');
     }
@@ -136,7 +136,7 @@
     <a href="arrivals.html" class="app-tab active" aria-current="page">✈ 空港ツール</a>
     <a href="stands.html" id="tab-stands" class="app-tab" style="display:none">📍 乗り場</a>
   </nav>
-  <script type="module" src="js/stands-tab.js?b=da65c6017253"></script>
+  <script type="module" src="js/stands-tab.js?b=752514874d8c"></script>
 
   <div class="terminal-tabs">
     <a href="arrivals.html" class="terminal-tab">到着便</a>
@@ -148,11 +148,11 @@
   <div id="noriba-trends-error" hidden></div>
   <main id="noriba-trends-root"></main>
 
-  <script type="module" src="./js/noriba-trends.js?b=da65c6017253"></script>
+  <script type="module" src="./js/noriba-trends.js?b=752514874d8c"></script>
   <div id="navHost"></div>
   <script type="module">
-    import { renderBottomNav } from '../js/app.js?b=da65c6017253';
-    import { showGpsPrivacyBanner } from '../js/gps-privacy-banner.js?b=da65c6017253';
+    import { renderBottomNav } from '../js/app.js?b=752514874d8c';
+    import { showGpsPrivacyBanner } from '../js/gps-privacy-banner.js?b=752514874d8c';
     document.getElementById('navHost').innerHTML = renderBottomNav('tools', '../');
     showGpsPrivacyBanner();
   </script>
