@@ -48,6 +48,9 @@
 .cal-cell.paid .tag { color: #6a1b9a; }
 .cal-cell.roster-day-off .tag { color: #8f3434; }
 .cal-cell .day { font-weight: 600; font-size: 13px; }
+.cal-cell .day.sun { color: #d32f2f; }
+.cal-cell .day.sat { color: #1976d2; }
+.cal-cell .day .hol { font-size: 8px; font-weight: 600; margin-left: 1px; vertical-align: 2px; }
 .cal-cell .yen { font-size: 10px; color: var(--primary); font-weight: 600; line-height: 1.1; }
 .cal-cell .ic { font-size: 10px; color: var(--muted); }
 .dow-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; font-size: 10px; color: var(--muted); text-align: center; }
@@ -64,6 +67,7 @@
 .sum-table tr.total td { border-top: 2px solid #ddd; }
 .sum-table .dow-sun { color: #d32f2f; font-weight: 600; }
 .sum-table .dow-sat { color: #1976d2; font-weight: 600; }
+.sum-table .hol-mark { font-size: 9px; padding: 0 3px; margin-left: 3px; border-radius: 2px; background: #ffebee; color: #c62828; }
 .sum-table .memo { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #555; }
 .period-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 4px; min-width: 480px; }
 .period-table th, .period-table td { padding: 8px 4px; text-align: right; border-bottom: 1px solid #eee; white-space: nowrap; }
@@ -178,24 +182,25 @@ if (location.hostname.includes('-dev')) {
 <button class="fab" onclick="location.href='input.html'" style="display:none;">＋</button>
 <div id="navHost"></div>
 <script type="module">
-import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=752514874d8c';
-import { getConfig, getDrivesForMonth, flushPendingQueue, saveConfig } from './js/storage.js?b=752514874d8c';
-import { DEFAULT_CONFIG } from './js/default-config.js?b=752514874d8c';
-import { calcTotalPay, calcDailySales, isApproxSales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales, predictMonthly, tierBasisDrives, tierBasisSalesExcl } from './js/payroll.js?b=752514874d8c';
-import { METRIC_CATALOG, METRIC_GROUPS, resolveMetrics } from './js/home-metrics.js?b=752514874d8c';
-import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=752514874d8c';
-import { processInvite } from './js/invite-crypto.js?b=752514874d8c';
-import { renderLegalFooter } from './js/legal-footer.js?b=752514874d8c';
-import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=752514874d8c';
-import { isBillingFrozen } from './js/access-control.js?b=752514874d8c';
-import { isEmailAuth, waitForAuth, getUserId } from './js/firebase-auth.js?b=752514874d8c';
-import { auth } from './js/firebase-init.js?b=752514874d8c';
+import { renderBottomNav, formatYen, formatDate, currentBillingPeriod, formatBillingPeriod, shiftBillingPeriod, getBillingPeriodRange, todayIso, toLocalIso } from './js/app.js?b=76cf1ecb7d1d';
+import { getConfig, getDrivesForMonth, flushPendingQueue, saveConfig } from './js/storage.js?b=76cf1ecb7d1d';
+import { DEFAULT_CONFIG } from './js/default-config.js?b=76cf1ecb7d1d';
+import { calcTotalPay, calcDailySales, isApproxSales, calcMonthlySales, findTierIdx, findNextHigherRateTier, findNextLowerRateTier, requiredUniformSales, predictMonthly, tierBasisDrives, tierBasisSalesExcl } from './js/payroll.js?b=76cf1ecb7d1d';
+import { METRIC_CATALOG, METRIC_GROUPS, resolveMetrics } from './js/home-metrics.js?b=76cf1ecb7d1d';
+import { isHoliday } from './js/jp-holidays.js?b=76cf1ecb7d1d';
+import { calcTimeBreakdown, formatMin, isSummaryOnly, calcPeriodBreakdown, calcZoneBreakdown, getShiftZones, PERIOD_LABELS, dowOf, DOW_LABELS } from './js/chart-helpers.js?b=76cf1ecb7d1d';
+import { processInvite } from './js/invite-crypto.js?b=76cf1ecb7d1d';
+import { renderLegalFooter } from './js/legal-footer.js?b=76cf1ecb7d1d';
+import { getSubscription, requiresOnboarding, isCanceledOrUnpaid, formatStatus } from './js/subscription-state.js?b=76cf1ecb7d1d';
+import { isBillingFrozen } from './js/access-control.js?b=76cf1ecb7d1d';
+import { isEmailAuth, waitForAuth, getUserId } from './js/firebase-auth.js?b=76cf1ecb7d1d';
+import { auth } from './js/firebase-init.js?b=76cf1ecb7d1d';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
-import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts, isRosterDayOff } from './js/planned-shifts.js?b=752514874d8c';
-import { checkInviteAndWarn, fetchCompanyExists, loadInviteSlug, loadReferrer, shouldRedirectInviteToSignup, buildSignupRedirectUrl } from './js/invite-url.js?b=752514874d8c';
-import { shouldShowFirstRunCard, shouldMarkHasDrive, isExistingLocalRealUser } from './js/first-run.js?b=752514874d8c';
-import './js/help-video.js?b=752514874d8c';
-import { showLoadError } from './js/load-error-banner.js?b=752514874d8c';
+import { getPlannedVehicle, pruneOrphanVehicles, countMonthlyShifts, isRosterDayOff } from './js/planned-shifts.js?b=76cf1ecb7d1d';
+import { checkInviteAndWarn, fetchCompanyExists, loadInviteSlug, loadReferrer, shouldRedirectInviteToSignup, buildSignupRedirectUrl } from './js/invite-url.js?b=76cf1ecb7d1d';
+import { shouldShowFirstRunCard, shouldMarkHasDrive, isExistingLocalRealUser } from './js/first-run.js?b=76cf1ecb7d1d';
+import './js/help-video.js?b=76cf1ecb7d1d';
+import { showLoadError } from './js/load-error-banner.js?b=76cf1ecb7d1d';
 
 // 暗号化招待リンク処理は GitHub 版専用のためスキップ（Firebase 版）
 const inviteProcessed = false;
@@ -1260,7 +1265,7 @@ function renderSummaryTable(drives) {
   function dowClass(iso) {
     const d = new Date(iso + 'T00:00:00+09:00');
     const dow = d.getDay();
-    return dow === 0 ? 'dow-sun' : dow === 6 ? 'dow-sat' : '';
+    return (dow === 0 || isHoliday(iso)) ? 'dow-sun' : dow === 6 ? 'dow-sat' : '';
   }
 
   let totalIncl = 0, totalExcl = 0, totalKm = 0;
@@ -1292,7 +1297,7 @@ function renderSummaryTable(drives) {
     const inclStyle = !summary ? inclBg(sales.inclTax) : '';
     const hourlyStyle = !summary ? hourlyBg(hourly) : '';
     return `<tr onclick="location.href='detail.html?date=${d.date}'" style="cursor:pointer;${summary ? 'background:#fafafa;' : ''}">
-      <td class="date ${dowClass(d.date)}">${formatDate(d.date)}${summary ? '<span class="badge" style="font-size:9px;padding:0 4px;background:#ddd;color:#666;margin-left:3px;">概</span>' : ''}</td>
+      <td class="date ${dowClass(d.date)}">${formatDate(d.date)}${isHoliday(d.date) ? '<span class="hol-mark">祝</span>' : ''}${summary ? '<span class="badge" style="font-size:9px;padding:0 4px;background:#ddd;color:#666;margin-left:3px;">概</span>' : ''}</td>
       <td>${summary ? dash : count}</td>
       <td style="${inclStyle}"><strong>${formatYen(sales.inclTax)}</strong></td>
       <td>${formatYen(sales.exclTax)}</td>
@@ -1395,7 +1400,11 @@ function renderCalendar(drives, range, rosterDriveDates) {
   `;
   for (let i = 0; i < startDow; i++) html += `<div class="cal-cell dim"></div>`;
   for (const iso of periodDates) {
-    const day = parseInt(iso.split('-')[2]);
+    const dayNum = parseInt(iso.split('-')[2]);
+    const dow = new Date(iso + 'T00:00:00+09:00').getDay();
+    const holiday = isHoliday(iso);
+    const dayCls = (dow === 0 || holiday) ? 'day sun' : dow === 6 ? 'day sat' : 'day';
+    const day = `${dayNum}${holiday ? '<span class="hol">祝</span>' : ''}`;
     const drive = driveByDate[iso];
     const isToday = iso === today;
     const isPlanned = plannedSet.has(iso) && iso >= today;
@@ -1426,15 +1435,15 @@ function renderCalendar(drives, range, rosterDriveDates) {
     if (drive) {
       const sales = calcDailySales(drive);
       const wIcon = pickWeatherIcon(drive.weather);
-      inner = `<div class="day">${day}</div><div class="ic">${wIcon}</div><div class="yen">${shortYen(sales.inclTax)}</div>`;
+      inner = `<div class="${dayCls}">${day}</div><div class="ic">${wIcon}</div><div class="yen">${shortYen(sales.inclTax)}</div>`;
     } else if (isPaid) {
-      inner = `<div class="day">${day}</div><div class="tag">有給</div>`;
+      inner = `<div class="${dayCls}">${day}</div><div class="tag">有給</div>`;
     } else if (isPlanned) {
-      inner = `<div class="day">${day}</div><div class="tag">予定</div>`;
+      inner = `<div class="${dayCls}">${day}</div><div class="tag">予定</div>`;
     } else if (isDayOff) {
-      inner = `<div class="day">${day}</div><div class="tag">公休</div>`;
+      inner = `<div class="${dayCls}">${day}</div><div class="tag">公休</div>`;
     } else {
-      inner = `<div class="day">${day}</div>`;
+      inner = `<div class="${dayCls}">${day}</div>`;
     }
     const onclick = drive ? ` onclick="location.href='detail.html?date=${iso}'"` : ((isPlanned || isPaid) ? ` onclick="location.href='calendar.html'"` : '');
     const cursor = drive || isPlanned || isPaid ? 'cursor:pointer;' : '';
@@ -1536,7 +1545,7 @@ function pickWeatherIcon(w) {
 load().catch(showLoadError);
 </script>
 <script type="module">
-import { isCoachEnabled } from './js/coach/coach-flag.js?b=752514874d8c';
+import { isCoachEnabled } from './js/coach/coach-flag.js?b=76cf1ecb7d1d';
 const _ce = document.getElementById('coachEntryCard');
 if (_ce && isCoachEnabled()) _ce.style.display = '';
 </script>
