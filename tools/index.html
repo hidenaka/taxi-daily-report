@@ -513,7 +513,7 @@
 </head>
 <body>
   <script type="module">
-    import { enforceAccess } from '../js/access-control.js?b=76cf1ecb7d1d';
+    import { enforceAccess } from '../js/access-control.js?b=c8da54effdaf';
     if (!(await enforceAccess('core', { redirect: '../subscribe.html' }))) {
       throw new Error('access-denied: redirected');
     }
@@ -525,7 +525,7 @@
     <a href="arrivals.html" class="app-tab">✈ 空港ツール</a>
     <a href="stands.html" id="tab-stands" class="app-tab" style="display:none">📍 乗り場</a>
   </nav>
-  <script type="module" src="js/stands-tab.js?b=76cf1ecb7d1d"></script>
+  <script type="module" src="js/stands-tab.js?b=c8da54effdaf"></script>
   <main>
     <header>
       <h1>タクシー乗務タイマー<button class="help-video-btn" data-help-video="timer" type="button">▶ 使い方（30秒）</button></h1>
@@ -703,10 +703,10 @@
   </dialog>
 
 <script type="module">
-import { computeRemainingMs, fmtCountdown, crossedZero, normalizeTimerState, fmtClockShort, overtimeNote, distanceMeters, normalizeCountdownPresets } from './js/countdown.js?b=76cf1ecb7d1d';
-import { newRecordId, ensureRecordIds, mergeSyncDocs, pickSettings } from './js/timer-sync.js?b=76cf1ecb7d1d';
-import { pullTimerState, pushTimerState } from './js/timer-cloud.js?b=76cf1ecb7d1d';
-import { waitForAuth } from '../js/firebase-auth.js?b=76cf1ecb7d1d';
+import { computeRemainingMs, fmtCountdown, crossedZero, normalizeTimerState, fmtClockShort, overtimeNote, distanceMeters, normalizeCountdownPresets } from './js/countdown.js?b=c8da54effdaf';
+import { newRecordId, ensureRecordIds, mergeSyncDocs, pickSettings, tombstoneOlderThan } from './js/timer-sync.js?b=c8da54effdaf';
+import { pullTimerState, pushTimerState } from './js/timer-cloud.js?b=c8da54effdaf';
+import { waitForAuth } from '../js/firebase-auth.js?b=c8da54effdaf';
 // ============================================================
 // --- Pure ---
 // 依存のない純粋関数。入出力のみで動く。
@@ -794,12 +794,13 @@ function applyMerged(merged) {
 
 let cloudPushTimer = null;
 // 変更をデバウンス(4秒)でクラウドへ。オンライン＆ログイン時のみ・失敗は握りつぶす。
+// 書き込みはドキュメントの丸ごと上書きなので、必ず取得→マージしてから書く
+// （そのまま書くと、この端末が知らない別端末の休憩をクラウドから消してしまう）。
 function scheduleCloudPush() {
   if (cloudPushTimer) clearTimeout(cloudPushTimer);
   cloudPushTimer = setTimeout(() => {
     cloudPushTimer = null;
-    if (!navigator.onLine) return;
-    pushTimerState(toSyncDoc()).catch(() => {});
+    syncWithCloud();
   }, 4000);
 }
 
@@ -1660,9 +1661,10 @@ setInterval(() => {
   if (state.shiftStartAt && Date.now() - state.shiftStartAt > MAX_SHIFT_MS) {
     state.lastResetSnapshot = captureResetSnapshot();
     state.shiftStartAt = null;
-    // 20時間自動リセットも墓石化（クラウドで復活させない）
+    // 20時間自動リセットは、20時間より前に終わった休憩だけを墓石化（クラウドで復活させない）。
+    // 全部を消すと、古いまま開いた別の端末が今の乗務の休憩まで消してしまう。
     const _anow = Date.now();
-    state.records = state.records.map(r => r.deleted ? r : ({ ...r, deleted: true, updatedAt: _anow }));
+    state.records = tombstoneOlderThan(state.records, _anow - MAX_SHIFT_MS, _anow);
     state.stopwatch.running = false;
     state.stopwatch.startedAt = null;
     state.stopwatch.elapsedMs = 0;
@@ -1706,11 +1708,11 @@ document.querySelectorAll('.app-tab').forEach(a => {
 </script>
 <div id="navHost"></div>
 <script type="module">
-  import { renderBottomNav } from '../js/app.js?b=76cf1ecb7d1d';
-  import { showGpsPrivacyBanner } from '../js/gps-privacy-banner.js?b=76cf1ecb7d1d';
+  import { renderBottomNav } from '../js/app.js?b=c8da54effdaf';
+  import { showGpsPrivacyBanner } from '../js/gps-privacy-banner.js?b=c8da54effdaf';
   document.getElementById('navHost').innerHTML = renderBottomNav('tools', '../');
   showGpsPrivacyBanner();
-  import '../js/help-video.js?b=76cf1ecb7d1d';
+  import '../js/help-video.js?b=c8da54effdaf';
 </script>
 </body>
 </html>
